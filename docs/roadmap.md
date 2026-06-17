@@ -1,169 +1,151 @@
 # Roadmap
 
-## Phase 0: Documentation And Agreement
+## 현재 위치
+
+현재 프로젝트는 synthetic validation을 지나 **Phase 4: Secure Real-Unlabeled Adaptation** 진입 단계다.
+
+```text
+완료/검증됨:
+synthetic generator
+-> observable feature extraction
+-> global similar wafer retrieval
+-> interest-conditioned retrieval
+-> holdout stress validation
+-> real-unlabeled workflow MVP
+-> expert review template MVP
+
+현재 주 경로:
+secure real `.npz` input
+-> sanity / drift report
+-> nearest-neighbor retrieval
+-> expert review
+-> feature/model backlog
+```
+
+## Phase 0. Problem And Contract
+
+상태: 완료
 
 목표:
 
-- 문제 정의 확정
-- data schema 확정
-- synthetic generator 요구사항 확정
-- validation protocol 확정
+- 문제 정의
+- semantic tensor schema
+- synthetic generator 요구사항
+- validation protocol
 
-완료 조건:
+핵심 문서:
 
-```text
-docs/problem_definition.md
-docs/data_schema.md
-docs/pattern_taxonomy.md
-docs/synthetic_data_plan.md
-docs/validation_protocol.md
-docs/modeling_strategy.md
-```
+- [Project Overview](project_overview.md)
+- [Data Schema](data_schema.md)
+- [Validation Protocol](validation_protocol.md)
+- [Pattern Taxonomy](pattern_taxonomy.md)
 
-## Phase 1: Synthetic Generator MVP
+## Phase 1. Synthetic Generator
 
-목표:
+상태: 완료, 필요 시 보정
 
-- 약 600 net die wafer geometry 생성
-- 제품별 chip block size config 지원
-- Grade 0~7 quantization 지원
-- scratch, ring, edge, local, random, shot_grid, stby_pattern 생성
-- preview image와 synthetic validation mask 저장
+완료된 것:
 
-완료 조건:
-
-```text
-review batch 생성
-preview grid 생성
-internal validation 통과
-expert review feedback 반영
-```
-
-## Phase 2: FBM Information Extraction And Grouping
-
-목표:
-
-- wafer-level observable feature table 생성
-- radial/angular/edge/shot/stby/local morphology feature 계산
-- 유사 wafer nearest-neighbor 검색
-- K=3/4 기준 coarse grouping
-- feature family ablation
-- 전문가 육안 확인용 neighbor gallery 생성
-
-완료 조건:
-
-```text
-synthetic pilot batch feature table 생성
-FBM grouping report 생성
-grouping stability report 생성
-parameter sweep report 생성
-feature ablation report 생성
-nearest-neighbor gallery 생성
-```
-
-현재 상태:
-
-```text
-155장 scale pilot top-5 유사검색 lift 약 1.36x
-120장 holdout stress top-5 유사검색 lift 약 1.40x
-observable feature 50개
-edge/shot/ring/stby feature family가 retrieval에 기여함
-local은 morphology 보강 후 일부 개선됨
-scratch는 segmentation 또는 scratch-specific representation 보강 대상
-```
-
-초기 36장 pilot에서는 top-5 lift 약 1.46x와 K=4가 관측됐다. 현재 roadmap의 운영 기준은 155장 scale pilot이다.
-
-추가 판정:
-
-```text
-patch proposal:
-  edge/local/stby review 후보를 줄이는 보조 도구로 유지
-
-curve proposal:
-  ring/center arc review 후보를 줄이는 보조 도구로 유지
-
-scratch:
-  rule/proposal 과투자를 멈추고 segmentation 또는 scratch-specific line representation으로 분리
-```
-
-따라서 Phase 2의 proposal 계열 실험은 현재 게이트를 닫고, Phase 4 real-unlabeled와 expert review 연결을 우선한다.
-
-## Phase 3: Synthetic-Label Segmentation Baseline
-
-목표:
-
-- multi-label segmentation dataset 구성
-- U-Net 계열 baseline 학습
-- defect heatmap과 report 생성
-- 작은 local defect와 중첩 defect recall 측정
-
-완료 조건:
-
-```text
-per-class synthetic IoU/Dice 산출
-small overlap defect recall 측정
-시계 방향 defect summary 생성
-```
-
-## Phase 4: Secure Real-Unlabeled Adaptation
-
-목표:
-
-- 실제 wafer를 repo 밖 보안 환경에서만 처리
-- real FBM feature extraction 실행
-- synthetic/real aggregate feature sanity check
-- nearest-neighbor gallery에 대한 expert review 수집
-
-완료 조건:
-
-```text
-real data를 저장하지 않고 feature만 추출 가능
-feature NaN/폭주 없음
-전문가가 유사맵 검색 결과를 검토 가능
-synthetic generator parameter calibration feedback 반영
-```
-
-현재 상태:
-
-```text
-scripts/extract_real_unlabeled_features.py MVP 구현 완료
-synthetic smoke manifest 실행 통과
-global nearest-neighbor feature 계약에서 polar 위치 feature 제외하도록 수정
-```
-
-다음 보강:
-
-- 실제 보안 환경에서 export 가능한 semantic `.npz` 입력 계약 확정
-- reference synthetic feature와 query feature의 aggregate drift/sanity summary 추가
-- nearest-neighbor 결과를 expert review template과 연결
-
-## Phase 5: Process Metadata Statistics
-
-목표:
-
-- 공정/설비/lot/recipe/chamber/test metadata와 FBM feature 조인
-- defect score별 통계 검정
-- tool/chamber/recipe factor effect 확인
-
-완료 조건:
-
-```text
-process metadata가 붙은 feature table 생성
-ANOVA 또는 적절한 통계 검정 수행
-공정 원인 후보를 expert review로 검토
-```
-
-## Phase 6: Advanced Modeling
-
-후보:
-
-- DINOv2-style self-supervised encoder
-- patch-level anomaly detection
-- synthetic-to-real domain adaptation
-- weakly-supervised report generation
-- interactive annotation/refinement workflow
+- 약 600 net die급 wafer geometry
+- Grade 0~7
+- none-wafer, valid-test, stby 분리
+- edge, local, shot-relative, stby-origin, ring, scratch 계열 생성
+- synthetic oracle mask는 검증용으로만 사용
 
 주의:
 
-Advanced model은 synthetic realism, baseline feature usefulness, secure real sanity check가 확인된 뒤 도입한다.
+- Synthetic 성능은 real 성능 인증이 아니다.
+- Generator와 feature extractor가 같은 가정을 공유하므로 real review gate가 필요하다.
+
+## Phase 2. Observable Feature And Retrieval
+
+상태: 완료, 운영 baseline 유지
+
+완료된 것:
+
+- compact observable feature 50개
+- scale 155장 top-k retrieval lift 약 1.36x
+- holdout 120장 top-k retrieval lift 약 1.40x
+- class/class_location/feature_key 기준 interest retrieval 신호 확인
+- resize-only representation은 global retrieval 대체재로 부적합하다고 판단
+
+운영 원칙:
+
+- Global retrieval은 compact observable feature 50개 기준을 유지한다.
+- `polar_*`, `stby_polar_*`는 위치-aware retrieval에서만 조건부 사용한다.
+- `label_*`, `*_mask_ratio`, `pattern_masks`, `pattern_intensity`는 inference feature가 아니다.
+
+## Phase 3. Proposal And Segmentation Readiness
+
+상태: 보조층으로 정리 완료
+
+판정:
+
+- Patch proposal: edge/local/stby review 후보 축소용
+- Curve proposal: ring/center arc review 후보 축소용
+- Scratch: rule/proposal 과투자를 멈추고 segmentation 또는 scratch-specific line representation으로 분리
+
+주의:
+
+- Proposal recall은 최종 성능 지표가 아니다.
+- 지금은 proposal 튜닝보다 real-unlabeled workflow와 expert review loop가 우선이다.
+
+## Phase 4. Secure Real-Unlabeled Adaptation
+
+상태: 현재 주 작업
+
+목표:
+
+- 실제 wafer raw data를 repo에 저장하지 않고 feature를 추출한다.
+- 보안 환경의 semantic `.npz` manifest를 입력으로 받는다.
+- feature CSV, sanity JSON, drift report, nearest-neighbor CSV, expert review template을 생성한다.
+
+완료된 것:
+
+- `scripts/extract_real_unlabeled_features.py`
+- `real_unlabeled_manifest/v1`
+- `observable_fbm_features/v1`
+- `.npz` semantic array validation
+- reference 대비 feature drift summary
+- nearest-neighbor CSV와 expert review template 연결
+
+다음 gate:
+
+1. 실제 보안 환경에서 standard-key `.npz` 1건 export
+2. `array_keys` mapping이 필요한 `.npz` 1건 export
+3. sanity JSON에서 stby/Grade7/none-wafer/valid-test 계약 확인
+4. top-k nearest-neighbor 결과를 전문가가 최소 20~50 pair 평가
+5. `next_action_queue`를 기준으로 feature/model backlog 결정
+
+## Phase 5. Scratch/Local Model Backlog
+
+상태: 대기
+
+시작 조건:
+
+- Expert review에서 scratch/local 계열 failure가 반복적으로 확인된다.
+- Observable morphology 보강으로 충분하지 않다는 근거가 생긴다.
+
+후보:
+
+- connected-component morphology
+- line enhancement / skeleton continuity
+- lightweight multi-label segmentation
+- self-supervised embedding 또는 metric learning
+
+## Phase 6. Process Metadata Statistics
+
+상태: 대기
+
+시작 조건:
+
+- FBM feature table이 안정화된다.
+- 공정/설비/lot/recipe/chamber/test metadata와 조인 가능하다.
+
+분석 예:
+
+- 특정 tool/chamber에서 shot-relative score가 높은가?
+- 특정 recipe 이후 edge-localized score가 상승하는가?
+- 특정 lot에서 stby-origin-hidden score가 반복되는가?
+
+ANOVA는 이 단계의 후속 분석이다.

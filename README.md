@@ -1,102 +1,65 @@
 # WaferMap Defect Intelligence
 
-보안상 실제 wafer Fail Bit Map을 repo에 둘 수 없는 조건에서, synthetic FBM을 만들고 검증하며 FBM 자체에서 정보를 추출하는 프로젝트입니다.
+1채널 고해상도 Wafer Fail Bit Map(FBM)에서 실제 wafer에도 적용 가능한 feature 표현을 만들기 위한 프로젝트입니다.
 
-현재 1차 목표는 ANOVA가 아닙니다. ANOVA와 공정/설비/lot/recipe 기반 통계 검정은 나중에 process metadata와 FBM feature를 조인한 뒤 수행할 후속 분석입니다.
+핵심 목표는 단일 defect classification이 아니라 다음 흐름을 안정적으로 만드는 것입니다.
 
 ```text
-현재 우선순위:
-FBM feature 추출 -> 유사맵 검색 -> defect score -> scale 검증 -> real-unlabeled workflow
+semantic FBM tensor
+-> compact observable feature
+-> similar wafer retrieval
+-> interest-conditioned defect retrieval
+-> defect score / feature table
+-> expert review
+-> real-unlabeled secure workflow
 ```
 
-## 현재 목표
+ANOVA와 공정/설비/lot/recipe/chamber metadata 분석은 현재 목표가 아닙니다. FBM feature table이 안정화되고 process metadata와 조인된 뒤의 후속 분석입니다.
 
-- 1채널 고해상도 Fail Bit Map에서 wafer-level observable feature를 추출한다.
-- 비슷한 불량 패턴을 가진 wafer를 nearest-neighbor 방식으로 찾는다.
-- hard label 하나가 아니라 edge, ring, scratch, local, shot-relative, stby 같은 여러 관점의 score를 만든다.
-- coarse group, 유사맵 검색, feature family ablation으로 방법론이 유효한지 CPU 환경에서 먼저 검증한다.
-- 이후 synthetic mask를 이용해 segmentation baseline을 만들고, 보안 환경 안에서 real unlabeled wafer sanity check로 확장한다.
-- 실제 wafer inference에 쓰는 feature는 observable-only로 고정하고, `*_mask_ratio` 같은 synthetic oracle field는 검증 전용으로 분리한다.
+## 현재 상태
 
-## 현재 범위
+- Synthetic generator는 Grade 0~7, none-wafer, valid-test, stby, edge/local/shot/ring/scratch 계열을 생성합니다.
+- Global retrieval은 compact observable feature 50개 기준을 유지합니다.
+- Scale 155장 top-k retrieval lift는 약 1.36x, holdout 120장은 약 1.40x입니다.
+- 위치-aware retrieval은 `class_location`, `feature_key` 같은 경우에만 `polar_*`, `stby_polar_*` feature를 조건부 사용합니다.
+- Resize-only representation은 global retrieval 대체재로 쓰지 않습니다.
+- Patch/curve proposal은 review 후보 축소용 보조층입니다.
+- Scratch는 rule/proposal 과투자 대신 segmentation 또는 scratch-specific line representation track으로 분리합니다.
+- Real-unlabeled workflow MVP는 feature CSV, sanity JSON, nearest-neighbor CSV, expert review template까지 연결되어 있습니다.
 
-- 600 net die급 synthetic wafer map 생성
-- Grade 0~7, none wafer, valid test mask, stby fail chip 분리
-- 계단식 wafer edge, center-to-edge fail gradient, edge-chip outer-face gradient
-- spin arc/radial scratch, ring, edge, local blob, shot-relative, stby-origin-coupled defect 생성
-- observable feature 기반 유사 wafer 검색, grouping, stability, parameter sweep, feature family ablation
-- 위치-aware retrieval용 chip-level polar feature는 CSV에 보관하되 global grouping에는 조건부로 제외
-- 전문가 육안 검증용 HTML report와 gallery 생성
+## 먼저 읽을 문서
 
-## 주요 리포트
-
-- [Project Progress Briefing](outputs/reports/project_progress_briefing.html)
-- [Methodology Validation](outputs/reports/methodology_validation_report.html)
-- [FBM Grouping](outputs/reports/fbm_grouping_report.html)
-- [Grouping Stability](outputs/reports/fbm_grouping_stability_report.html)
-- [Parameter Sweep](outputs/reports/fbm_grouping_parameter_sweep_report.html)
-- [Feature Ablation](outputs/reports/fbm_feature_ablation_report.html)
-- [Scale FBM Grouping](outputs/reports/fbm_grouping_scale_report.html)
-- [Scale Grouping Stability](outputs/reports/fbm_grouping_scale_stability_report.html)
-- [Scale Parameter Sweep](outputs/reports/fbm_grouping_scale_parameter_sweep_report.html)
-- [Scale Feature Ablation](outputs/reports/fbm_feature_ablation_scale_report.html)
-- [Scale Retrieval Confidence](outputs/reports/fbm_retrieval_confidence_scale_report.html)
-- [Interest-Based Retrieval](outputs/reports/fbm_interest_retrieval_scale_report.html)
-- [Scale Defect Feature Retrieval](outputs/reports/fbm_defect_feature_retrieval_scale_report.html)
-- [Holdout Retrieval Confidence](outputs/reports/fbm_retrieval_confidence_holdout_report.html)
-- [Holdout Interest Retrieval](outputs/reports/fbm_interest_retrieval_holdout_report.html)
-- [Holdout Defect Feature Retrieval](outputs/reports/fbm_defect_feature_retrieval_holdout_report.html)
-- [Segmentation Readiness](outputs/reports/fbm_segmentation_readiness_report.html)
-- [Holdout Segmentation Readiness](outputs/reports/fbm_segmentation_readiness_holdout_report.html)
-- [Segmentation Smoke Training](outputs/reports/fbm_segmentation_smoke_report.html)
-- [Holdout Segmentation Smoke Training](outputs/reports/fbm_segmentation_smoke_holdout_report.html)
-- [Defect Feature Summary](outputs/reports/fbm_defect_location_summary_report.html)
-- [Holdout Defect Feature Summary](outputs/reports/fbm_defect_location_summary_holdout_report.html)
-- [Scale Resize Benchmark](outputs/reports/fbm_resize_benchmark_scale_report.html)
-- [Holdout Resize Benchmark](outputs/reports/fbm_resize_benchmark_holdout_report.html)
-- [Scale Patch Proposal](outputs/reports/fbm_patch_proposal_scale_report.html)
-- [Holdout Patch Proposal](outputs/reports/fbm_patch_proposal_holdout_report.html)
-- [Scale Curve Proposal](outputs/reports/fbm_curve_proposal_scale_report.html)
-- [Holdout Curve Proposal](outputs/reports/fbm_curve_proposal_holdout_report.html)
-- [Expert Review Template](outputs/reports/expert_review_template.html)
-- [Expert Review Summary](outputs/reports/expert_review_summary.html)
-
-## 주요 문서
-
-- [Problem Definition](docs/problem_definition.md)
-- [Data Schema](docs/data_schema.md)
-- [Pattern Taxonomy](docs/pattern_taxonomy.md)
-- [Synthetic Data Plan](docs/synthetic_data_plan.md)
-- [Validation Protocol](docs/validation_protocol.md)
-- [Modeling Strategy](docs/modeling_strategy.md)
-- [Methodology Validation](docs/methodology_validation.md)
-- [Milestone Review](docs/milestone_review.md)
-- [AI Data Science Validation Audit](docs/ai_ds_validation_audit.md)
-- [Scale Pilot Review](docs/scale_pilot_review.md)
-- [Next Tasks](docs/next_tasks.md)
+- [문서 길잡이](docs/README.md)
+- [프로젝트 개요](docs/project_overview.md)
+- [로드맵](docs/roadmap.md)
 - [Real-Unlabeled Workflow](docs/real_unlabeled_workflow.md)
 - [Expert Review Protocol](docs/expert_review_protocol.md)
-- [Interest-Based Retrieval](docs/interest_based_retrieval.md)
-- [Segmentation Readiness](docs/segmentation_readiness.md)
-- [Defect Feature Summary](docs/defect_location_summary.md)
-- [Resize Strategy](docs/resize_strategy.md)
-- [Current Milestone Checkpoint](docs/current_milestone_checkpoint.md)
-- [Solution Roadmap Checkpoint](docs/solution_roadmap_checkpoint.md)
-- [Project Alignment Review](docs/project_alignment_review.md)
-- [Curve Proposal Strategy](docs/curve_proposal_strategy.md)
-- [Robustness Holdout](docs/robustness_holdout.md)
-- [Revised Physical Assumptions](docs/revised_physical_assumptions.md)
-- [Review Presets](docs/review_presets.md)
-- [Roadmap](docs/roadmap.md)
-- [Project Structure](docs/project_structure.md)
 
 ## 빠른 실행
 
 ```powershell
-python -m pytest -q
+python -m pytest -q --basetemp .pytest_tmp
 python scripts/generate_synthetic.py --config configs/synth/debug.json --out data/synthetic/debug --count 3
 python scripts/validate_synthetic.py --data data/synthetic/debug
 python scripts/extract_features.py --data data/synthetic/debug --out outputs/reports/synthetic_features.csv
 ```
 
-생성된 preview는 `data/synthetic/debug/synth_*/preview.png`에서 확인합니다. synthetic data와 report output은 git에 포함하지 않는 재생성 가능한 산출물입니다.
+Real-unlabeled smoke:
+
+```powershell
+python scripts/extract_real_unlabeled_features.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --reference-features outputs/reports/fbm_grouping_scale_features.csv `
+  --features-out outputs/reports/real_unlabeled_features.csv `
+  --sanity-out outputs/reports/real_unlabeled_sanity.json `
+  --report-out outputs/reports/real_unlabeled_report.html `
+  --neighbors-out outputs/reports/real_unlabeled_neighbors.csv `
+  --review-template-out outputs/reports/real_unlabeled_expert_review_template.csv
+```
+
+## 보안 원칙
+
+- 실제 wafer raw image/array는 repo에 저장하지 않습니다.
+- Real input은 보안 환경의 `.npz` manifest로 참조합니다.
+- Repo에는 code, config, schema, synthetic preset, 익명화된 feature/report만 남깁니다.
+- Synthetic oracle label/mask는 검증용이며 real inference feature에 섞지 않습니다.

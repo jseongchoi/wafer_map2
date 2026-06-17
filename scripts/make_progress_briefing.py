@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sweep-metrics", default="outputs/reports/fbm_grouping_parameter_sweep_metrics.json")
     parser.add_argument("--ablation-report", default="outputs/reports/fbm_feature_ablation_report.html")
     parser.add_argument("--ablation-metrics", default="outputs/reports/fbm_feature_ablation_metrics.json")
-    parser.add_argument("--scale-doc", default="docs/scale_pilot_review.md")
+    parser.add_argument("--scale-doc", default="docs/project_overview.md")
     parser.add_argument("--scale-grouping-report", default="outputs/reports/fbm_grouping_scale_report.html")
     parser.add_argument("--scale-grouping-metrics", default="outputs/reports/fbm_grouping_scale_metrics.json")
     parser.add_argument("--scale-stability-report", default="outputs/reports/fbm_grouping_scale_stability_report.html")
@@ -273,7 +273,7 @@ def html_report(
     stability_report: Path,
     sweep_report: Path,
     ablation_report: Path,
-    scale_doc: Path,
+    overview_doc: Path,
     scale_grouping_report: Path,
     scale_stability_report: Path,
     scale_sweep_report: Path,
@@ -376,7 +376,7 @@ def html_report(
     <li><a href="{html.escape(relpath(stability_report, out))}">FBM 그룹핑 안정성 리포트</a></li>
     <li><a href="{html.escape(relpath(sweep_report, out))}">FBM 그룹핑 파라미터 스윕 리포트</a></li>
     <li><a href="{html.escape(relpath(ablation_report, out))}">FBM feature family ablation 리포트</a></li>
-    <li><a href="{html.escape(relpath(scale_doc, out))}">Scale pilot review 문서</a></li>
+    <li><a href="{html.escape(relpath(overview_doc, out))}">Project overview 문서</a></li>
     <li><a href="{html.escape(relpath(scale_grouping_report, out))}">Scale FBM 그룹핑 리포트</a></li>
     <li><a href="{html.escape(relpath(scale_stability_report, out))}">Scale FBM 안정성 리포트</a></li>
     <li><a href="{html.escape(relpath(scale_sweep_report, out))}">Scale FBM 파라미터 스윕 리포트</a></li>
@@ -411,7 +411,7 @@ def main() -> None:
     stability_report = Path(args.stability_report)
     sweep_report = Path(args.sweep_report)
     ablation_report = Path(args.ablation_report)
-    scale_doc = Path(args.scale_doc)
+    overview_doc = Path(args.scale_doc)
     scale_grouping_report = Path(args.scale_grouping_report)
     scale_stability_report = Path(args.scale_stability_report)
     scale_sweep_report = Path(args.scale_sweep_report)
@@ -449,7 +449,7 @@ def main() -> None:
             stability_report,
             sweep_report,
             ablation_report,
-            scale_doc,
+            overview_doc,
             scale_grouping_report,
             scale_stability_report,
             scale_sweep_report,

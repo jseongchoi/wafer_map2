@@ -1,0 +1,34 @@
+# Documentation Guide
+
+이 폴더는 처음 보는 사람이 프로젝트를 빠르게 이해하고 실행할 수 있도록 핵심 문서만 유지한다.
+
+## 추천 읽기 순서
+
+1. [프로젝트 개요](project_overview.md)
+   - 목적, 현재 상태, 본질 정렬 여부, 주요 수치, 하지 말아야 할 일.
+
+2. [로드맵](roadmap.md)
+   - 단계별 진행 상태와 다음 작업.
+
+3. [데이터 스키마](data_schema.md)
+   - semantic tensor, synthetic sample, real-unlabeled manifest 계약.
+
+4. [Real-Unlabeled Workflow](real_unlabeled_workflow.md)
+   - 보안 환경의 `.npz` 입력에서 feature/sanity/nearest-neighbor/review template까지 생성하는 운영 절차.
+
+5. [Expert Review Protocol](expert_review_protocol.md)
+   - top-k retrieval 결과를 사람이 평가하고 feature/model backlog로 연결하는 방법.
+
+## 설계와 검증 참고
+
+- [Modeling Strategy](modeling_strategy.md): observable baseline, segmentation/self-supervised 모델의 위치, 참고 논문.
+- [Validation Protocol](validation_protocol.md): synthetic/real sanity, retrieval lift, expert review gate.
+- [Pattern Taxonomy](pattern_taxonomy.md): scratch, ring, edge, local, random, shot, stby pattern 정의.
+
+## 문서 정리 원칙
+
+- README는 입구만 담당한다.
+- 이 파일은 문서 index만 담당한다.
+- 실험별 HTML/JSON report는 `outputs/`에 재생성 산출물로 둔다.
+- 과거 checkpoint나 중복 진행 보고서는 핵심 문서에 흡수하고 별도 문서로 유지하지 않는다.
+
