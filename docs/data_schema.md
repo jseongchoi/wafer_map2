@@ -9,84 +9,57 @@ y axis: top -> bottom
 x axis: left -> right
 wafer center: (cx, cy)
 clock position:
-  12:00 = negative y direction
-  03:00 = positive x direction
-  06:00 = positive y direction
-  09:00 = negative x direction
+  12:00 = negative y
+  03:00 = positive x
+  06:00 = positive y
+  09:00 = negative x
 ```
 
-위치 기반 report는 Cartesian coordinate와 polar coordinate를 함께 사용할 수 있어야 한다.
+위치 기반 report는 Cartesian coordinate와 polar coordinate를 함께 사용할 수 있다.
 
-## 2. Geometry Units
+## 2. Semantic Tensor
 
-```text
-cell block: 가장 작은 Fail Bit Map 분석 단위
-chip/die: cell block 직사각형 묶음
-wafer: net die들이 원형/준원형으로 배열된 전체 map
+분석 내부에서는 시각화 색보다 semantic tensor를 우선한다.
+
+필수 channel:
+
+| Channel | dtype | Shape | Meaning |
+| --- | --- | --- | --- |
+| `severity` | `uint8` | `[H, W]` | Grade 0~7. wafer 밖과 stby는 0. |
+| `wafer_mask` | `uint8`/bool | `[H, W]` | wafer 내부 1, none-wafer 0. |
+| `valid_test_mask` | `uint8`/bool | `[H, W]` | 실제 test된 pixel 1. |
+| `stby_mask` | `uint8`/bool | `[H, W]` | stby fail chip 영역 1. |
+
+권장 channel:
+
+| Channel | dtype | Shape | Meaning |
+| --- | --- | --- | --- |
+| `chip_index` | `int32` | `[H, W]` | die/chip id. wafer 밖은 -1. |
+
+핵심 규칙:
+
+- Stby는 Grade 7이 아니다.
+- Stby는 `stby_mask=1`, `valid_test_mask=0`, `severity=0`으로 표현한다.
+- None-wafer와 in-wafer Grade 0은 `wafer_mask`로 구분한다.
+- `pattern_masks`, `pattern_intensity`는 synthetic 검증용 label이며 real inference feature가 아니다.
+
+## 3. Geometry Metadata
+
+제품별 chip size와 die layout은 metadata로 명시한다.
+
+```json
+{
+  "chip_blocks": { "width": 100, "height": 50 },
+  "grid": { "rows": 38, "cols": 20 },
+  "actual_net_die": 600
+}
 ```
 
-초기 synthetic 기본값:
+`chip_index`가 없으면 `chip_blocks`와 `grid`로 추정할 수 있지만, 실제 운영에서는 export하는 편이 더 안전하다.
 
-```yaml
-target_net_die: 600
-default_chip_blocks:
-  width: 100
-  height: 50
-```
+## 4. Synthetic Sample Format
 
-제품별 chip size와 die layout은 config에서 바꿀 수 있어야 한다.
-
-## 3. Logical Values
-
-사용자의 원본 parser mapping은 조정 가능하므로, 분석 내부에서는 시각화 값보다 semantic tensor를 우선한다.
-
-권장 내부 표현:
-
-```text
-none wafer: wafer_mask = 0
-in wafer: wafer_mask = 1
-Grade 0, fail bit 0: severity = 0
-Grade 1~7, fail bit count bucket: severity = 1~7
-stby chip: stby_mask = 1, valid_test_mask = 0
-measured chip: stby_mask = 0, valid_test_mask = 1
-```
-
-Stby는 Grade 7과 다르다. 시각화에서 흰색으로 표시하더라도 분석에서는 `stby_mask`로 분리한다.
-
-## 4. Tensor Channels
-
-최소 sample tensor:
-
-```text
-severity: uint8 [H, W], 0~7
-wafer_mask: uint8 [H, W], 0/1
-valid_test_mask: uint8 [H, W], 0/1
-stby_mask: uint8 [H, W], 0/1
-```
-
-Synthetic 전용 validation tensor:
-
-```text
-pattern_masks: uint8 [C, H, W]
-pattern_intensity: float32 [C, H, W]
-chip_index: int32 [H, W]
-```
-
-`pattern_masks`는 synthetic validation label이다. 실제 wafer inference feature에 섞으면 label leakage가 되므로 report와 검증용으로만 사용한다.
-
-선택 channel:
-
-```text
-radius_norm: [H, W]
-theta_sin/theta_cos: [H, W]
-die_boundary_mask: [H, W]
-edge_distance: [H, W]
-local_density: [H, W]
-```
-
-## 5. Synthetic Sample Files
-
-저장 형식은 numpy와 JSON을 기본으로 한다.
+Synthetic sample은 repo 밖 재생성 산출물이다.
 
 ```text
 sample_id/
@@ -98,72 +71,20 @@ sample_id/
 `arrays.npz`:
 
 ```text
-severity: uint8 [H, W]
-wafer_mask: uint8 [H, W]
-valid_test_mask: uint8 [H, W]
-stby_mask: uint8 [H, W]
-pattern_masks: uint8 [C, H, W]
-pattern_intensity: float32 [C, H, W]
-chip_index: int32 [H, W]
+severity
+wafer_mask
+valid_test_mask
+stby_mask
+chip_index
+pattern_masks        # synthetic validation only
+pattern_intensity    # synthetic validation only
 ```
 
-`metadata.json`:
-
-```json
-{
-  "sample_id": "synth_000001",
-  "target_net_die": 600,
-  "chip_blocks": {"width": 100, "height": 50},
-  "image_shape": {"height": 0, "width": 0},
-  "patterns": [
-    {
-      "type": "scratch",
-      "instance_id": 1,
-      "clock_position": "12:00",
-      "severity": 0.8,
-      "parameters": {"mode": "spin_arc"}
-    }
-  ],
-  "grade_thresholds": [0.055, 0.115, 0.205, 0.34, 0.53, 0.76, 1.05]
-}
-```
-
-## 6. Feature Table
-
-현재 feature table의 1차 목적은 FBM 정보추출, 유사 wafer 검색, coarse grouping, defect score report다.
-
-예시 column:
-
-```text
-sample_id
-product_id
-lot_id
-wafer_id
-total_fail_density
-grade_weighted_severity
-stby_ratio
-edge_density
-center_density
-edge_sector_peak_contrast
-ring_radial_peak_contrast
-scratch_angular_peak_contrast
-local_hotspot_peak_contrast
-shot_lower_left_contrast
-shot_bottom_edge_contrast
-shot_left_edge_contrast
-radial_zone_00_severity ... radial_zone_NN_severity
-angular_sector_00_severity ... angular_sector_11_severity
-```
-
-향후 공정/설비/lot/recipe metadata가 조인되면 이 feature table을 ANOVA와 통계 검정에도 사용할 수 있다.
-
-실제 보안 데이터는 repo에 저장하지 않고, feature schema와 extraction code만 관리한다.
-
-## 7. Real-Unlabeled Manifest Schema
+## 5. Real-Unlabeled Manifest
 
 실제 wafer는 repo에 저장하지 않고, 보안 환경의 semantic `.npz`를 manifest로 참조한다.
 
-Top-level 필수 field:
+Top-level:
 
 ```json
 {
@@ -173,7 +94,7 @@ Top-level 필수 field:
 }
 ```
 
-`npz_semantic_arrays` sample 필수 field:
+`npz_semantic_arrays` sample:
 
 ```json
 {
@@ -184,8 +105,8 @@ Top-level 필수 field:
   "parser_name": "secure_fbm_parser",
   "parser_version": "0.1.0",
   "orientation": "not_rotated",
-  "chip_blocks": {"width": 100, "height": 50},
-  "grid": {"rows": 38, "cols": 20}
+  "chip_blocks": { "width": 100, "height": 50 },
+  "grid": { "rows": 38, "cols": 20 }
 }
 ```
 
@@ -205,15 +126,57 @@ Top-level 필수 field:
 
 보안 규칙:
 
-- `sample_id`에는 lot, wafer id, tool, recipe, chamber 같은 민감 정보를 넣지 않는다.
+- `sample_id`는 익명 id만 사용한다.
 - `arrays_npz`와 optional `metadata_json`은 기본적으로 workspace 밖 경로여야 한다.
-- real inference feature에는 `label_*`, `*_mask_ratio`, `pattern_masks`, `pattern_intensity`를 넣지 않는다.
-- global nearest-neighbor에는 compact observable feature만 쓰며 `polar_*`, `stby_polar_*`는 제외한다.
+- 실제 file path, lot id, wafer id, tool, recipe, chamber 정보는 repo 산출물에 남기지 않는다.
 
-Real `.npz` ingest validation:
+## 6. Feature Table Contract
 
-- `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`는 required다.
-- `chip_index`는 recommended이며 없으면 grid/chip block metadata로 추정한다.
-- `array_keys`는 원본 key 이름이 표준 key와 다를 때만 필요하다.
-- 배열은 semantic cast 전에 검사한다. float mask `0.5`, severity `1.5`, NaN/inf, 잘못된 shape는 reject한다.
-- stby와 기타 invalid-test 영역은 `severity=0`이어야 한다. stby는 Grade 7이 아니다.
+현재 feature table의 목적:
+
+- similar wafer retrieval
+- coarse grouping
+- defect score report
+- expert review triage
+- downstream model input
+
+기본 column:
+
+```text
+sample_id
+actual_net_die
+total_fail_density
+grade_weighted_severity
+stby_ratio
+edge_density
+center_density
+edge_sector_peak_contrast
+ring_radial_peak_contrast
+scratch_angular_peak_contrast
+local_hotspot_peak_contrast
+shot_lower_left_contrast
+shot_bottom_edge_contrast
+shot_left_edge_contrast
+...
+```
+
+Global retrieval feature contract:
+
+```text
+compact observable feature 50개
+```
+
+Global retrieval에서 제외:
+
+```text
+label_*
+*_mask_ratio
+pattern_masks
+pattern_intensity
+polar_*
+stby_polar_*
+```
+
+`polar_*`, `stby_polar_*`는 `class_location`, `feature_key` 같은 위치-aware retrieval에서만 조건부 사용한다.
+
+Process metadata는 feature table이 안정화된 뒤 외부에서 조인한다. 현재 repo feature table에는 민감한 lot/tool/recipe/chamber id를 넣지 않는다.
