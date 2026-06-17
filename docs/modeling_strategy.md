@@ -96,6 +96,12 @@ Proposal recall을 최종 성능으로 해석하지 않는다.
 - self-supervised encoder / metric learning
 - domain adaptation
 
+현재 구현 상태:
+
+- 구현됨: observable feature extractor, nearest-neighbor retrieval, interest retrieval evaluation, real-unlabeled review workflow
+- smoke 수준 구현됨: synthetic-label segmentation dataset helper와 NumPy-only 1x1 sigmoid segmentation smoke training
+- 아직 아님: 실사용 U-Net/SegFormer/DINO model, real wafer로 검증된 supervised/self-supervised model, calibrated defect probability model
+
 ## 왜 AutoEncoder First가 아닌가
 
 현재 문제는 단순 anomaly detection이 아니다.

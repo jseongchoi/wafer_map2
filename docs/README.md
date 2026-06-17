@@ -19,6 +19,9 @@
 5. [Expert Review Protocol](expert_review_protocol.md)
    - top-k retrieval 결과를 사람이 평가하고 feature/model backlog로 연결하는 방법.
 
+6. [Real Wafer Review Checklist](real_wafer_review_checklist.md)
+   - 실제 wafer 리뷰 전 준비물, 실행 결과, 리뷰어가 채워야 할 항목, AI 모델 구현 상태.
+
 ## 설계와 검증 참고
 
 - [Modeling Strategy](modeling_strategy.md): observable baseline, segmentation/self-supervised 모델의 위치, 참고 논문.
