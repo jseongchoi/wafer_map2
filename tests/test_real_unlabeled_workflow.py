@@ -145,6 +145,18 @@ def test_manifest_rejects_duplicate_sample_ids():
         module.validate_manifest(manifest)
 
 
+def test_real_unlabeled_manifest_templates_are_valid():
+    module = _load_real_script()
+    root = Path(__file__).resolve().parents[1]
+    for name in (
+        "real_unlabeled_manifest_template_standard.json",
+        "real_unlabeled_manifest_template_keymap.json",
+    ):
+        manifest = json.loads((root / "configs" / "eval" / name).read_text(encoding="utf-8"))
+
+        module.validate_manifest(manifest)
+
+
 def test_real_unlabeled_cli_top_k_requires_positive_integer():
     module = _load_real_script()
 

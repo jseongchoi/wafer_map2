@@ -1,0 +1,24 @@
+{
+  "schema_version": "real_unlabeled_manifest/v1",
+  "feature_schema_version": "observable_fbm_features/v1",
+  "samples": [
+    {
+      "sample_id": "real_like_001",
+      "source_type": "npz_semantic_arrays",
+      "arrays_npz": "D:/secure_fbm/real_like_001_arrays.npz",
+      "pseudonymized": true,
+      "parser_name": "secure_fbm_parser",
+      "parser_version": "0.1.0",
+      "orientation": "not_rotated",
+      "chip_blocks": {
+        "width": 100,
+        "height": 50
+      },
+      "grid": {
+        "rows": 38,
+        "cols": 20
+      },
+      "actual_net_die": 600
+    }
+  ]
+}

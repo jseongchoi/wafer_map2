@@ -38,6 +38,11 @@ Schema 세부 계약은 [Data Schema](data_schema.md)를 기준으로 한다.
 
 ## Manifest 예시
 
+복사해서 수정할 수 있는 템플릿:
+
+- 표준 key: `configs/eval/real_unlabeled_manifest_template_standard.json`
+- key mapping 필요: `configs/eval/real_unlabeled_manifest_template_keymap.json`
+
 표준 key를 쓰는 경우:
 
 ```json

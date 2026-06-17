@@ -31,6 +31,19 @@ ANOVA와 공정 metadata 해석은 현재 목표가 아니다. 공정/설비/lot
 - Real-unlabeled workflow MVP는 semantic `.npz` manifest, feature CSV, sanity JSON, nearest-neighbor CSV, expert review template까지 연결되어 있다.
 - Global nearest-neighbor 경로에서는 `polar_*`, `stby_polar_*` 위치 feature를 제외한다.
 
+## 목표 대비 진행 / 연구 근거
+
+| 사용자가 원한 목표 | 진행한 내용 | 확인된 근거 | 확인 위치 |
+| --- | --- | --- | --- |
+| 실제 wafer에도 적용 가능한 FBM feature | synthetic oracle 없이 계산 가능한 compact observable feature를 정리했다. Global retrieval은 50개 feature 기준으로 고정했다. | scale 155장 top-k lift 약 1.36x, holdout 120장 약 1.40x. | [Modeling Strategy](modeling_strategy.md), [Roadmap](roadmap.md) |
+| 유사 wafer 검색 | feature standardization과 nearest-neighbor retrieval을 공통 유틸로 분리하고, global 경로에서 polar 위치 feature를 제외했다. | random baseline 대비 retrieval lift가 유지된다. | `src/wafermap/evaluation/nearest.py`, `src/wafermap/features/selection.py` |
+| 관심 defect별 retrieval | class, class_location, feature_key 기준 retrieval을 분리해 검증했다. 위치 feature는 이 경로에서만 조건부 사용한다. | feature_key/class_location에서 random 대비 lift가 관측됐다. | [Modeling Strategy](modeling_strategy.md) |
+| defect score / feature table / downstream 표현 | edge, shot, stby, ring, local, scratch proxy feature와 structured defect feature row 방향을 정리했다. | downstream feature table과 expert review backlog로 연결 가능한 schema가 생겼다. | [Data Schema](data_schema.md), [Pattern Taxonomy](pattern_taxonomy.md) |
+| 실제 보안 환경 적용 | `real_unlabeled_manifest/v1`와 semantic `.npz` 입력 계약을 만들고, raw data를 repo에 저장하지 않는 workflow를 구현했다. | synthetic smoke로 feature CSV, sanity JSON, NN CSV, review template 생성이 통과했다. | [Real-Unlabeled Workflow](real_unlabeled_workflow.md), `scripts/extract_real_unlabeled_features.py` |
+| expert review loop | nearest-neighbor 결과를 reviewer CSV로 바꾸고, review summary에서 failure mode와 next action queue를 집계한다. | reviewer 판단이 feature/model backlog로 이어지는 protocol이 생겼다. | [Expert Review Protocol](expert_review_protocol.md), `scripts/summarize_expert_review.py` |
+| proposal 과투자 방지 | patch/curve proposal은 review 후보 축소용으로 제한하고, scratch는 별도 track으로 분리했다. | resize-only와 proposal-only 경로가 global retrieval 대체재가 아님을 정리했다. | [Roadmap](roadmap.md), [Modeling Strategy](modeling_strategy.md) |
+| 해외 연구 참고 | wafer map clustering/manual labeling, graph spatial filtering, segmentation 연구를 검토해 현재 전략의 위치를 정리했다. | 연구 방향은 `feature -> retrieval/grouping -> expert review`, scratch/local은 morphology/segmentation 보강이라는 판단을 지지한다. | 아래 참고 연구, [Modeling Strategy](modeling_strategy.md) |
+
 ## 본질 정렬 판정
 
 판정: 본질대로 진행 중이다.
@@ -77,4 +90,3 @@ ANOVA와 공정 metadata 해석은 현재 목표가 아니다. 공정/설비/lot
 - WaferSegClassNet
   - mixed-type wafer defect classification/segmentation을 함께 다루며, scratch/local/overlap 보강을 segmentation track으로 분리한 현재 판단과 맞다.
   - https://arxiv.org/abs/2207.00960
-
