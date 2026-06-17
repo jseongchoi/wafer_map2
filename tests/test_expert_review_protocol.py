@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def _load_script(name: str):
     path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
@@ -34,6 +36,24 @@ def test_review_template_strips_reference_labels_and_adds_blank_fields():
     assert rows[0]["next_action"] == ""
     assert "label_edge" not in rows[0]
     assert warnings
+
+
+def test_review_template_rejects_duplicate_case_ids():
+    module = _load_script("make_expert_review_template")
+    rows = [
+        {"query_sample_id": "q1", "rank": "1", "neighbor_sample_id": "n1", "distance": "1.0"},
+        {"query_sample_id": "q1", "rank": "1", "neighbor_sample_id": "n1", "distance": "1.0"},
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate review_case_id"):
+        module.build_template_rows(rows)
+
+
+def test_review_summary_cli_top_k_requires_positive_integer():
+    module = _load_script("summarize_expert_review")
+
+    with pytest.raises(SystemExit):
+        module.parse_args(["--top-k", "0"])
 
 
 def test_review_summary_computes_query_topk_acceptance():

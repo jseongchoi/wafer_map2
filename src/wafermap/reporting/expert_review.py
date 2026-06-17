@@ -121,13 +121,18 @@ def format_distance(value: str) -> str:
 def build_template_rows(neighbor_rows: list[dict[str, str]]) -> tuple[list[dict[str, Any]], list[str]]:
     warnings = validate_neighbor_rows(neighbor_rows)
     rows: list[dict[str, Any]] = []
+    review_case_ids: set[str] = set()
     for item in neighbor_rows:
         query_id = str(item["query_sample_id"]).strip()
         rank = str(item["rank"]).strip()
         neighbor_id = str(item["neighbor_sample_id"]).strip()
+        review_case_id = f"{query_id}__rank{rank}__{neighbor_id}"
+        if review_case_id in review_case_ids:
+            raise ValueError(f"Duplicate review_case_id generated from neighbor rows: {review_case_id}")
+        review_case_ids.add(review_case_id)
         rows.append(
             {
-                "review_case_id": f"{query_id}__rank{rank}__{neighbor_id}",
+                "review_case_id": review_case_id,
                 "query_sample_id": query_id,
                 "rank": rank,
                 "neighbor_sample_id": neighbor_id,

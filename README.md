@@ -82,6 +82,7 @@ FBM feature 추출 -> 유사맵 검색 -> defect score -> scale 검증 -> real-u
 - [Resize Strategy](docs/resize_strategy.md)
 - [Current Milestone Checkpoint](docs/current_milestone_checkpoint.md)
 - [Solution Roadmap Checkpoint](docs/solution_roadmap_checkpoint.md)
+- [Project Alignment Review](docs/project_alignment_review.md)
 - [Curve Proposal Strategy](docs/curve_proposal_strategy.md)
 - [Robustness Holdout](docs/robustness_holdout.md)
 - [Revised Physical Assumptions](docs/revised_physical_assumptions.md)

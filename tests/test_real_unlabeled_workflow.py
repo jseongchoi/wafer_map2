@@ -130,6 +130,35 @@ def test_manifest_requires_known_schema_versions_and_source_type():
         module.validate_manifest(bad_version)
 
 
+def test_manifest_rejects_duplicate_sample_ids():
+    module = _load_real_script()
+    manifest = {
+        "schema_version": "real_unlabeled_manifest/v1",
+        "feature_schema_version": "observable_fbm_features/v1",
+        "samples": [
+            {"sample_id": "dup", "source_type": "synthetic_sample_dir", "sample_dir": "a"},
+            {"sample_id": "dup", "source_type": "synthetic_sample_dir", "sample_dir": "b"},
+        ],
+    }
+
+    with pytest.raises(ValueError, match="duplicate sample_id"):
+        module.validate_manifest(manifest)
+
+
+def test_real_unlabeled_cli_top_k_requires_positive_integer():
+    module = _load_real_script()
+
+    with pytest.raises(SystemExit):
+        module.parse_args(
+            [
+                "--manifest",
+                "manifest.json",
+                "--top-k",
+                "0",
+            ]
+        )
+
+
 def test_load_npz_semantic_arrays_with_key_mapping(tmp_path):
     module = _load_real_script()
     arrays = _npz_arrays()
@@ -199,6 +228,66 @@ def test_real_input_inside_workspace_requires_explicit_allow_flag(tmp_path, monk
 
     with pytest.raises(ValueError, match="arrays_npz must live outside the workspace"):
         module.load_real_like_sample(entry, tmp_path / "manifest.json")
+
+
+def test_output_paths_are_restricted_to_output_root(tmp_path, monkeypatch):
+    module = _load_real_script()
+    monkeypatch.setattr(module, "OUTPUT_ROOT", tmp_path / "outputs")
+
+    allowed = module.ensure_output_path(tmp_path / "outputs" / "report.json")
+
+    assert allowed == (tmp_path / "outputs" / "report.json").resolve()
+    with pytest.raises(ValueError, match="Output path must be under"):
+        module.ensure_output_path(tmp_path / "leak.json")
+
+
+def test_invalid_real_samples_write_sanity_under_output_root(tmp_path, monkeypatch):
+    module = _load_real_script()
+    output_root = tmp_path / "outputs"
+    monkeypatch.setattr(module, "OUTPUT_ROOT", output_root)
+    arrays = _npz_arrays()
+    arrays["valid_test_mask"] = np.zeros((4, 4), dtype=np.uint8)
+    arrays["stby_mask"] = np.zeros((4, 4), dtype=np.uint8)
+    arrays["severity"] = np.zeros((4, 4), dtype=np.uint8)
+    npz_path = tmp_path / "arrays.npz"
+    np.savez(npz_path, **arrays)
+    entry = _manifest_entry(npz_path)
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "real_unlabeled_manifest/v1",
+                "feature_schema_version": "observable_fbm_features/v1",
+                "samples": [entry],
+            }
+        ),
+        encoding="utf-8",
+    )
+    sanity_out = output_root / "bad_sanity.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "extract_real_unlabeled_features.py",
+            "--manifest",
+            str(manifest_path),
+            "--features-out",
+            str(output_root / "features.csv"),
+            "--sanity-out",
+            str(sanity_out),
+            "--report-out",
+            str(output_root / "report.html"),
+            "--neighbors-out",
+            str(output_root / "neighbors.csv"),
+            "--review-template-out",
+            str(output_root / "review.csv"),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="No valid samples"):
+        module.main()
+
+    payload = json.loads(sanity_out.read_text(encoding="utf-8"))
+    assert payload["samples"][0]["errors"] == ["sample has no valid tested pixels"]
 
 
 def test_neighbor_rows_do_not_copy_reference_labels_by_default():

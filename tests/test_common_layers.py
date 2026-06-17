@@ -1,7 +1,9 @@
 import numpy as np
 
+import pytest
+
 from wafermap.evaluation import cross_nearest_neighbor_indices, nearest_neighbor_indices
-from wafermap.features import compact_observable_feature_names, observable_feature_names
+from wafermap.features import compact_observable_feature_names, feature_matrix, observable_feature_names
 from wafermap.reporting import clock_position_from_xy
 from wafermap.viz import render_grayscale
 
@@ -58,3 +60,22 @@ def test_cross_nearest_neighbors_fit_reference_distribution():
 
     assert neighbors.tolist() == [[1]]
     assert distances.shape == (1, 2)
+
+
+def test_nearest_neighbor_rejects_non_positive_top_k():
+    x = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="top_k must be a positive integer"):
+        nearest_neighbor_indices(x, top_k=0)
+    with pytest.raises(ValueError, match="top_k must be a positive integer"):
+        cross_nearest_neighbor_indices(x, x, top_k=-1)
+
+
+def test_feature_matrix_reports_bad_feature_values_with_context():
+    rows = [{"sample_id": "s1", "total_fail_density": "nan"}]
+
+    with pytest.raises(ValueError, match="sample_id=s1"):
+        feature_matrix(rows, ["total_fail_density"])
+
+    with pytest.raises(ValueError, match="Missing feature column 'stby_ratio'"):
+        feature_matrix(rows, ["stby_ratio"])

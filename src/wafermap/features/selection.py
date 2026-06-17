@@ -82,4 +82,24 @@ def shared_observable_feature_names(
 
 
 def feature_matrix(rows: Sequence[Mapping[str, Any]], feature_names: Sequence[str]) -> np.ndarray:
-    return np.array([[float(row[name]) for name in feature_names] for row in rows], dtype=np.float32)
+    values: list[list[float]] = []
+    for row_idx, row in enumerate(rows, start=1):
+        sample_id = str(row.get("sample_id", f"row_{row_idx}"))
+        row_values: list[float] = []
+        for name in feature_names:
+            if name not in row:
+                raise ValueError(f"Missing feature column '{name}' at row {row_idx} sample_id={sample_id}")
+            raw_value = row[name]
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Non-numeric feature value for '{name}' at row {row_idx} sample_id={sample_id}: {raw_value!r}"
+                ) from exc
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"Non-finite feature value for '{name}' at row {row_idx} sample_id={sample_id}: {raw_value!r}"
+                )
+            row_values.append(value)
+        values.append(row_values)
+    return np.array(values, dtype=np.float32)

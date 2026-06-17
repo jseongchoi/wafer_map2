@@ -48,13 +48,23 @@ SENSITIVE_COMMENT_PATTERNS = {
 }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--review", default="outputs/reports/expert_review_template.csv")
     parser.add_argument("--out", default="outputs/reports/expert_review_summary.html")
     parser.add_argument("--metrics", default="outputs/reports/expert_review_summary_metrics.json")
-    parser.add_argument("--top-k", type=int, default=5)
-    return parser.parse_args()
+    parser.add_argument("--top-k", type=positive_int, default=5)
+    return parser.parse_args(argv)
+
+
+def positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:

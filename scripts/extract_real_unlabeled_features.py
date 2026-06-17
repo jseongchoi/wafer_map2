@@ -36,7 +36,17 @@ OUTPUT_ROOT = ROOT / "outputs"
 SAMPLE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
-def parse_args() -> argparse.Namespace:
+def positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, help="JSON manifest listing real-like samples.")
     parser.add_argument("--features-out", default="outputs/reports/real_unlabeled_features.csv")
@@ -45,13 +55,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-features", help="Optional reference feature CSV for nearest-neighbor review.")
     parser.add_argument("--neighbors-out", default="outputs/reports/real_unlabeled_neighbors.csv")
     parser.add_argument("--review-template-out", default="outputs/reports/real_unlabeled_expert_review_template.csv")
-    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--top-k", type=positive_int, default=5)
     parser.add_argument(
         "--include-reference-labels",
         action="store_true",
         help="Copy reference label_* columns into the neighbor CSV. Use only with approved synthetic references.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -73,6 +83,7 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     entries = manifest.get("samples", [])
     if not isinstance(entries, list) or not entries:
         raise ValueError("Manifest must contain at least one sample entry")
+    sample_ids: set[str] = set()
     for idx, entry in enumerate(entries):
         if not isinstance(entry, dict):
             raise ValueError(f"samples[{idx}] must be an object")
@@ -82,6 +93,9 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         sample_id = str(entry.get("sample_id", ""))
         if not sample_id or not SAMPLE_ID_RE.match(sample_id):
             raise ValueError(f"samples[{idx}] requires pseudonymized sample_id using only letters/numbers/._-")
+        if sample_id in sample_ids:
+            raise ValueError(f"samples[{idx}] duplicate sample_id: {sample_id}")
+        sample_ids.add(sample_id)
         if source_type == "npz_semantic_arrays":
             required = ("arrays_npz", "chip_blocks", "grid", "parser_name", "parser_version", "orientation")
             missing = [name for name in required if name not in entry]
@@ -139,41 +153,41 @@ def load_real_like_sample(entry: dict[str, Any], manifest_path: Path) -> Synthet
         "chip_index": "chip_index",
         **entry.get("array_keys", {}),
     }
-    arrays = np.load(arrays_path)
-    severity = _load_severity_array(arrays, key_map["severity"])
-    shape = severity.shape
-    wafer_mask = _load_binary_array_or_default(
-        arrays,
-        key_map.get("wafer_mask"),
-        "wafer_mask",
-        shape,
-        np.ones(shape, dtype=np.uint8),
-        allow_missing=entry.get("allow_missing_masks_for_test") is True,
-    )
-    stby_mask = _load_binary_array_or_default(
-        arrays,
-        key_map.get("stby_mask"),
-        "stby_mask",
-        shape,
-        np.zeros(shape, dtype=np.uint8),
-        allow_missing=entry.get("allow_missing_masks_for_test") is True,
-    )
-    valid_default = ((wafer_mask > 0) & (stby_mask == 0)).astype(np.uint8)
-    valid_test_mask = _load_binary_array_or_default(
-        arrays,
-        key_map.get("valid_test_mask"),
-        "valid_test_mask",
-        shape,
-        valid_default,
-        allow_missing=entry.get("allow_missing_masks_for_test") is True,
-    )
-    metadata = _metadata_from_entry(entry, manifest_path, shape)
-    chip_index = _load_chip_index_or_default(
-        arrays,
-        key_map.get("chip_index"),
-        shape,
-        _infer_chip_index(metadata, shape, wafer_mask),
-    )
+    with np.load(arrays_path, allow_pickle=False) as arrays:
+        severity = _load_severity_array(arrays, key_map["severity"])
+        shape = severity.shape
+        wafer_mask = _load_binary_array_or_default(
+            arrays,
+            key_map.get("wafer_mask"),
+            "wafer_mask",
+            shape,
+            np.ones(shape, dtype=np.uint8),
+            allow_missing=entry.get("allow_missing_masks_for_test") is True,
+        )
+        stby_mask = _load_binary_array_or_default(
+            arrays,
+            key_map.get("stby_mask"),
+            "stby_mask",
+            shape,
+            np.zeros(shape, dtype=np.uint8),
+            allow_missing=entry.get("allow_missing_masks_for_test") is True,
+        )
+        valid_default = ((wafer_mask > 0) & (stby_mask == 0)).astype(np.uint8)
+        valid_test_mask = _load_binary_array_or_default(
+            arrays,
+            key_map.get("valid_test_mask"),
+            "valid_test_mask",
+            shape,
+            valid_default,
+            allow_missing=entry.get("allow_missing_masks_for_test") is True,
+        )
+        metadata = _metadata_from_entry(entry, manifest_path, shape)
+        chip_index = _load_chip_index_or_default(
+            arrays,
+            key_map.get("chip_index"),
+            shape,
+            _infer_chip_index(metadata, shape, wafer_mask),
+        )
     pattern_masks = np.zeros((len(PATTERN_CLASSES), *shape), dtype=np.uint8)
     pattern_intensity = np.zeros((len(PATTERN_CLASSES), *shape), dtype=np.float32)
     return SyntheticSample(
@@ -623,7 +637,7 @@ def main() -> None:
             rows.append(feature_row(sample))
 
     if not rows:
-        write_sanity_json(Path(args.sanity_out), sanity_records)
+        write_sanity_json(sanity_out, sanity_records)
         raise SystemExit("No valid samples available for feature extraction")
 
     write_csv(features_out, rows)

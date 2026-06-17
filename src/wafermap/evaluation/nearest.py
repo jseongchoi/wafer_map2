@@ -7,6 +7,11 @@ import numpy as np
 EPSILON = 1e-6
 
 
+def _validate_top_k(top_k: int) -> None:
+    if top_k < 1:
+        raise ValueError("top_k must be a positive integer")
+
+
 def fit_standardizer(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     values = np.asarray(x, dtype=np.float32)
     mu = values.mean(axis=0, keepdims=True)
@@ -39,7 +44,10 @@ def nearest_neighbor_indices(
     standardize_input: bool = True,
     exclude_self: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
+    _validate_top_k(top_k)
     z = standardize(x) if standardize_input else np.asarray(x, dtype=np.float32)
+    if len(z) == 0:
+        raise ValueError("nearest-neighbor input is empty")
     distances = euclidean_distance_matrix(z)
     if exclude_self:
         np.fill_diagonal(distances, np.inf)
@@ -52,6 +60,11 @@ def cross_nearest_neighbor_indices(
     reference_x: np.ndarray,
     top_k: int,
 ) -> tuple[np.ndarray, np.ndarray]:
+    _validate_top_k(top_k)
+    if len(query_x) == 0:
+        raise ValueError("query feature matrix is empty")
+    if len(reference_x) == 0:
+        raise ValueError("reference feature matrix is empty")
     ref_mu, ref_sigma = fit_standardizer(reference_x)
     ref_z = apply_standardizer(reference_x, ref_mu, ref_sigma)
     query_z = apply_standardizer(query_x, ref_mu, ref_sigma)
