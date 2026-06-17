@@ -1,0 +1,21 @@
+{
+  "schema_version": "real_unlabeled_manifest/v1",
+  "feature_schema_version": "observable_fbm_features/v1",
+  "samples": [
+    {
+      "sample_id": "real_like_synth_000000",
+      "source_type": "synthetic_sample_dir",
+      "sample_dir": "../../data/synthetic/fbm_grouping_scale_pilot/synth_000000"
+    },
+    {
+      "sample_id": "real_like_synth_000001",
+      "source_type": "synthetic_sample_dir",
+      "sample_dir": "../../data/synthetic/fbm_grouping_scale_pilot/synth_000001"
+    },
+    {
+      "sample_id": "real_like_synth_000002",
+      "source_type": "synthetic_sample_dir",
+      "sample_dir": "../../data/synthetic/fbm_grouping_scale_pilot/synth_000002"
+    }
+  ]
+}

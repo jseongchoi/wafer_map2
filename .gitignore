@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local/private wafer data
+data/raw/**
+data/interim/**
+data/processed/**
+data/synthetic/**
+data/labels/**
+outputs/**
+other_sample/outputs/**
+
+# Keep directory placeholders
+!data/
+!data/**/
+!outputs/
+!outputs/**/
+!**/.gitkeep
+
+# Large model artifacts
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# Local notebooks/checkpoints
+.ipynb_checkpoints/

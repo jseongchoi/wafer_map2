@@ -1,0 +1,23 @@
+{
+  "seed": 17,
+  "count": 20,
+  "target_net_die": 600,
+  "chip_blocks": {
+    "width": 100,
+    "height": 50
+  },
+  "stby_chips": {
+    "min": 4,
+    "max": 10
+  },
+  "pattern_probabilities": {
+    "scratch": 0.30,
+    "ring": 0.20,
+    "edge": 0.60,
+    "local": 0.85,
+    "random": 1.00,
+    "shot_grid": 0.30,
+    "stby_pattern": 1.00
+  },
+  "grade_thresholds": [0.052, 0.110, 0.198, 0.330, 0.515, 0.740, 1.020]
+}
