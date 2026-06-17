@@ -15,6 +15,46 @@ secure real FBM
 -> summary metrics
 ```
 
+## 내가 해야 할 TODO
+
+1. real wafer sample 5~20장을 고른다.
+   - 정상/edge/local/shot/ring/scratch/stby가 가능하면 섞이게 고른다.
+   - sample id는 익명 id로 바꾼다.
+
+2. 각 wafer를 semantic `.npz`로 export한다.
+   - 필수: `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`
+   - 권장: `chip_index`
+   - stby는 Grade 7이 아니라 `stby_mask=1`, `valid_test_mask=0`, `severity=0`인지 확인한다.
+
+3. manifest를 만든다.
+   - 표준 key면 `configs/eval/real_unlabeled_manifest_template_standard.json`
+   - key 이름이 다르면 `configs/eval/real_unlabeled_manifest_template_keymap.json`
+   - lot/tool/recipe/chamber/wafer id는 넣지 않는다.
+
+4. real-unlabeled workflow를 실행한다.
+   - `real_unlabeled_report.html`
+   - `real_unlabeled_sanity.json`
+   - `real_unlabeled_neighbors.csv`
+   - `real_unlabeled_expert_review_template.csv`
+
+5. sanity 결과를 먼저 본다.
+   - FAIL이면 retrieval 리뷰보다 parser/export 계약을 먼저 고친다.
+   - PASS이면 top-k review로 넘어간다.
+
+6. review template을 채운다.
+   - query당 top-5 neighbor를 본다.
+   - 전체 20~50 pair 정도를 먼저 채운다.
+   - `reviewer_decision`, `dominant_defect`, `retrieval_failure_mode`, `next_action`은 가능하면 꼭 채운다.
+
+7. review summary를 생성한다.
+   - `same_family_rate`
+   - `accepted_match_rate`
+   - `missed_major_defect_rate`
+   - `next_action_queue`
+
+8. 나에게 공유 가능한 산출물만 준다.
+   - raw image/array, 실제 path, lot/tool/recipe/chamber/wafer id는 공유하지 않는다.
+
 ## 내일 준비할 입력
 
 권장 수량:

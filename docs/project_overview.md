@@ -58,6 +58,27 @@ ANOVA와 공정 metadata 해석은 현재 목표가 아니다. 공정/설비/lot
 
 가장 큰 리스크는 synthetic 성능을 real 성능으로 오해하는 것이다. 지금 수치는 방법론 가능성의 근거이지 실제 wafer 성능 인증이 아니다.
 
+## 최종 점검 요약
+
+| 영역 | 현재 상태 | 판정 |
+| --- | --- | --- |
+| Synthetic generator | 다양한 FBM defect family와 stby/valid-test/none-wafer semantic을 생성한다. | baseline 검증용으로 충분 |
+| Observable feature | real wafer에도 계산 가능한 compact feature와 global retrieval 계약을 정리했다. | 주 경로 유지 |
+| Global retrieval | scale/holdout에서 random baseline 대비 lift가 있다. | 1차 솔루션 후보로 유효 |
+| Interest retrieval | class/class_location/feature_key 기준 신호가 있다. | defect별 search 방향 유효 |
+| Resize/proposal | resize-only는 대체재가 아니고 proposal은 review 후보 축소용으로 제한했다. | 과투자 방지 완료 |
+| Real-unlabeled workflow | semantic `.npz` manifest에서 feature/sanity/NN/review template까지 생성된다. | real review 직전 단계 |
+| Expert review loop | reviewer decision, failure mode, next action을 summary/backlog로 연결한다. | 실제 검증 대기 |
+| AI model | segmentation smoke training 배관은 있으나 실사용 deep model은 아직 아니다. | real review 후 target 결정 |
+
+현재 결론:
+
+```text
+1차 baseline 솔루션은 잡혔다.
+아직 최종 솔루션 확정은 아니다.
+다음 gate는 real wafer expert review다.
+```
+
 ## 지금 우선해야 할 작업
 
 1. Real-unlabeled manifest/schema를 운영 계약으로 고정한다.
