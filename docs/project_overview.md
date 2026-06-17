@@ -44,6 +44,8 @@ ANOVA와 공정 metadata 해석은 현재 목표가 아니다. 공정/설비/lot
 | proposal 과투자 방지 | patch/curve proposal은 review 후보 축소용으로 제한하고, scratch는 별도 track으로 분리했다. | resize-only와 proposal-only 경로가 global retrieval 대체재가 아님을 정리했다. | [Roadmap](roadmap.md), [Modeling Strategy](modeling_strategy.md) |
 | 해외 연구 참고 | wafer map clustering/manual labeling, graph spatial filtering, segmentation 연구를 검토해 현재 전략의 위치를 정리했다. | 연구 방향은 `feature -> retrieval/grouping -> expert review`, scratch/local은 morphology/segmentation 보강이라는 판단을 지지한다. | 아래 참고 연구, [Modeling Strategy](modeling_strategy.md) |
 
+실험한 기법과 판단 과정의 자세한 흐름은 [Experiment History](experiment_history.md)에 모아두었다.
+
 ## 본질 정렬 판정
 
 판정: 본질대로 진행 중이다.
