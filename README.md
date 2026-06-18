@@ -27,6 +27,7 @@ FBM 배열 정리
 
 ## 먼저 읽을 문서
 
+- [로드맵 메인 HTML](docs/index.html)
 - [문서 길잡이](docs/README.md)
 - [프로젝트 개요](docs/project_overview.md)
 - [실험과 판단 기록](docs/experiment_history.md)
