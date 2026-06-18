@@ -329,7 +329,7 @@ def html_report(
   <p>생성 시각: <code>{generated_at}</code>. 현재 위치: <strong>{html.escape(current_position)}</strong></p>
 
   <div class="note">
-    현재 프로젝트는 기본 문제 정의와 generator scaffold를 넘어섰다. 지금의 핵심은 FBM 자체에서 정보를 추출하고, 유사한 불량 패턴의 wafer를 그룹핑할 수 있는지 검증하는 것이다. ANOVA는 공정데이터와 조인한 이후의 후속 분석으로 둔다.
+    현재 프로젝트는 기본 문제 정의와 generator scaffold를 넘어섰다. 지금의 핵심은 FBM 자체에서 정보를 추출하고, 유사한 불량 패턴의 wafer를 그룹핑할 수 있는지 검증하는 것이다.
   </div>
 
   <div class="summary">
@@ -393,7 +393,6 @@ def html_report(
     <li>Scratch/local처럼 작은 공간 불량은 morphology feature와 segmentation baseline으로 더 보강한다.</li>
     <li>필요하면 generator runtime을 더 줄인 뒤 200장 이상 full batch를 재시도한다. 현재 노트북 CPU에서는 155장이 실용적인 scale check다.</li>
     <li>보안 환경에서 real wafer를 복사하지 않고 feature extraction과 nearest-neighbor review만 실행하는 sanity-check workflow를 설계한다.</li>
-    <li>공정데이터가 조인되는 시점에 ANOVA/통계 검정을 별도 단계로 추가한다.</li>
   </ol>
 </body>
 </html>

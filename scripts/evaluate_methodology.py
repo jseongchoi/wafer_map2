@@ -310,7 +310,7 @@ def html_report(metrics: dict[str, Any], features: Path, metrics_path: Path, out
   <p>이 리포트는 현재 synthetic wafer map이 원래 목표인 <strong>FBM 정보 추출, 유사 불량 wafer 그룹핑, 다양한 불량 관점의 score 정의, 이후 공간 분해 모델</strong>로 이어질 수 있는지 검증한다. Synthetic mask는 검증용 정답으로만 사용하며, feature vector에는 실제 wafer에서도 계산 가능한 observable feature만 포함한다.</p>
 
   <div class="note">
-    현재 결론: 1차 목표는 ANOVA가 아니라 FBM 자체의 정보 추출과 유사 wafer 그룹핑이다. ANOVA나 통계 검정은 나중에 공정/설비/lot/recipe 데이터와 feature를 조인한 뒤 수행하는 후속 분석이다. AutoEncoder 단독 접근은 stby missing chip과 전체 reconstruction error에 과민할 수 있어 1차 방법론으로 두지 않는다.
+    현재 결론: 1차 목표는 FBM 자체의 정보 추출과 유사 wafer 그룹핑이다. AutoEncoder 단독 접근은 stby missing chip과 전체 reconstruction error에 과민할 수 있어 1차 방법론으로 두지 않는다.
   </div>
 
   <div class="summary">
@@ -347,7 +347,6 @@ def html_report(metrics: dict[str, Any], features: Path, metrics_path: Path, out
     <li>Synthetic mask는 검증용 정답으로만 사용하고, feature에는 넣지 않는다.</li>
     <li>Ring, edge, shot-grid, stby는 wafer-level observable feature로도 신호가 잘 잡힌다.</li>
     <li>Scratch와 local은 작은 공간 패턴이라 feature만으로는 약하며, segmentation 또는 morphology feature 보강이 필요하다.</li>
-    <li>ANOVA는 공정데이터와 조인한 뒤 수행하는 후속 분석이다.</li>
   </ol>
 
   <h2>산출물</h2>

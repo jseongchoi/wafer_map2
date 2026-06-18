@@ -15,7 +15,7 @@
 -> 요약 지표 확인
 ```
 
-## 내가 해야 할 TODO
+## 내가 해야 할 일
 
 1. real wafer sample 5~20장을 고른다.
    - 가능하면 정상/edge/local/shot/ring/scratch/stby가 섞이게 고른다.

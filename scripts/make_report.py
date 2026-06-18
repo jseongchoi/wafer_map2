@@ -333,7 +333,7 @@ def html_report(metrics: dict[str, Any], gallery: Path, features: Path, metrics_
 </head>
 <body>
   <h1>WaferMap Synthetic Fail Bit Map Review</h1>
-  <p>This report was generated from the final review dataset <code>data/synthetic/final_review</code>. The goal is to build a plausible synthetic Fail Bit Map dataset without using confidential real wafer data, then verify whether it is suitable as a foundation for FBM information extraction, similarity search, coarse grouping, defect scoring, and later segmentation modeling. ANOVA is treated as a downstream analysis after process metadata is joined.</p>
+  <p>This report was generated from the final review dataset <code>data/synthetic/final_review</code>. The goal is to build a plausible synthetic Fail Bit Map dataset without using confidential real wafer data, then verify whether it is suitable as a foundation for FBM information extraction, similarity search, coarse grouping, defect scoring, and later segmentation modeling.</p>
 
   <div class="note">
     <strong>Key revision:</strong> flow and water-streak-like defects are excluded. The active synthetic classes are <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>local</code>, <code>random</code>, <code>shot_grid</code>, and <code>stby_pattern</code>. The local class includes single, double, and triple-triangle blob variants. <code>shot_grid</code> represents repeated photo-shot behavior where the same relative region inside each shot field, such as lower-left or shot-edge area, has subtly higher fail bits. Stby can now be origin-coupled, meaning a scratch contact point or local impact origin can become a chip-level missing-test region that hides the fail-bit pattern underneath.

@@ -21,7 +21,7 @@
 | `arrays_npz` | 해당 sample의 `.npz` 파일 경로다. | `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`를 읽는 위치다. |
 | `array_keys` | 원본 `.npz` 안의 key 이름이 표준 이름과 다를 때 쓰는 mapping이다. | 예를 들어 원본 key가 `grade`이면 이를 `severity`로 연결한다. |
 | `pseudonymized` | sample id와 metadata가 익명화되었는지 표시한다. | 보안 원칙을 지키기 위한 확인값이다. |
-| `parser_name` / `parser_version` | 실제 FBM을 `.npz`로 바꾼 parser의 이름과 버전이다. | 나중에 parser 변경으로 결과가 달라졌는지 추적한다. |
+| `parser_name` / `parser_version` | 실제 FBM을 `.npz`로 바꾼 parser의 이름과 버전이다. | 추후 parser 변경으로 결과가 달라졌는지 추적한다. |
 | `orientation` | wafer map 방향 정보다. | 회전/flip이 있으면 clock 위치와 edge 위치 해석이 달라진다. |
 | `chip_blocks` | 한 chip이 array에서 차지하는 block 크기다. | chip 단위 feature와 geometry 검증에 필요하다. |
 | `grid` | wafer map의 chip row/column 개수다. | die layout과 예상 net die 수를 확인한다. |
