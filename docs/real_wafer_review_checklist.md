@@ -1,27 +1,27 @@
-# Real Wafer Review Checklist
+# Real Wafer 리뷰 체크리스트
 
 ## 결론
 
 내일 real wafer로 리뷰해볼 수 있다.
 
-단, 실제 wafer raw image/array를 repo에 넣는 방식이 아니다. 보안 환경에서 semantic `.npz`와 manifest를 만들고, 이 repo의 real-unlabeled workflow를 실행한 뒤 생성된 review template을 채우는 방식이다.
+단, 실제 wafer raw image/array를 repo에 넣는 방식이 아니다. 보안 환경에서 `.npz`와 manifest를 만들고, 이 repo의 라벨 없는 실제 wafer 처리 절차를 실행한 뒤 생성된 리뷰 template을 채우는 방식이다.
 
 ```text
-secure real FBM
--> semantic .npz export
--> manifest
--> feature / sanity / nearest-neighbor
--> expert review CSV
--> summary metrics
+보안 환경의 실제 FBM
+-> .npz export
+-> manifest 작성
+-> feature / sanity / nearest-neighbor 생성
+-> 전문가 리뷰 CSV 작성
+-> 요약 지표 확인
 ```
 
 ## 내가 해야 할 TODO
 
 1. real wafer sample 5~20장을 고른다.
-   - 정상/edge/local/shot/ring/scratch/stby가 가능하면 섞이게 고른다.
+   - 가능하면 정상/edge/local/shot/ring/scratch/stby가 섞이게 고른다.
    - sample id는 익명 id로 바꾼다.
 
-2. 각 wafer를 semantic `.npz`로 export한다.
+2. 각 wafer를 `.npz`로 export한다.
    - 필수: `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`
    - 권장: `chip_index`
    - stby는 Grade 7이 아니라 `stby_mask=1`, `valid_test_mask=0`, `severity=0`인지 확인한다.
@@ -31,14 +31,14 @@ secure real FBM
    - key 이름이 다르면 `configs/eval/real_unlabeled_manifest_template_keymap.json`
    - lot/tool/recipe/chamber/wafer id는 넣지 않는다.
 
-4. real-unlabeled workflow를 실행한다.
+4. 라벨 없는 실제 wafer 처리 script를 실행한다.
    - `real_unlabeled_report.html`
    - `real_unlabeled_sanity.json`
    - `real_unlabeled_neighbors.csv`
    - `real_unlabeled_expert_review_template.csv`
 
 5. sanity 결과를 먼저 본다.
-   - FAIL이면 retrieval 리뷰보다 parser/export 계약을 먼저 고친다.
+   - FAIL이면 retrieval 리뷰보다 parser/export 문제를 먼저 고친다.
    - PASS이면 top-k review로 넘어간다.
 
 6. review template을 채운다.
@@ -68,7 +68,7 @@ secure real FBM
 필수 array:
 
 - `severity`: Grade 0~7, `[H, W]`
-- `wafer_mask`: wafer 내부 1, none-wafer 0
+- `wafer_mask`: wafer 내부 1, wafer 밖 0
 - `valid_test_mask`: 실제 test된 pixel 1
 - `stby_mask`: stby fail chip 영역 1
 
@@ -80,7 +80,7 @@ secure real FBM
 
 - Stby는 Grade 7이 아니다.
 - Stby는 `stby_mask=1`, `valid_test_mask=0`, `severity=0`이어야 한다.
-- None-wafer와 in-wafer Grade 0은 `wafer_mask`로 구분한다.
+- Wafer 밖 영역과 in-wafer Grade 0은 `wafer_mask`로 구분한다.
 
 ## Manifest 작성
 
@@ -213,20 +213,20 @@ python scripts/summarize_expert_review.py `
 
 리뷰 후 결정:
 
-- accepted match가 충분하면 current feature baseline을 real triage MVP로 유지
-- 특정 family만 약하면 해당 observable feature 보강
-- scratch/local이 약하면 segmentation 또는 scratch-specific representation track으로 이동
-- parser/mask 문제가 있으면 AI/model보다 export 계약부터 수정
+- accepted match가 충분하면 현재 feature 검색을 real triage용 최소 버전으로 유지
+- 특정 family만 약하면 해당 feature 보강
+- scratch/local이 약하면 segmentation 또는 scratch 전용 representation으로 이동
+- parser/mask 문제가 있으면 AI/model보다 export 형식부터 수정
 
 ## AI 모델 구현 상태
 
 현재 구현된 것:
 
-- Observable feature extractor
+- Feature extractor
 - compact 50 feature 기반 global nearest-neighbor retrieval
 - interest-conditioned retrieval 평가 경로
 - feature selection / standardization / nearest-neighbor 공통 유틸
-- real-unlabeled sanity / drift / review template workflow
+- 라벨 없는 실제 wafer sanity / drift / review template 절차
 - expert review summary와 `next_action_queue`
 - synthetic-label segmentation dataset helper
 - NumPy-only 1x1 sigmoid segmentation smoke training
@@ -244,13 +244,13 @@ python scripts/summarize_expert_review.py `
 - calibrated defect probability model
 - scratch/local 전용 line/segmentation model
 
-따라서 현재 솔루션의 중심은 AI deep model이 아니라 다음 baseline이다.
+따라서 현재 솔루션의 중심은 AI deep model이 아니라 다음 기준선이다.
 
 ```text
-observable feature
+feature extraction
 -> nearest-neighbor retrieval
 -> expert review
--> targeted model backlog
+-> 필요한 feature 또는 모델 보강
 ```
 
-AI 모델은 real wafer review에서 약한 defect family가 확인된 뒤, 필요한 곳에만 붙이는 단계다.
+AI 모델은 real wafer review에서 약한 defect family가 확인된 뒤, 필요한 곳에 붙이는 단계다.

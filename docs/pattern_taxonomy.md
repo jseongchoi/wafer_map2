@@ -1,22 +1,22 @@
-# Pattern Taxonomy
+# 불량 패턴 정리
 
-이 taxonomy는 완전한 공정 taxonomy가 아니라 synthetic generation, feature validation, expert review를 맞추기 위한 최소 defect family 정의다.
+이 문서는 완전한 공정 taxonomy가 아니다. 합성 데이터 생성, feature 검증, 전문가 리뷰에서 같은 단어를 쓰기 위한 최소 defect family 정의다.
 
-## Defect Families
+## Defect Family
 
-| Family | Meaning | Current Handling |
+| Family | 의미 | 현재 처리 |
 | --- | --- | --- |
 | `edge` | wafer edge 근처 fail density 상승 또는 localized edge sector | compact feature와 patch proposal에서 비교적 안정적 |
 | `shot_grid` | reticle/shot-relative 반복 위치 defect | wafer polar 좌표가 아니라 shot-relative feature로 관리 |
 | `stby_pattern` | stby fail chip의 chip-level missing-test pattern | `stby_mask`, `valid_test_mask`로 Grade 7과 분리 |
-| `stby_hidden_origin` | stby가 실제 defect origin을 가리는 경우 | expert review와 향후 stby-origin coupling feature 후보 |
+| `stby_hidden_origin` | stby가 실제 defect origin을 가리는 경우 | 전문가 리뷰와 향후 stby-origin coupling feature 후보 |
 | `ring` | wafer 중심 기준 annulus 또는 partial ring/arc | curve proposal과 radial profile로 관리 |
 | `scratch` | 길고 좁은 선형/곡선형 defect | 현재 feature/proposal로 약함. 별도 line/segmentation track |
-| `local` | 국소 hotspot 또는 compact blob cluster | connected-component morphology와 expert review로 보강 |
+| `local` | 국소 hotspot 또는 compact blob cluster | connected-component morphology와 전문가 리뷰로 보강 |
 | `random` | 구조가 약한 산발성 fail | background/noise baseline |
-| `mixed` | 여러 family가 동시에 보이는 경우 | multi-label mask와 expert review로 관리 |
+| `mixed` | 여러 family가 동시에 보이는 경우 | multi-label mask와 전문가 리뷰로 관리 |
 
-## Synthetic Modes
+## Synthetic Mode
 
 `scratch`:
 
@@ -61,11 +61,11 @@ Segmentation baseline을 학습할 때는 softmax가 아니라 class별 sigmoid 
 
 ## Review Rule
 
-Global retrieval은 hard class 하나를 맞히는 문제가 아니다.
+전체 유사 wafer 검색은 hard class 하나를 맞히는 문제가 아니다.
 
-Expert review에서는 다음을 따로 본다.
+전문가 리뷰에서는 다음을 따로 본다.
 
 - family가 같은가?
 - 위치/clock이 비슷한가?
 - query의 주요 defect를 놓쳤는가?
-- mismatch라면 어떤 feature/model backlog로 연결할 것인가?
+- mismatch라면 어떤 feature/model 보강 작업으로 연결할 것인가?

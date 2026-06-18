@@ -1,4 +1,4 @@
-# Modeling Strategy
+# 모델링 전략
 
 ## 기본 입장
 
@@ -7,17 +7,17 @@
 먼저 확인해야 할 것은 다음이다.
 
 ```text
-실제 wafer에도 계산 가능한 observable feature가 있는가?
+실제 wafer에서도 계산 가능한 feature가 있는가?
 그 feature로 비슷한 wafer를 찾을 수 있는가?
-관심 defect별 retrieval 신호가 있는가?
+관심 불량별 검색 신호가 있는가?
 전문가가 top-k 결과를 업무적으로 받아들일 수 있는가?
 ```
 
-따라서 현재 1차 방법론은 interpretable observable feature와 nearest-neighbor retrieval이다.
+따라서 현재 1차 방법론은 해석 가능한 feature와 nearest-neighbor 검색이다.
 
-## Baseline Layer
+## 기준선 Feature
 
-현재 baseline은 사람이 해석 가능한 계측층이다.
+현재 기준선은 사람이 해석할 수 있는 계측 feature다.
 
 주요 feature family:
 
@@ -29,27 +29,27 @@
 - local hotspot / connected component morphology
 - shot-relative lower-left, bottom-edge, left-edge contrast
 
-이 baseline의 역할:
+이 기준선의 역할:
 
-- synthetic label로 검증 가능한 첫 기준선
-- real unlabeled wafer에 바로 적용 가능한 feature
-- expert review에서 사람이 판단할 수 있는 feature 이름 제공
-- segmentation/self-supervised model의 비교 기준
+- 합성 label로 검증 가능한 첫 비교 기준
+- 라벨 없는 실제 wafer에 바로 적용 가능한 feature
+- 전문가 리뷰에서 사람이 이해할 수 있는 feature 이름 제공
+- segmentation/self-supervised model을 붙일 때 비교 기준 제공
 
 ## 현재 검증 결과
 
 - Scale 155장 top-5 retrieval lift: 약 1.36x
 - Holdout 120장 top-5 retrieval lift: 약 1.40x
 - Structured defect target retrieval은 class, class_location, feature_key 기준에서 신호가 있다.
-- Resize-only representation은 compact feature보다 global retrieval에 약하다.
+- 단순 resize representation은 compact feature보다 전체 유사 wafer 검색에 약하다.
 - Scratch는 holdout에서 불안정하므로 wafer-level feature만으로 끝내지 않는다.
 
-## Feature Contract
+## Feature 사용 기준
 
-Global retrieval:
+전체 유사 wafer 검색:
 
 ```text
-compact observable feature 50개만 사용
+compact feature 50개만 사용
 ```
 
 제외:
@@ -63,31 +63,31 @@ polar_*
 stby_polar_*
 ```
 
-위치-aware retrieval:
+위치가 중요한 검색:
 
 ```text
-class_location / feature_key 같은 target에서만 polar feature를 조건부 사용
+class_location / feature_key 같은 target에서만 polar feature를 조건부로 사용
 ```
 
-## Proposal의 위치
+## Proposal의 역할
 
 Patch proposal과 curve proposal은 보조 도구다.
 
-- edge/local/stby: patch proposal로 review 후보 영역 축소
+- edge/local/stby: patch proposal로 리뷰 후보 영역 축소
 - ring/center arc: curve proposal로 후보 곡선 영역 축소
 - scratch: proposal 튜닝 중단, 별도 track으로 분리
 
 Proposal recall을 최종 성능으로 해석하지 않는다.
 
-## Segmentation / Self-Supervised Model의 위치
+## Segmentation / Self-Supervised Model의 역할
 
-모델은 baseline을 대체하기보다 약한 defect family를 보강하는 layer다.
+모델은 기준선을 무조건 대체하는 것이 아니라, 실제 리뷰에서 반복적으로 약한 defect family를 보강하는 층이다.
 
 시작 조건:
 
-- real-unlabeled sanity가 통과한다.
-- expert review에서 특정 family failure가 반복된다.
-- observable feature 보강만으로 부족하다는 근거가 있다.
+- 라벨 없는 실제 wafer sanity check가 통과한다.
+- 전문가 리뷰에서 특정 family 실패가 반복된다.
+- feature 보강만으로 부족하다는 근거가 있다.
 
 후보:
 
@@ -98,11 +98,11 @@ Proposal recall을 최종 성능으로 해석하지 않는다.
 
 현재 구현 상태:
 
-- 구현됨: observable feature extractor, nearest-neighbor retrieval, interest retrieval evaluation, real-unlabeled review workflow
+- 구현됨: feature extractor, nearest-neighbor 검색, 관심 불량 검색 평가, 라벨 없는 실제 wafer 리뷰 절차
 - smoke 수준 구현됨: synthetic-label segmentation dataset helper와 NumPy-only 1x1 sigmoid segmentation smoke training
-- 아직 아님: 실사용 U-Net/SegFormer/DINO model, real wafer로 검증된 supervised/self-supervised model, calibrated defect probability model
+- 아직 아님: 실사용 U-Net/SegFormer/DINO model, 실제 wafer로 검증된 supervised/self-supervised model, calibrated defect probability model
 
-## 왜 AutoEncoder First가 아닌가
+## 왜 AutoEncoder부터 하지 않는가
 
 현재 문제는 단순 anomaly detection이 아니다.
 

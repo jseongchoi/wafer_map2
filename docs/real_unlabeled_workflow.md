@@ -1,19 +1,19 @@
-# Real-Unlabeled Workflow
+# 라벨 없는 실제 Wafer 처리 절차
 
 ## 목적
 
-실제 wafer FBM raw image/array를 repo에 저장하지 않고, 보안 환경 안의 semantic `.npz`만 참조해 feature와 review 산출물을 만든다.
+실제 wafer FBM raw image/array를 repo에 저장하지 않고, 보안 환경 안의 `.npz`만 참조해 feature와 리뷰 산출물을 만든다.
 
 ```text
-secure FBM arrays
+보안 환경의 FBM 배열
 -> real_unlabeled_manifest/v1
--> observable feature extraction
+-> feature 추출
 -> sanity / drift report
 -> nearest-neighbor CSV
--> expert review template
+-> 전문가 리뷰 template
 ```
 
-Schema 세부 계약은 [Data Schema](data_schema.md)를 기준으로 한다.
+Schema 세부 기준은 [데이터 형식](data_schema.md)을 따른다.
 
 ## 입력 준비
 
@@ -22,7 +22,7 @@ Schema 세부 계약은 [Data Schema](data_schema.md)를 기준으로 한다.
 필수 array:
 
 - `severity`: Grade 0~7, `[H, W]`
-- `wafer_mask`: wafer 내부 1, none-wafer 0
+- `wafer_mask`: wafer 내부 1, wafer 밖 0
 - `valid_test_mask`: 실제 test된 pixel 1
 - `stby_mask`: stby fail chip 영역 1
 
@@ -34,7 +34,7 @@ Schema 세부 계약은 [Data Schema](data_schema.md)를 기준으로 한다.
 
 - Stby는 Grade 7이 아니다.
 - Stby는 `stby_mask=1`, `valid_test_mask=0`, `severity=0`이다.
-- None-wafer와 in-wafer Grade 0은 `wafer_mask`로 구분한다.
+- Wafer 밖 영역과 in-wafer Grade 0은 `wafer_mask`로 구분한다.
 
 ## Manifest 예시
 
@@ -112,10 +112,10 @@ python scripts/extract_real_unlabeled_features.py `
 
 Repo에 남겨도 되는 산출물:
 
-- observable feature CSV
+- feature CSV
 - sanity JSON
 - nearest-neighbor CSV
-- expert review template CSV
+- 전문가 리뷰 template CSV
 - HTML report
 
 Repo에 남기지 않는 것:
@@ -127,7 +127,7 @@ Repo에 남기지 않는 것:
 
 ## Sanity / Drift 해석
 
-Sanity check는 parser와 semantic contract 검증이다.
+Sanity check는 parser와 입력 배열이 정해진 형식을 지키는지 확인하는 단계다.
 
 확인 항목:
 
@@ -143,11 +143,11 @@ Reference feature를 주면 drift summary를 만든다.
 
 - query/reference compact feature 평균 차이
 - reference 표준편차 기준 z-score shift
-- 가장 크게 달라진 observable feature
+- 가장 크게 달라진 feature
 
 Drift summary는 성능 metric이 아니다. 실제 wafer가 synthetic reference 분포와 얼마나 다른지 보는 sanity signal이다.
 
-## Expert Review 연결
+## 전문가 리뷰 연결
 
 `--reference-features`를 넣으면 nearest-neighbor CSV와 reviewer 입력용 template CSV가 함께 생성된다.
 
@@ -163,6 +163,6 @@ Template에는 reviewer가 채울 빈 field만 들어간다.
 - `next_action`
 - `safe_comment`
 
-Reference의 `label_*` 컬럼은 reviewer bias 방지를 위해 template에 복사하지 않는다.
+Reference의 `label_*` 컬럼은 reviewer bias를 막기 위해 template에 복사하지 않는다.
 
-Review 절차는 [Expert Review Protocol](expert_review_protocol.md)을 따른다.
+Review 절차는 [전문가 리뷰 절차](expert_review_protocol.md)을 따른다.

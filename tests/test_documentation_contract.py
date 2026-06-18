@@ -58,8 +58,8 @@ def test_documentation_guides_experiment_history() -> None:
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
 
     assert "experiment_history.md" in docs_index
-    assert "Experiment History" in overview
+    assert "실험과 판단 기록" in overview
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
-    assert "Segmentation Smoke" in experiment_history
-    assert "Real-Unlabeled Workflow" in experiment_history
+    assert "Segmentation Smoke Test" in experiment_history
+    assert "라벨 없는 실제 Wafer 처리 절차" in experiment_history

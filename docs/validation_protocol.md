@@ -1,14 +1,14 @@
-# Validation Protocol
+# 검증 방법
 
-## 1. Purpose
+## 1. 목적
 
 실제 wafer 데이터와 label을 repo에 포함할 수 없기 때문에 validation은 세 축으로 진행한다.
 
-- Synthetic internal validation: generator가 의도한 구조와 mask를 올바르게 저장하는지 검증
-- Expert visual/statistical validation: 사용자의 현업 경험을 기준으로 synthetic realism 평가
-- Methodology validation: observable feature만으로 유사 wafer 검색, grouping, score 해석이 가능한지 검증
+- 합성 데이터 내부 검증: generator가 의도한 구조와 mask를 올바르게 저장하는지 확인
+- 전문가 시각 검증: 사용자의 현업 경험을 기준으로 합성 wafer가 그럴듯한지 평가
+- 방법론 검증: 실제 데이터에서도 계산 가능한 feature만으로 유사 wafer 검색, grouping, score 해석이 가능한지 확인
 
-## 2. Synthetic Internal Validation
+## 2. 합성 데이터 내부 검증
 
 Generator가 만든 sample마다 다음을 자동 확인한다.
 
@@ -22,9 +22,9 @@ net die count가 목표 net die 수에 가까운가?
 metadata와 array shape가 일치하는가?
 ```
 
-## 3. Realism Metrics
+## 3. Realism Metric
 
-실제 데이터를 repo로 가져올 수 없어도, 보안 환경에서 같은 feature extractor를 실행해 aggregate 통계만 비교할 수 있다.
+실제 데이터를 repo로 가져올 수 없어도, 보안 환경에서 같은 feature extractor를 실행해 집계 통계만 비교할 수 있다.
 
 비교 대상 metric:
 
@@ -44,17 +44,17 @@ nearest-neighbor distance distribution
 tile-level severity distribution
 ```
 
-Visual realism gate:
+Visual realism 확인 기준:
 
 ```text
 wafer body가 preview에서 즉시 보여야 한다.
 edge는 smooth circle보다 net die/chip layout을 반영한 stair-step boundary가 적합하다.
-none wafer와 in-wafer Grade 0은 semantic mask로 구분되어야 한다.
+wafer 밖 영역과 in-wafer Grade 0은 mask로 구분되어야 한다.
 scratch/ring/edge/local은 실제 FBM처럼 sparse/noisy field 안에 묻힌 신호에 가까워야 한다.
 stby는 왜곡 요인이자 의미 있는 패턴 신호로 둘 다 검토되어야 한다.
 ```
 
-## 4. Expert Review Scorecard
+## 4. 전문가 Review Scorecard
 
 각 synthetic batch에 대해 사용자가 1~5점으로 평가한다.
 
@@ -81,14 +81,14 @@ overall usefulness
 5 = 실제와 구분하기 어려운 수준
 ```
 
-## 5. Methodology Validation Without Real Labels
+## 5. Real Label 없이 방법론 검증
 
 현재 핵심 검증은 FBM 자체에서 정보를 뽑아 유사 wafer를 찾을 수 있는지다.
 
 검증 항목:
 
 ```text
-1. Observable feature only
+1. 실제 데이터용 feature만 사용
    - synthetic mask ratio와 label은 feature에서 제외
    - 실제 wafer에서도 계산 가능한 feature만 사용
 
@@ -114,7 +114,7 @@ overall usefulness
    - 특히 scratch/local/ring은 synthetic label metric보다 expert visual review를 더 중요하게 본다.
 ```
 
-## 6. Segmentation Validation
+## 6. Segmentation 검증
 
 Synthetic label을 사용할 수 있는 다음 단계에서는 segmentation baseline을 검증한다.
 
@@ -127,7 +127,7 @@ stby-hidden origin recall
 clock-position report consistency
 ```
 
-## 7. Process Metadata Statistics
+## 7. 공정 Metadata 통계
 
 ANOVA와 통계 검정은 이 단계에서 수행한다. 즉, FBM feature와 process metadata가 조인된 뒤에 다음 질문을 던진다.
 
@@ -137,14 +137,14 @@ ANOVA와 통계 검정은 이 단계에서 수행한다. 즉, FBM feature와 pro
 특정 lot에서 stby_origin_hidden_score가 반복되는가?
 ```
 
-## 8. Security Boundary
+## 8. 보안 경계
 
 Repo에는 실제 wafer image, raw array, lot/process 민감 정보를 저장하지 않는다.
 
 허용 가능한 정보:
 
 ```text
-익명화된 aggregate statistics
+익명화된 집계 통계
 수동으로 작성한 realism feedback
 synthetic config template
 feature schema
