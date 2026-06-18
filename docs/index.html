@@ -375,6 +375,26 @@
       gap: 10px;
     }
 
+    .glossary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .term {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfa;
+    }
+
+    .term strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
     .doc-link {
       display: block;
       min-height: 86px;
@@ -408,7 +428,8 @@
       }
 
       .metrics,
-      .links {
+      .links,
+      .glossary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
@@ -437,7 +458,8 @@
 
       .metrics,
       .pipeline,
-      .links {
+      .links,
+      .glossary-grid {
         grid-template-columns: 1fr;
       }
 
@@ -457,6 +479,7 @@
       <div class="brand"><span class="mark" aria-hidden="true"></span> WaferMap Roadmap</div>
       <nav aria-label="문서 바로가기">
         <a href="project_overview.md">개요</a>
+        <a href="glossary.md">용어</a>
         <a href="experiment_history.md">실험 기록</a>
         <a href="real_wafer_review_checklist.md">리뷰 체크리스트</a>
         <a href="roadmap.md">로드맵 원문</a>
@@ -515,6 +538,52 @@
         <div class="step"><span class="step-num">4</span><h3>리뷰</h3><p class="note">same family, mismatch, missed defect 기록</p></div>
         <div class="step"><span class="step-num">5</span><h3>보강</h3><p class="note">약한 family에 feature 또는 AI 추가</p></div>
         <div class="step"><span class="step-num">6</span><h3>재검증</h3><p class="note">실제 wafer 리뷰 결과로 반복</p></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="glossary-title">
+      <h2 id="glossary-title">처음 보는 용어와 변수</h2>
+      <p class="note">
+        아래 용어는 이 프로젝트 문서와 CSV에 반복해서 나오는 핵심 단어다.
+        더 자세한 표는 <a href="glossary.md">용어와 변수 설명</a>에서 확인한다.
+      </p>
+      <div class="glossary-grid">
+        <div class="term">
+          <strong><code>severity</code></strong>
+          wafer map의 Grade 0~7 값이다. wafer 밖과 stby 영역은 0으로 둔다.
+        </div>
+        <div class="term">
+          <strong><code>wafer_mask</code></strong>
+          wafer 내부와 wafer 밖을 구분한다. wafer 밖 0과 wafer 안 정상 Grade 0을 구분하는 데 필요하다.
+        </div>
+        <div class="term">
+          <strong><code>valid_test_mask</code></strong>
+          실제 test가 수행된 위치를 표시한다. stby나 미측정 영역은 0이다.
+        </div>
+        <div class="term">
+          <strong><code>stby_mask</code></strong>
+          stby fail chip 영역을 표시한다. stby를 Grade 7 불량으로 오해하지 않게 한다.
+        </div>
+        <div class="term">
+          <strong><code>manifest</code></strong>
+          실제 raw data를 repo에 넣지 않고, 보안 경로의 `.npz`와 metadata를 참조하는 JSON 파일이다.
+        </div>
+        <div class="term">
+          <strong><code>top-k</code></strong>
+          query wafer 하나에 대해 가까운 neighbor k개를 보는 방식이다. top-5면 가장 가까운 5개를 본다.
+        </div>
+        <div class="term">
+          <strong><code>retrieval lift</code></strong>
+          random 검색보다 nearest-neighbor 검색이 얼마나 나은지 보는 비율이다. 1보다 크면 random보다 낫다.
+        </div>
+        <div class="term">
+          <strong><code>feature drift</code></strong>
+          새 wafer feature 분포가 reference와 얼마나 다른지 보는 sanity signal이다. 성능 점수가 아니다.
+        </div>
+        <div class="term">
+          <strong><code>next_action_queue</code></strong>
+          전문가 리뷰에서 나온 실패 유형을 모아 다음 feature 보강이나 AI 모델 후보로 정리한 목록이다.
+        </div>
       </div>
     </section>
 
@@ -602,6 +671,7 @@
       <h2 id="links-title">문서 바로가기</h2>
       <div class="links">
         <a class="doc-link" href="project_overview.md"><strong>프로젝트 개요</strong><span>목표, 현재 상태, 핵심 판단</span></a>
+        <a class="doc-link" href="glossary.md"><strong>용어와 변수 설명</strong><span>입력 배열, 검색 지표, 리뷰 컬럼</span></a>
         <a class="doc-link" href="experiment_history.md"><strong>실험과 판단 기록</strong><span>무엇을 해봤고 왜 남겼는지</span></a>
         <a class="doc-link" href="roadmap.md"><strong>로드맵 원문</strong><span>단계별 세부 진행 상태</span></a>
         <a class="doc-link" href="real_wafer_review_checklist.md"><strong>리뷰 체크리스트</strong><span>내일 실제 wafer로 할 일</span></a>

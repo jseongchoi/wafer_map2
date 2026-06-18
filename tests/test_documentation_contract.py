@@ -12,6 +12,7 @@ CORE_DOCS = [
     ROOT / "README.md",
     DOCS / "index.html",
     DOCS / "README.md",
+    DOCS / "glossary.md",
     DOCS / "project_overview.md",
     DOCS / "experiment_history.md",
     DOCS / "roadmap.md",
@@ -76,9 +77,11 @@ def test_documentation_guides_experiment_history() -> None:
     docs_index = (DOCS / "README.md").read_text(encoding="utf-8")
     overview = (DOCS / "project_overview.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
+    glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
     assert "index.html" in docs_index
+    assert "glossary.md" in docs_index
     assert "experiment_history.md" in docs_index
     assert "실험과 판단 기록" in overview
     assert "resize-only representation" in experiment_history
@@ -87,3 +90,7 @@ def test_documentation_guides_experiment_history() -> None:
     assert "라벨 없는 실제 Wafer 처리 절차" in experiment_history
     assert "라벨 없는 실제 wafer 적용 준비 단계" in roadmap_html
     assert "Phase 4" in roadmap_html
+    assert "처음 보는 용어와 변수" in roadmap_html
+    assert "glossary.md" in roadmap_html
+    assert "`severity`" in glossary
+    assert "`retrieval_failure_mode`" in glossary
