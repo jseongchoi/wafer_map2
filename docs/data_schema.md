@@ -179,4 +179,4 @@ stby_polar_*
 
 `polar_*`, `stby_polar_*`는 `class_location`, `feature_key`처럼 위치가 중요한 검색에서만 조건부로 쓴다.
 
-Process metadata는 feature table이 안정화된 뒤 외부에서 조인한다. 현재 repo feature table에는 민감한 lot/tool/recipe/chamber id를 넣지 않는다.
+현재 repo feature table에는 민감한 lot/tool/recipe/chamber id를 넣지 않는다.

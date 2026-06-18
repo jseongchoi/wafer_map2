@@ -4,7 +4,7 @@
 
 이 프로젝트는 1채널 고해상도 Wafer Fail Bit Map에서 실제 wafer에도 쓸 수 있는 표현을 만드는 것이다.
 
-여기서 말하는 표현은 단일 classification label이 아니다. 유사 wafer 검색, 관심 불량 검색, defect score table, 후속 공정 분석에 쓸 feature 기반 표현이다.
+여기서 말하는 표현은 단일 classification label이 아니다. 유사 wafer 검색, 관심 불량 검색, defect score table, 모델 입력에 쓸 feature 기반 표현이다.
 
 ```text
 FBM 배열 정리
@@ -15,8 +15,6 @@ FBM 배열 정리
 -> 전문가 리뷰 결과 반영
 -> 라벨 없는 실제 wafer 검증
 ```
-
-ANOVA와 공정 metadata 해석은 지금 목표가 아니다. 공정/설비/lot/recipe/chamber metadata가 붙은 뒤, 안정화된 feature table과 조인해서 수행할 후속 분석이다.
 
 ## 현재 상태
 
@@ -38,7 +36,7 @@ ANOVA와 공정 metadata 해석은 지금 목표가 아니다. 공정/설비/lot
 | 실제 wafer에도 적용 가능한 FBM feature | 합성 데이터의 oracle label 없이 계산 가능한 compact feature를 정리했다. 전체 검색은 50개 feature 기준으로 유지한다. | scale 155장 top-k lift 약 1.36x, holdout 120장 약 1.40x. | [모델링 전략](modeling_strategy.md), [로드맵](roadmap.md) |
 | 유사 wafer 검색 | feature 표준화와 nearest-neighbor 계산을 공통 유틸로 분리했다. 전체 검색에서는 위치 feature를 제외했다. | random baseline 대비 retrieval lift가 유지된다. | `src/wafermap/evaluation/nearest.py`, `src/wafermap/features/selection.py` |
 | 관심 불량별 검색 | class, class_location, feature_key 기준 retrieval을 분리해 검증했다. 위치 feature는 이 경로에서만 조건부로 쓴다. | feature_key/class_location에서 random 대비 lift가 관측됐다. | [모델링 전략](modeling_strategy.md) |
-| defect score / feature table / 후속 분석용 표현 | edge, shot, stby, ring, local, scratch proxy feature와 structured defect feature row 방향을 정리했다. | feature table을 전문가 리뷰와 후속 공정 분석으로 연결할 수 있는 형태가 생겼다. | [데이터 형식](data_schema.md), [불량 패턴 정리](pattern_taxonomy.md) |
+| defect score / feature table / downstream task용 표현 | edge, shot, stby, ring, local, scratch proxy feature와 structured defect feature row 방향을 정리했다. | feature table을 검색, 리뷰, 모델 입력으로 연결할 수 있는 형태가 생겼다. | [데이터 형식](data_schema.md), [불량 패턴 정리](pattern_taxonomy.md) |
 | 실제 보안 환경 적용 | `real_unlabeled_manifest/v1`와 `.npz` 입력 형식을 만들고, raw data를 repo에 저장하지 않는 절차를 구현했다. | synthetic smoke로 feature CSV, sanity JSON, NN CSV, review template 생성이 통과했다. | [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md), `scripts/extract_real_unlabeled_features.py` |
 | 전문가 리뷰 연결 | nearest-neighbor 결과를 reviewer CSV로 바꾸고, 리뷰 결과에서 실패 유형과 다음 작업을 집계한다. | 사람의 판단을 feature 보강 또는 AI 모델 후보로 연결하는 절차가 생겼다. | [전문가 리뷰 절차](expert_review_protocol.md), `scripts/summarize_expert_review.py` |
 | proposal 과투자 방지 | patch/curve proposal은 리뷰 후보 축소용으로 제한하고, scratch는 별도 track으로 분리했다. | resize-only와 proposal-only는 전체 검색을 대신할 수 없다고 정리했다. | [로드맵](roadmap.md), [모델링 전략](modeling_strategy.md) |
@@ -95,7 +93,6 @@ ANOVA와 공정 metadata 해석은 지금 목표가 아니다. 공정/설비/lot
 - 합성 데이터의 oracle label/mask를 실제 inference feature에 섞지 않는다.
 - 전체 유사 wafer 검색에 `polar_*`, `stby_polar_*`를 넣지 않는다.
 - Proposal recall을 최종 성능처럼 해석하지 않는다.
-- ANOVA를 지금 milestone 목표로 당기지 않는다.
 - AutoEncoder나 대형 모델을 1차 해결책처럼 붙이지 않는다.
 
 ## 참고 연구의 위치

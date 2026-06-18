@@ -127,17 +127,7 @@ stby-hidden origin recall
 clock-position report consistency
 ```
 
-## 7. 공정 Metadata 통계
-
-ANOVA와 통계 검정은 이 단계에서 수행한다. 즉, FBM feature와 process metadata가 조인된 뒤에 다음 질문을 던진다.
-
-```text
-특정 tool/chamber에서 shot_relative_score가 높은가?
-특정 recipe 이후 edge_localized_score가 상승하는가?
-특정 lot에서 stby_origin_hidden_score가 반복되는가?
-```
-
-## 8. 보안 경계
+## 7. 보안 경계
 
 Repo에는 실제 wafer image, raw array, lot/process 민감 정보를 저장하지 않는다.
 

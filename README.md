@@ -14,8 +14,6 @@ FBM 배열 정리
 -> 라벨 없는 실제 wafer 검증
 ```
 
-ANOVA나 공정/설비/lot/recipe/chamber metadata 분석은 지금 단계의 목표가 아닙니다. 먼저 FBM feature table을 안정화하고, 그 뒤 공정 metadata와 조인해서 후속 분석으로 진행합니다.
-
 ## 현재 상태
 
 - 합성 FBM generator는 Grade 0~7, wafer 밖 영역, 실제 test 영역, stby, edge/local/shot/ring/scratch 계열을 생성합니다.
