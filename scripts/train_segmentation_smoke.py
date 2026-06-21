@@ -145,6 +145,13 @@ def relpath(target: Path, base_file: Path) -> str:
     return os.path.relpath(target.resolve(), base_file.resolve().parent).replace("\\", "/")
 
 
+def repo_path(target: Path) -> str:
+    try:
+        return target.resolve().relative_to(ROOT.resolve()).as_posix()
+    except (OSError, ValueError):
+        return str(target)
+
+
 def metric_rows(metrics: dict[str, Any]) -> str:
     rows = []
     for row in metrics["validation"]["per_class"]:
@@ -183,7 +190,7 @@ def html_report(metrics: dict[str, Any], figure: Path, metrics_path: Path, out: 
 <body>
   <h1>FBM Segmentation Smoke Training</h1>
   <div class="note">이 리포트는 성능 리포트가 아니라 배관 검증 리포트다. NumPy 1x1 sigmoid baseline으로 manifest, input tensor, target mask, weighted BCE가 정상 연결되는지 확인한다.</div>
-  <h2>Gate Result: {verdict}</h2>
+  <h2>판정 결과: {verdict}</h2>
   <ul>
     <li>Train samples: {metrics['train_samples']}, Val samples: {metrics['val_samples']}</li>
     <li>Tensor size: {metrics['output_size']} x {metrics['output_size']}</li>
@@ -197,7 +204,7 @@ def html_report(metrics: dict[str, Any], figure: Path, metrics_path: Path, out: 
     <tr><th>Class</th><th>Target pixels</th><th>Predicted pixels</th><th>Precision</th><th>Recall</th><th>IoU</th></tr>
     {metric_rows(metrics)}
   </table>
-  <h2>Next Gate</h2>
+  <h2>다음 확인 단계</h2>
   <p>다음은 PyTorch/GPU 환경에서 small U-Net 또는 lightweight SegFormer로 넘어가되, 성공 기준은 전체 mIoU가 아니라 scratch recall, stby-hidden scratch recall, local small-blob recall로 둔다.</p>
   <p>Metrics JSON: <code>{html.escape(relpath(metrics_path, out))}</code></p>
 </body>
@@ -221,7 +228,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         learning_rate=args.learning_rate,
     )
     metrics = {
-        "manifest": str(manifest),
+        "manifest": repo_path(manifest),
         "output_size": args.output_size,
         "train_samples": len(train.sample_ids),
         "val_samples": len(val.sample_ids),

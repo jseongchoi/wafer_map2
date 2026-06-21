@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from wafermap.synth.generator import SyntheticConfig, generate_sample, save_sample
-from wafermap.viz import save_preview
+from wafermap.viz import save_grayscale, save_preview
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +74,12 @@ def main() -> None:
             continue
         sample = generate_sample(config, idx)
         save_sample(sample, sample_dir)
+        save_grayscale(
+            sample_dir / "raw_grayscale.png",
+            sample.severity,
+            sample.wafer_mask,
+            sample.stby_mask,
+        )
         if not args.no_preview:
             save_preview(
                 sample_dir / "preview.png",
@@ -88,6 +94,7 @@ def main() -> None:
         "config": str(config_path),
         "count": config.count,
         "sample_ids": [f"synth_{idx:06d}" for idx in range(config.count)],
+        "raw_grayscale_rendered": True,
         "preview_rendered": not args.no_preview,
     }
     (out_dir / "manifest.json").write_text(

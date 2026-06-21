@@ -1,4 +1,4 @@
-"""Create a human review template for FBM nearest-neighbor results."""
+"""Create a human review form for FBM nearest-neighbor results."""
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def html_report(
   <h2>Outputs</h2>
   <ul>
     <li>Input neighbors: <code>{html.escape(relpath(neighbors_path, report_path))}</code></li>
-    <li>Review template: <code>{html.escape(relpath(template_path, report_path))}</code></li>
+    <li>Review form: <code>{html.escape(relpath(template_path, report_path))}</code></li>
   </ul>
 </body>
 </html>
@@ -133,8 +133,8 @@ def main() -> None:
     write_csv(template_path, rows)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(html_report(rows, warnings, neighbors_path, template_path, report_path), encoding="utf-8")
-    print(f"Wrote expert review template: {template_path}")
-    print(f"Wrote expert review template report: {report_path}")
+    print(f"Wrote expert review form: {template_path}")
+    print(f"Wrote expert review form report: {report_path}")
 
 
 if __name__ == "__main__":

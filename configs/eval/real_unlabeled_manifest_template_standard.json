@@ -3,7 +3,7 @@
   "feature_schema_version": "observable_fbm_features/v1",
   "samples": [
     {
-      "sample_id": "real_like_001",
+      "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
       "source_type": "npz_semantic_arrays",
       "arrays_npz": "D:/secure_fbm/real_like_001_arrays.npz",
       "pseudonymized": true,

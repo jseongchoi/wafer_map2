@@ -11,7 +11,6 @@ import csv
 import html
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from wafermap.data import PATTERN_CLASSES, SyntheticSample, load_metadata, load_sample
+from wafermap.data import (
+    PATTERN_CLASSES,
+    SyntheticSample,
+    load_metadata,
+    load_sample,
+)
 from wafermap.evaluation import cross_nearest_neighbor_indices
 from wafermap.features import (
     compact_observable_feature_names,
@@ -30,11 +34,20 @@ from wafermap.features import (
     shared_observable_feature_names as shared_compact_feature_names,
 )
 from wafermap.reporting import build_template_rows, write_template_csv
+from wafermap.real import (
+    SOURCE_TYPE_NPZ_SEMANTIC_ARRAYS,
+    SOURCE_TYPE_PNG_GRAYSCALE_RAW,
+    SOURCE_TYPE_SYNTHETIC_SAMPLE_DIR,
+    detect_full_gray_stby_blocks,
+    infer_png_wafer_mask,
+    load_png_gray_values,
+    metadata_from_png_entry,
+    severity_from_png_gray,
+    validate_manifest,
+)
 
 LABEL_PREFIX = "label_"
 OUTPUT_ROOT = ROOT / "outputs"
-SAMPLE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
-
 
 def positive_int(value: str) -> int:
     try:
@@ -61,11 +74,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Copy reference label_* columns into the neighbor CSV. Use only with approved synthetic references.",
     )
+    parser.add_argument(
+        "--allow-output-outside-root",
+        action="store_true",
+        help="Allow derived outputs outside outputs/. Use only for isolated synthetic smoke tests.",
+    )
     return parser.parse_args(argv)
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def resolve_manifest_path(path: str | Path, manifest_path: Path) -> Path:
@@ -73,41 +91,6 @@ def resolve_manifest_path(path: str | Path, manifest_path: Path) -> Path:
     if path.is_absolute():
         return path
     return (manifest_path.parent / path).resolve()
-
-
-def validate_manifest(manifest: dict[str, Any]) -> None:
-    if manifest.get("schema_version") != "real_unlabeled_manifest/v1":
-        raise ValueError("Manifest requires schema_version=real_unlabeled_manifest/v1")
-    if manifest.get("feature_schema_version") != "observable_fbm_features/v1":
-        raise ValueError("Manifest requires feature_schema_version=observable_fbm_features/v1")
-    entries = manifest.get("samples", [])
-    if not isinstance(entries, list) or not entries:
-        raise ValueError("Manifest must contain at least one sample entry")
-    sample_ids: set[str] = set()
-    for idx, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            raise ValueError(f"samples[{idx}] must be an object")
-        if "source_type" not in entry:
-            raise ValueError(f"samples[{idx}] requires source_type")
-        source_type = str(entry["source_type"])
-        sample_id = str(entry.get("sample_id", ""))
-        if not sample_id or not SAMPLE_ID_RE.match(sample_id):
-            raise ValueError(f"samples[{idx}] requires pseudonymized sample_id using only letters/numbers/._-")
-        if sample_id in sample_ids:
-            raise ValueError(f"samples[{idx}] duplicate sample_id: {sample_id}")
-        sample_ids.add(sample_id)
-        if source_type == "npz_semantic_arrays":
-            required = ("arrays_npz", "chip_blocks", "grid", "parser_name", "parser_version", "orientation")
-            missing = [name for name in required if name not in entry]
-            if missing:
-                raise ValueError(f"samples[{idx}] missing required npz_semantic_arrays fields: {missing}")
-            if entry.get("pseudonymized") is not True:
-                raise ValueError(f"samples[{idx}] must set pseudonymized=true for real semantic arrays")
-        elif source_type == "synthetic_sample_dir":
-            if "sample_dir" not in entry:
-                raise ValueError(f"samples[{idx}] missing sample_dir")
-        else:
-            raise ValueError(f"samples[{idx}] unsupported source_type: {source_type}")
 
 
 def _is_inside(path: Path, parent: Path) -> bool:
@@ -123,22 +106,24 @@ def _ensure_real_input_outside_workspace(path: Path, entry: dict[str, Any], labe
         raise ValueError(f"{label} must live outside the workspace for real inputs: {path}")
 
 
-def ensure_output_path(path: Path) -> Path:
+def ensure_output_path(path: Path, *, allow_outside_root: bool = False) -> Path:
     resolved = path.resolve()
-    if not _is_inside(resolved, OUTPUT_ROOT):
+    if not allow_outside_root and not _is_inside(resolved, OUTPUT_ROOT):
         raise ValueError(f"Output path must be under {OUTPUT_ROOT}: {path}")
     return resolved
 
 
 def load_real_like_sample(entry: dict[str, Any], manifest_path: Path) -> SyntheticSample:
-    source_type = str(entry.get("source_type", "npz_semantic_arrays"))
-    if source_type == "synthetic_sample_dir":
+    source_type = str(entry.get("source_type", SOURCE_TYPE_NPZ_SEMANTIC_ARRAYS))
+    if source_type == SOURCE_TYPE_SYNTHETIC_SAMPLE_DIR:
         sample_dir = resolve_manifest_path(entry["sample_dir"], manifest_path)
         sample = load_sample(sample_dir)
         if "sample_id" in entry:
             sample.sample_id = str(entry["sample_id"])
         return sample
-    if source_type != "npz_semantic_arrays":
+    if source_type == SOURCE_TYPE_PNG_GRAYSCALE_RAW:
+        return _load_png_grayscale_raw_sample(entry, manifest_path)
+    if source_type != SOURCE_TYPE_NPZ_SEMANTIC_ARRAYS:
         raise ValueError(f"Unsupported source_type: {source_type}")
 
     arrays_path = resolve_manifest_path(entry["arrays_npz"], manifest_path)
@@ -192,6 +177,36 @@ def load_real_like_sample(entry: dict[str, Any], manifest_path: Path) -> Synthet
     pattern_intensity = np.zeros((len(PATTERN_CLASSES), *shape), dtype=np.float32)
     return SyntheticSample(
         sample_id=str(entry.get("sample_id", metadata.get("sample_id", arrays_path.stem))),
+        severity=severity,
+        wafer_mask=wafer_mask,
+        valid_test_mask=valid_test_mask,
+        stby_mask=stby_mask,
+        pattern_masks=pattern_masks,
+        pattern_intensity=pattern_intensity,
+        chip_index=chip_index,
+        metadata=metadata,
+    )
+
+
+def _load_png_grayscale_raw_sample(entry: dict[str, Any], manifest_path: Path) -> SyntheticSample:
+    png_path = resolve_manifest_path(entry["png_path"], manifest_path)
+    _ensure_real_input_outside_workspace(png_path, entry, "png_path")
+    raw = load_png_gray_values(png_path)
+    severity = severity_from_png_gray(raw)
+    metadata = metadata_from_png_entry(entry, raw)
+    chip_width = int(metadata["chip_blocks"]["width"])
+    chip_height = int(metadata["chip_blocks"]["height"])
+    rows = int(metadata["grid"]["rows"])
+    cols = int(metadata["grid"]["cols"])
+    stby_mask = detect_full_gray_stby_blocks(raw, chip_height, chip_width, rows, cols)
+    severity[stby_mask > 0] = 0
+    wafer_mask = infer_png_wafer_mask(metadata, raw.shape)
+    valid_test_mask = ((wafer_mask > 0) & (stby_mask == 0)).astype(np.uint8)
+    chip_index = _infer_chip_index(metadata, raw.shape, wafer_mask)
+    pattern_masks = np.zeros((len(PATTERN_CLASSES), *raw.shape), dtype=np.uint8)
+    pattern_intensity = np.zeros((len(PATTERN_CLASSES), *raw.shape), dtype=np.float32)
+    return SyntheticSample(
+        sample_id=str(entry.get("sample_id", metadata.get("sample_id", png_path.stem))),
         severity=severity,
         wafer_mask=wafer_mask,
         valid_test_mask=valid_test_mask,
@@ -323,6 +338,8 @@ def _infer_chip_index(metadata: dict[str, Any], shape: tuple[int, int], wafer_ma
             x0 = col * chip_width
             x1 = min(x0 + chip_width, shape[1])
             chip = wafer_mask[y0:y1, x0:x1] > 0
+            if not chip.any():
+                continue
             block = chip_index[y0:y1, x0:x1]
             block[chip] = chip_id
             chip_index[y0:y1, x0:x1] = block
@@ -394,6 +411,14 @@ def validate_real_like_sample(sample: SyntheticSample) -> tuple[list[str], list[
         warnings.append("sample has no stby pixels")
     if ((sample.severity == 0) & (sample.valid_test_mask > 0)).sum() == 0:
         warnings.append("sample has no measured Grade 0 pixels")
+    if sample.metadata.get("wafer_mask_strategy") == "full_grid_from_png":
+        warnings.append(
+            "PNG source uses full-grid wafer_mask because wafer-outside pixels are also gray 0; provide an explicit wafer mask for exact wafer-boundary features"
+        )
+    if sample.metadata.get("wafer_mask_strategy") == "centered_ellipse_from_png":
+        warnings.append(
+            "PNG source uses inferred centered-ellipse wafer_mask; provide an explicit wafer mask if product die layout differs"
+        )
     return errors, warnings
 
 
@@ -527,7 +552,7 @@ def html_report(
         else ""
     )
     review_template_link = (
-        f'<li><a href="{html.escape(relpath(review_template_out, report_out))}">Expert review template CSV</a></li>'
+        f'<li><a href="{html.escape(relpath(review_template_out, report_out))}">Expert review form CSV</a></li>'
         if review_template_out is not None
         else ""
     )
@@ -601,11 +626,14 @@ def main() -> None:
     manifest = read_json(manifest_path)
     validate_manifest(manifest)
     entries = manifest.get("samples", [])
-    features_out = ensure_output_path(Path(args.features_out))
-    sanity_out = ensure_output_path(Path(args.sanity_out))
-    report_out = ensure_output_path(Path(args.report_out))
-    neighbors_out = ensure_output_path(Path(args.neighbors_out))
-    review_template_out = ensure_output_path(Path(args.review_template_out))
+    features_out = ensure_output_path(Path(args.features_out), allow_outside_root=args.allow_output_outside_root)
+    sanity_out = ensure_output_path(Path(args.sanity_out), allow_outside_root=args.allow_output_outside_root)
+    report_out = ensure_output_path(Path(args.report_out), allow_outside_root=args.allow_output_outside_root)
+    neighbors_out = ensure_output_path(Path(args.neighbors_out), allow_outside_root=args.allow_output_outside_root)
+    review_template_out = ensure_output_path(
+        Path(args.review_template_out),
+        allow_outside_root=args.allow_output_outside_root,
+    )
 
     samples = [load_real_like_sample(entry, manifest_path) for entry in entries]
     sanity_records = []
@@ -669,7 +697,7 @@ def main() -> None:
     if neighbors_path:
         print(f"Wrote nearest-neighbor CSV: {neighbors_path}")
     if review_template_path:
-        print(f"Wrote expert review template CSV: {review_template_path}")
+        print(f"Wrote expert review form CSV: {review_template_path}")
 
 
 if __name__ == "__main__":

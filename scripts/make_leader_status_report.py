@@ -81,7 +81,7 @@ def refactor_table() -> str:
             "데이터 의미 분리",
             "양호",
             "Grade 0, none-wafer, valid-test, stby가 tensor/mask로 분리되어 있다. Synthetic oracle feature도 inference feature에서 제외된다.",
-            "유지. real parser에서도 같은 semantic contract를 강제한다.",
+            "유지. real parser에서도 같은 semantic 기준을 강제한다.",
         ),
         (
             "테스트 커버리지",
@@ -325,7 +325,7 @@ def build_html() -> str:
     {refactor_table()}
   </table>
 
-  <h2>다음 Gate</h2>
+  <h2>다음 확인 단계</h2>
   <ol>
     <li>이 보고서의 synthetic gallery와 neighbor gallery를 보고 현실성/유사성 판단을 남긴다.</li>
     <li><code>outputs/reports/expert_review_template.csv</code>의 일부 row를 채워서 accepted/mismatch 기준을 만든다.</li>

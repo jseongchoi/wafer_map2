@@ -26,7 +26,7 @@ FBM 배열 정리
 - Patch proposal은 edge/local/stby 리뷰 후보를 줄이는 보조 도구로만 둔다.
 - Curve proposal은 ring/center arc 리뷰 후보를 줄이는 보조 도구로만 둔다.
 - Scratch는 rule/proposal에 더 깊게 투자하지 않고 segmentation 또는 scratch 전용 line feature 쪽으로 분리한다.
-- 라벨 없는 실제 wafer 처리 절차는 `.npz` manifest, feature CSV, sanity JSON, nearest-neighbor CSV, 전문가 리뷰 template까지 연결되어 있다.
+- 라벨 없는 실제 wafer 처리 절차는 제품별 raw PNG 폴더 또는 `.npz` manifest에서 feature CSV, sanity JSON, nearest-neighbor CSV, 전문가 리뷰 양식까지 연결되어 있다.
 - 전체 유사 wafer 검색에서는 `polar_*`, `stby_polar_*` 위치 feature를 제외한다.
 
 ## 목표 대비 진행 상황
@@ -37,7 +37,7 @@ FBM 배열 정리
 | 유사 wafer 검색 | feature 표준화와 nearest-neighbor 계산을 공통 유틸로 분리했다. 전체 검색에서는 위치 feature를 제외했다. | random baseline 대비 retrieval lift가 유지된다. | `src/wafermap/evaluation/nearest.py`, `src/wafermap/features/selection.py` |
 | 관심 불량별 검색 | class, class_location, feature_key 기준 retrieval을 분리해 검증했다. 위치 feature는 이 경로에서만 조건부로 쓴다. | feature_key/class_location에서 random 대비 lift가 관측됐다. | [모델링 전략](modeling_strategy.md) |
 | defect score / feature table / downstream task용 표현 | edge, shot, stby, ring, local, scratch proxy feature와 structured defect feature row 방향을 정리했다. | feature table을 검색, 리뷰, 모델 입력으로 연결할 수 있는 형태가 생겼다. | [데이터 형식](data_schema.md), [불량 패턴 정리](pattern_taxonomy.md) |
-| 실제 보안 환경 적용 | `real_unlabeled_manifest/v1`와 `.npz` 입력 형식을 만들고, raw data를 repo에 저장하지 않는 절차를 구현했다. | synthetic smoke로 feature CSV, sanity JSON, NN CSV, review template 생성이 통과했다. | [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md), `scripts/extract_real_unlabeled_features.py` |
+| 실제 보안 환경 적용 | 제품별 raw PNG 폴더 batch, `png_grayscale_raw`, `real_unlabeled_manifest/v1`, `.npz` 입력 형식을 만들고, raw data를 repo에 저장하지 않는 절차를 구현했다. | PNG round-trip과 batch smoke에서 feature CSV, sanity JSON, HTML report 생성이 통과했다. | [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md), `scripts/analyze_png_raw_folders.py`, `scripts/extract_real_unlabeled_features.py` |
 | 전문가 리뷰 연결 | nearest-neighbor 결과를 reviewer CSV로 바꾸고, 리뷰 결과에서 실패 유형과 다음 작업을 집계한다. | 사람의 판단을 feature 보강 또는 AI 모델 후보로 연결하는 절차가 생겼다. | [전문가 리뷰 절차](expert_review_protocol.md), `scripts/summarize_expert_review.py` |
 | proposal 과투자 방지 | patch/curve proposal은 리뷰 후보 축소용으로 제한하고, scratch는 별도 track으로 분리했다. | resize-only와 proposal-only는 전체 검색을 대신할 수 없다고 정리했다. | [로드맵](roadmap.md), [모델링 전략](modeling_strategy.md) |
 | 외부 연구 참고 | wafer map clustering/manual labeling, graph spatial filtering, segmentation 연구를 참고해 현재 전략의 위치를 정리했다. | 현재 방향은 `feature -> retrieval/grouping -> expert review`이고, scratch/local은 morphology/segmentation 보강이 필요하다는 판단과 맞다. | 아래 참고 연구, [모델링 전략](modeling_strategy.md) |
@@ -67,7 +67,7 @@ FBM 배열 정리
 | 전체 유사 wafer 검색 | scale/holdout에서 random baseline 대비 lift가 있다. | 1차 솔루션 후보로 유효 |
 | 관심 불량별 검색 | class/class_location/feature_key 기준 신호가 있다. | defect별 search 방향 유효 |
 | Resize/proposal | resize-only는 대체재가 아니고 proposal은 리뷰 후보 축소용이다. | 과투자 방지 완료 |
-| 라벨 없는 실제 wafer 처리 | `.npz` manifest에서 feature/sanity/NN/review template까지 생성된다. | 실제 리뷰 직전 단계 |
+| 라벨 없는 실제 wafer 처리 | 제품별 raw PNG 폴더 또는 `.npz` manifest에서 feature/sanity/NN/리뷰 양식까지 생성된다. | 실제 리뷰 직전 단계 |
 | 전문가 리뷰 | reviewer decision, failure mode, next action을 summary로 연결한다. | 실제 검증 대기 |
 | AI 모델 | segmentation smoke training 배관은 있으나 실사용 deep model은 아직 아니다. | 실제 리뷰 후 target 결정 |
 
@@ -81,11 +81,12 @@ FBM 배열 정리
 
 ## 지금 우선해야 할 작업
 
-1. 실제 작업에서 쓸 `.npz` manifest 형식을 명확히 정한다.
-2. 보안 환경에서 실제 wafer를 `.npz`로 export하고 sanity 결과와 feature drift를 확인한다.
-3. Nearest-neighbor 결과를 전문가 리뷰 template으로 평가한다.
-4. 리뷰어가 적은 `retrieval_failure_mode`, `next_action`을 feature 보강 또는 AI 모델 후보로 연결한다.
-5. Scratch/local처럼 약한 계열은 morphology 또는 segmentation 쪽으로 분리한다.
+1. 보안 환경의 제품별 raw PNG 폴더에서 batch script를 실행하고 sanity 결과를 확인한다.
+2. 제품별 chip geometry 추론이 흔들리는 경우 `--geometry-json`으로 보완한다.
+3. 필요하면 `.npz` manifest 경로도 별도 smoke로 확인한다.
+4. Nearest-neighbor 결과를 전문가 리뷰 양식으로 평가한다.
+5. 리뷰어가 적은 `retrieval_failure_mode`, `next_action`을 feature 보강 또는 AI 모델 후보로 연결한다.
+6. Scratch/local처럼 약한 계열은 morphology 또는 segmentation 쪽으로 분리한다.
 
 ## 하지 말아야 할 일
 

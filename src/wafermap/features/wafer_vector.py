@@ -36,12 +36,12 @@ def extract_observable_feature_vector(
 
     normalized_severity = severity / 7.0
     radius, theta = _pixel_radius_theta(sample.shape, wafer)
-    for idx, value in enumerate(_binned_mean(normalized_severity, wafer, radius, radial_bins)):
+    for idx, value in enumerate(_binned_mean(normalized_severity, valid, radius, radial_bins)):
         features[f"radial_zone_{idx:02d}_severity"] = float(value)
-    for idx, value in enumerate(_binned_mean(normalized_severity, wafer, theta, angular_bins)):
+    for idx, value in enumerate(_binned_mean(normalized_severity, valid, theta, angular_bins)):
         features[f"angular_sector_{idx:02d}_severity"] = float(value)
 
-    density_profile = _binned_mean((severity > 0).astype(np.float32), wafer, radius, 5)
+    density_profile = _binned_mean((severity > 0).astype(np.float32), valid, radius, 5)
     features["edge_density"] = float(np.mean(density_profile[-1:]))
     features["center_density"] = float(density_profile[0])
     features["edge_minus_center_density"] = float(features["edge_density"] - features["center_density"])

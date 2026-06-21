@@ -17,6 +17,9 @@ PATTERN_CLASSES: tuple[str, ...] = (
     "shot_grid",
     "stby_pattern",
 )
+GRADE_TO_GRAY: tuple[int, ...] = (0, 31, 151, 175, 191, 207, 223, 255)
+GRAY_TO_GRADE: dict[int, int] = {gray: grade for grade, gray in enumerate(GRADE_TO_GRAY)}
+STBY_GRAY_VALUE = 255
 
 
 @dataclass(frozen=True)

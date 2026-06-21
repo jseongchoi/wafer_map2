@@ -1,21 +1,33 @@
 import numpy as np
+from PIL import Image
 
 import pytest
 
 from wafermap.evaluation import cross_nearest_neighbor_indices, nearest_neighbor_indices
 from wafermap.features import compact_observable_feature_names, feature_matrix, observable_feature_names
 from wafermap.reporting import clock_position_from_xy
-from wafermap.viz import render_grayscale
+from wafermap.viz import render_grayscale, save_grayscale
 
 
-def test_render_grayscale_keeps_stby_distinct_from_grade():
-    severity = np.array([[0, 1, 7]], dtype=np.uint8)
+def test_render_grayscale_uses_real_raw_gray_values():
+    severity = np.array([[0, 1, 2, 3, 4, 5, 6, 7, 0]], dtype=np.uint8)
     wafer_mask = np.ones_like(severity, dtype=np.uint8)
-    stby_mask = np.array([[0, 0, 1]], dtype=np.uint8)
+    stby_mask = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 1]], dtype=np.uint8)
 
     rendered = render_grayscale(severity, wafer_mask, stby_mask)
 
-    assert rendered.tolist() == [[0, 33, 255]]
+    assert rendered.tolist() == [[0, 31, 151, 175, 191, 207, 223, 255, 255]]
+
+
+def test_save_grayscale_writes_exact_raw_png_values(tmp_path):
+    severity = np.array([[1, 7]], dtype=np.uint8)
+    wafer_mask = np.ones_like(severity, dtype=np.uint8)
+    stby_mask = np.array([[0, 1]], dtype=np.uint8)
+    path = tmp_path / "raw.png"
+
+    save_grayscale(path, severity, wafer_mask, stby_mask)
+
+    assert np.asarray(Image.open(path)).tolist() == [[31, 255]]
 
 
 def test_clock_position_uses_ascii_labels():

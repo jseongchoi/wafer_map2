@@ -99,7 +99,7 @@ Proposal recall을 최종 성능으로 해석하지 않는다.
 현재 구현 상태:
 
 - 구현됨: feature extractor, nearest-neighbor 검색, 관심 불량 검색 평가, 라벨 없는 실제 wafer 리뷰 절차
-- smoke 수준 구현됨: synthetic-label segmentation dataset helper와 NumPy-only 1x1 sigmoid segmentation smoke training
+- CPU 기준선 구현됨: synthetic-label segmentation dataset helper, NumPy-only 1x1 sigmoid segmentation smoke training, synthetic embedding 점검, NumPy shared encoder multi-label model, 라벨 없는 manifest scoring
 - 아직 아님: 실사용 U-Net/SegFormer/DINO model, 실제 wafer로 검증된 supervised/self-supervised model, calibrated defect probability model
 
 ## 왜 AutoEncoder부터 하지 않는가

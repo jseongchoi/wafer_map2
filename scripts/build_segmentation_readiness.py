@@ -206,6 +206,14 @@ def relpath(target: Path, base: Path) -> str:
     return os.path.relpath(Path(target).resolve(), Path(base).resolve()).replace("\\", "/")
 
 
+def repo_path(target: Path) -> str:
+    path = Path(target)
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except (OSError, ValueError):
+        return str(target)
+
+
 def summary_rows(rows: list[dict[str, Any]]) -> str:
     out = []
     for row in rows:
@@ -298,9 +306,9 @@ def html_report(metrics: dict[str, Any], gallery: Path, manifest: Path, metrics_
   <p>각 행은 대표 sample이다. 왼쪽은 input severity이고, 오른쪽은 scratch/ring/local/stby target mask overlay다.</p>
   <img src="{html.escape(relpath(gallery, out.parent))}" alt="segmentation readiness gallery">
 
-  <h2>Next Gate</h2>
+  <h2>다음 확인 단계</h2>
   <ol>
-    <li>local은 현재 morphology baseline 결과를 expert review template에 연결한다.</li>
+    <li>local은 현재 morphology baseline 결과를 expert review form에 연결한다.</li>
     <li>scratch는 이 manifest를 이용해 작은 U-Net/SegFormer 계열 multi-label segmentation으로 넘긴다.</li>
     <li>학습 target은 class별 sigmoid mask이며 overlap을 허용한다.</li>
     <li>성공 기준은 전체 mIoU가 아니라 scratch recall, stby-hidden scratch recall, local small-blob recall이다.</li>
@@ -382,7 +390,7 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
     }
     metrics = {
         "sample_count": len(dirs),
-        "data_root": str(data_root),
+        "data_root": repo_path(data_root),
         "input_channels": list(INPUT_CHANNELS),
         "target_channels": list(PATTERN_CLASSES),
         "split_counts": split_counts,

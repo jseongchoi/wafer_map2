@@ -481,6 +481,7 @@
         <a href="project_overview.md">개요</a>
         <a href="glossary.md">용어</a>
         <a href="experiment_history.md">실험 기록</a>
+        <a href="real_png_operator_runbook.md">PNG 운영 안내서</a>
         <a href="real_wafer_review_checklist.md">리뷰 체크리스트</a>
         <a href="roadmap.md">로드맵 원문</a>
       </nav>
@@ -524,7 +525,7 @@
         <span class="label">holdout 120장 top-k retrieval lift</span>
       </article>
       <article class="card metric">
-        <span class="value">58</span>
+        <span class="value">65</span>
         <span class="label">현재 통과한 pytest 개수</span>
       </article>
     </section>
@@ -566,7 +567,11 @@
         </div>
         <div class="term">
           <strong><code>manifest</code></strong>
-          실제 raw data를 repo에 넣지 않고, 보안 경로의 `.npz`와 metadata를 참조하는 JSON 파일이다.
+          실제 raw data를 repo에 넣지 않고, 보안 경로의 raw PNG 또는 `.npz`와 metadata를 참조하는 JSON 파일이다.
+        </div>
+        <div class="term">
+          <strong><code>png_grayscale_raw</code></strong>
+          실제 8-bit grayscale PNG를 gray value 기준으로 Grade 0~7과 stby 후보로 변환하는 입력 형식이다.
         </div>
         <div class="term">
           <strong><code>top-k</code></strong>
@@ -612,7 +617,7 @@
         </article>
         <article class="phase">
           <div class="phase-label">Phase 4</div>
-          <div><h3>라벨 없는 실제 wafer 적용</h3><p class="note"><code>.npz</code> manifest, sanity, drift, nearest-neighbor, 리뷰 template 연결</p></div>
+          <div><h3>라벨 없는 실제 wafer 적용</h3><p class="note">제품별 raw PNG batch 또는 <code>.npz</code> manifest, sanity, drift, nearest-neighbor, 리뷰 양식 연결</p></div>
           <div class="phase-state active">현재 단계</div>
         </article>
         <article class="phase">
@@ -627,10 +632,10 @@
       <article class="card">
         <h2>내가 지금 해야 할 일</h2>
         <ol>
-          <li>real wafer 5~20장을 익명 sample id로 고른다.</li>
-          <li><code>severity</code>, <code>wafer_mask</code>, <code>valid_test_mask</code>, <code>stby_mask</code>를 포함한 <code>.npz</code>를 export한다.</li>
-          <li>manifest를 작성하고 sanity 결과를 먼저 확인한다.</li>
-          <li>top-k neighbor 중 20~50 pair를 전문가 리뷰 template에 채운다.</li>
+          <li>real wafer 5~20장을 제품별 raw PNG 폴더로 준비한다.</li>
+          <li>8-bit grayscale 값이 <code>0,31,151,175,191,207,223,255</code> 기준인지 확인한다.</li>
+          <li>batch script로 manifest와 sanity 결과를 생성한다.</li>
+          <li>top-k neighbor 중 20~50 pair를 전문가 리뷰 양식에 채운다.</li>
           <li><code>next_action_queue</code>를 보고 feature 보강 또는 AI 모델 후보를 결정한다.</li>
         </ol>
       </article>
@@ -640,7 +645,7 @@
           <li>실제 wafer raw image</li>
           <li>실제 wafer raw array <code>.npz</code></li>
           <li>실제 file path가 들어간 manifest 원본</li>
-          <li>lot, tool, recipe, chamber, wafer id</li>
+          <li>제품명, lot, tool, recipe, chamber, wafer id</li>
         </ul>
       </article>
     </section>
@@ -656,14 +661,12 @@
       </article>
       <article class="card">
         <h2>실행 명령</h2>
-        <pre><code>python scripts/extract_real_unlabeled_features.py `
-  --manifest D:/secure_fbm/real_manifest.json `
-  --reference-features outputs/reports/fbm_grouping_scale_features.csv `
-  --features-out outputs/reports/real_unlabeled_features.csv `
-  --sanity-out outputs/reports/real_unlabeled_sanity.json `
-  --report-out outputs/reports/real_unlabeled_report.html `
-  --neighbors-out outputs/reports/real_unlabeled_neighbors.csv `
-  --review-template-out outputs/reports/real_unlabeled_expert_review_template.csv</code></pre>
+        <pre><code>python scripts/analyze_png_raw_folders.py `
+  --raw-root D:/secure_fbm/raw_png `
+  --production-run `
+  --geometry-json D:/secure_fbm/product_geometry.json `
+  --out-dir outputs/reports/real_png_batch `
+  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv</code></pre>
       </article>
     </section>
 
@@ -674,9 +677,10 @@
         <a class="doc-link" href="glossary.md"><strong>용어와 변수 설명</strong><span>입력 배열, 검색 지표, 리뷰 컬럼</span></a>
         <a class="doc-link" href="experiment_history.md"><strong>실험과 판단 기록</strong><span>무엇을 해봤고 왜 남겼는지</span></a>
         <a class="doc-link" href="roadmap.md"><strong>로드맵 원문</strong><span>단계별 세부 진행 상태</span></a>
+        <a class="doc-link" href="real_png_operator_runbook.md"><strong>PNG 운영 안내서</strong><span>데이터 준비부터 결과 공유까지</span></a>
         <a class="doc-link" href="real_wafer_review_checklist.md"><strong>리뷰 체크리스트</strong><span>내일 실제 wafer로 할 일</span></a>
         <a class="doc-link" href="real_unlabeled_workflow.md"><strong>처리 절차</strong><span>manifest부터 report까지</span></a>
-        <a class="doc-link" href="expert_review_protocol.md"><strong>전문가 리뷰</strong><span>리뷰 template과 집계 지표</span></a>
+        <a class="doc-link" href="expert_review_protocol.md"><strong>전문가 리뷰</strong><span>리뷰 양식과 집계 지표</span></a>
         <a class="doc-link" href="data_schema.md"><strong>데이터 형식</strong><span>필수 배열과 보안 기준</span></a>
         <a class="doc-link" href="modeling_strategy.md"><strong>모델링 전략</strong><span>feature 기준선과 AI 모델 위치</span></a>
       </div>

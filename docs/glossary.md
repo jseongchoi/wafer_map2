@@ -16,8 +16,10 @@
 
 | 이름 | 뜻 | 왜 필요한가 |
 | --- | --- | --- |
-| `manifest` | 여러 wafer sample의 `.npz` 경로와 metadata를 적은 JSON 파일이다. | 실제 raw data를 repo에 넣지 않고 보안 경로만 참조하기 위해 쓴다. |
+| `manifest` | 여러 wafer sample의 raw PNG 또는 `.npz` 경로와 metadata를 적은 JSON 파일이다. | 실제 raw data를 repo에 넣지 않고 보안 경로만 참조하기 위해 쓴다. |
 | `sample_id` | wafer sample을 가리키는 익명 id다. | 리뷰와 검색 결과에서 wafer를 구분한다. |
+| `png_grayscale_raw` | 실제 8-bit grayscale PNG를 직접 읽는 source type이다. | gray value를 Grade 0~7과 stby 후보로 변환한다. |
+| `png_path` | raw PNG 파일 경로다. | 제품별 PNG batch나 manifest에서 입력 파일을 참조한다. 원본 path가 들어가므로 공유하지 않는다. |
 | `arrays_npz` | 해당 sample의 `.npz` 파일 경로다. | `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`를 읽는 위치다. |
 | `array_keys` | 원본 `.npz` 안의 key 이름이 표준 이름과 다를 때 쓰는 mapping이다. | 예를 들어 원본 key가 `grade`이면 이를 `severity`로 연결한다. |
 | `pseudonymized` | sample id와 metadata가 익명화되었는지 표시한다. | 보안 원칙을 지키기 위한 확인값이다. |
@@ -26,8 +28,22 @@
 | `chip_blocks` | 한 chip이 array에서 차지하는 block 크기다. | chip 단위 feature와 geometry 검증에 필요하다. |
 | `grid` | wafer map의 chip row/column 개수다. | die layout과 예상 net die 수를 확인한다. |
 | `actual_net_die` | 실제 wafer 안에서 유효한 die 수다. | generator 또는 parser 결과가 말이 되는지 sanity check에 쓴다. |
+| `wafer_mask_strategy` | PNG에서 wafer 밖 0과 good 0을 나눌 때 쓰는 mask 추정 방식이다. | 기본값은 `centered_ellipse_from_png`이다. 제품 layout이 다르면 별도 geometry나 mask가 필요하다. |
 
-## 3. Feature와 검색 용어
+## 3. 실제 raw PNG gray 기준
+
+| Gray value | 의미 | 주의 |
+| --- | --- | --- |
+| `0` | Grade 0, good | wafer 밖도 0일 수 있어 mask 추정이 필요하다. |
+| `31` | Grade 1 |  |
+| `151` | Grade 2 |  |
+| `175` | Grade 3 |  |
+| `191` | Grade 4 |  |
+| `207` | Grade 5 |  |
+| `223` | Grade 6 |  |
+| `255` | Grade 7 또는 stby 후보 | chip 전체가 255일 때만 stby로 분리한다. |
+
+## 4. Feature와 검색 용어
 
 | 이름 | 뜻 | 해석 방법 |
 | --- | --- | --- |
@@ -41,7 +57,7 @@
 | `feature drift` | 새 wafer feature 분포가 reference와 얼마나 다른지 보는 값이다. | 성능 점수가 아니라 입력 분포 sanity signal이다. |
 | `sanity check` | 입력 배열과 metadata가 정해진 형식을 지키는지 확인하는 검사다. | FAIL이면 검색보다 parser/export 문제를 먼저 봐야 한다. |
 
-## 4. 검색에서 제외하는 값
+## 5. 검색에서 제외하는 값
 
 전체 유사 wafer 검색에서는 아래 값을 쓰지 않는다.
 
@@ -54,7 +70,7 @@
 | `polar_*` | 전체 유사 검색에 위치 편향을 강하게 줄 수 있다. |
 | `stby_polar_*` | 전체 유사 검색에는 제외하고, 위치가 중요한 검색에서만 조건부로 쓴다. |
 
-## 5. 전문가 리뷰 컬럼
+## 6. 전문가 리뷰 컬럼
 
 | 이름 | 뜻 | 채우는 방법 |
 | --- | --- | --- |
@@ -73,7 +89,7 @@
 | `next_action` | 다음에 무엇을 보강할지 적는 값이다. | 예: `feature_weight_tuning`, `segmentation_candidate`, `parser_validation`. |
 | `safe_comment` | 보안 정보 없는 짧은 메모다. | lot, wafer id, 실제 path는 쓰지 않는다. |
 
-## 6. Defect Family
+## 7. Defect Family
 
 | 이름 | 뜻 |
 | --- | --- |
@@ -87,9 +103,9 @@
 | `random` | 구조가 약한 산발성 fail이다. |
 | `mixed` | 여러 defect family가 동시에 보이는 경우다. |
 
-## 7. 이 문서를 읽는 방법
+## 8. 이 문서를 읽는 방법
 
-1. 실제 `.npz`를 만들 때는 "입력 배열 변수"와 "Manifest 변수"를 본다.
+1. 실제 PNG 폴더나 `.npz`를 준비할 때는 "입력 배열 변수", "Manifest 변수", "실제 raw PNG gray 기준"을 본다.
 2. 검색 결과를 볼 때는 "Feature와 검색 용어"를 본다.
-3. 리뷰 template을 채울 때는 "전문가 리뷰 컬럼"을 본다.
+3. 리뷰 양식을 채울 때는 "전문가 리뷰 컬럼"을 본다.
 4. 특정 불량 이름이 헷갈리면 "Defect Family"를 본다.

@@ -8,7 +8,7 @@
 
 ```text
 nearest-neighbor CSV
--> 전문가 리뷰 template
+-> 전문가 리뷰 양식
 -> reviewer decision
 -> 요약 지표
 -> feature 보강 / morphology / segmentation 우선순위 결정
@@ -20,7 +20,7 @@ nearest-neighbor CSV
 
 - `scripts/extract_real_unlabeled_features.py`가 feature와 nearest-neighbor CSV를 만든다.
 - `scripts/extract_real_unlabeled_features.py`는 reference feature가 주어지면 reviewer 입력용 CSV도 함께 만든다.
-- `scripts/make_expert_review_template.py`는 이미 만든 nearest-neighbor CSV를 template CSV/HTML로 바꿀 때 사용한다.
+- `scripts/make_expert_review_template.py`는 이미 만든 nearest-neighbor CSV를 리뷰 양식 CSV/HTML로 바꿀 때 사용한다.
 - `scripts/summarize_expert_review.py`가 사람이 채운 리뷰 결과를 집계한다.
 
 ## 리뷰 단위
@@ -112,17 +112,17 @@ nearest-neighbor CSV
 
 ## 실행
 
-라벨 없는 실제 wafer 처리에서 바로 template을 만들 수 있다.
+라벨 없는 실제 wafer 처리에서 바로 리뷰 양식을 만들 수 있다.
 
 ```powershell
 python scripts/extract_real_unlabeled_features.py `
   --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
-  --reference-features outputs/reports/fbm_grouping_scale_features.csv `
+  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
   --neighbors-out outputs/reports/real_unlabeled_neighbors.csv `
   --review-template-out outputs/reports/real_unlabeled_expert_review_template.csv
 ```
 
-이미 생성된 neighbor CSV를 별도로 template/report로 바꿀 수도 있다.
+이미 생성된 neighbor CSV를 별도로 리뷰 양식/리포트로 바꿀 수도 있다.
 
 ```powershell
 python scripts/make_expert_review_template.py `
@@ -163,19 +163,30 @@ python scripts/summarize_expert_review.py `
 - scratch/local에서 계속 약하면 wafer-level feature보다 morphology 또는 segmentation으로 넘기는 것이 맞다.
 - `next_action_queue`에서 `stby_hidden_origin_mismatch`, `shot_phase_layout_mismatch`, `ring_radius_width_mismatch` 같은 항목이 쌓이면 해당 feature family 보강 작업으로 바로 연결한다.
 
+## 파일럿 성공 판정 기준
+
+파일럿 성공 판정은 아래 조건을 모두 만족해야 한다. 이 기준을 만족하기 전에는 기업 판매용 성능 주장으로 쓰지 않는다.
+
+- 리뷰한 query wafer: 최소 `20`, 권장 `50` 이상
+- `accepted_match_rate`: `70%` 이상
+- `query_topk_accept_rate`: `80%` 이상
+- `missed_major_defect_rate`: `5%` 이하
+- `parser_or_mask_issue`: `0`
+- 민감정보 comment 또는 `sensitive_comment`: `0`
+
 ## 보안 규칙
 
 - 실제 wafer raw image/array는 repo에 저장하지 않는다.
 - 실제 파일 경로, lot id, wafer id, tool id, recipe, chamber 정보는 `safe_comment`에 쓰지 않는다.
 - sample id는 익명 id만 사용한다.
-- synthetic reference의 `label_*` 컬럼은 reviewer template에 복사하지 않는다.
+- synthetic reference의 `label_*` 컬럼은 reviewer 양식에 복사하지 않는다.
 - review summary는 comment 안의 민감 패턴을 flag만 하고, 원본 데이터를 저장하지 않는다.
 
 ## 다음 의사결정
 
 전문가 리뷰 결과는 다음 순서로 사용한다.
 
-1. accepted rate가 충분하면 현재 feature 검색을 실제 triage용 최소 버전으로 유지한다.
+1. 파일럿 성공 판정 기준을 만족하면 현재 feature 검색을 파일럿용 최소 분류 보조 도구로 유지한다.
 2. 특정 family만 약하면 해당 family의 feature를 보강한다.
 3. scratch/local처럼 위치와 형태가 핵심이면 connected-component morphology를 먼저 시도한다.
 4. morphology로도 부족하면 synthetic mask 기반 segmentation baseline으로 넘어간다.

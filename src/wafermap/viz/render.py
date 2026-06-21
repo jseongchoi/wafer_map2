@@ -7,6 +7,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
+from PIL import Image
+
+from wafermap.data import GRADE_TO_GRAY, STBY_GRAY_VALUE
 
 
 def render_grayscale(
@@ -14,15 +17,27 @@ def render_grayscale(
     wafer_mask: NDArray[np.uint8],
     stby_mask: NDArray[np.uint8],
 ) -> NDArray[np.uint8]:
-    """Render analysis tensors into the user's current grayscale convention."""
+    """Render analysis tensors into the real raw PNG grayscale convention."""
 
     image = np.zeros(severity.shape, dtype=np.uint8)
     measured = (wafer_mask > 0) & (stby_mask == 0)
-    image[measured] = np.round(np.clip(severity[measured], 0, 7) / 7.0 * 230).astype(
-        np.uint8
-    )
-    image[stby_mask > 0] = 255
+    grade_values = np.asarray(GRADE_TO_GRAY, dtype=np.uint8)
+    image[measured] = grade_values[np.clip(severity[measured], 0, 7)]
+    image[stby_mask > 0] = STBY_GRAY_VALUE
     return image
+
+
+def save_grayscale(
+    path: str | Path,
+    severity: NDArray[np.uint8],
+    wafer_mask: NDArray[np.uint8],
+    stby_mask: NDArray[np.uint8],
+) -> None:
+    """Save an exact 8-bit grayscale PNG matching the real raw convention."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(render_grayscale(severity, wafer_mask, stby_mask)).save(path)
 
 
 def save_preview(

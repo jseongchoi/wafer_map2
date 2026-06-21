@@ -26,6 +26,16 @@ metadata와 array shape가 일치하는가?
 
 실제 데이터를 repo로 가져올 수 없어도, 보안 환경에서 같은 feature extractor를 실행해 집계 통계만 비교할 수 있다.
 
+PNG raw 입력 sanity:
+
+```text
+허용 gray value가 0, 31, 151, 175, 191, 207, 223, 255뿐인가?
+chip 전체가 255인 영역만 stby로 분리되는가?
+일부 pixel만 255인 영역은 Grade 7로 유지되는가?
+제품별 chip_blocks와 grid가 PNG shape와 정확히 맞는가?
+wafer_mask_strategy가 제품 layout과 맞는가?
+```
+
 비교 대상 metric:
 
 ```text

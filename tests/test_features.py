@@ -1,3 +1,6 @@
+import numpy as np
+
+from wafermap.data import PATTERN_CLASSES, SyntheticSample
 from wafermap.features import extract_feature_vector, extract_validation_feature_vector
 from wafermap.synth import SyntheticConfig, generate_sample
 
@@ -50,3 +53,29 @@ def test_validation_feature_vector_contains_synthetic_oracle_fields():
     assert "scratch_mask_ratio" in features
     assert "stby_pattern_mask_ratio" in features
     assert all(name.endswith("_mask_ratio") for name in features)
+
+
+def test_observable_zone_features_ignore_untested_pixels():
+    severity = np.array([[7, 0], [0, 0]], dtype=np.uint8)
+    sample = SyntheticSample(
+        sample_id="valid_mask_unit",
+        severity=severity,
+        wafer_mask=np.ones((2, 2), dtype=np.uint8),
+        valid_test_mask=np.array([[1, 0], [0, 0]], dtype=np.uint8),
+        stby_mask=np.array([[0, 1], [1, 1]], dtype=np.uint8),
+        pattern_masks=np.zeros((len(PATTERN_CLASSES), 2, 2), dtype=np.uint8),
+        pattern_intensity=np.zeros((len(PATTERN_CLASSES), 2, 2), dtype=np.float32),
+        chip_index=np.array([[0, 1], [2, 3]], dtype=np.int32),
+        metadata={
+            "actual_net_die": 4,
+            "chip_blocks": {"width": 1, "height": 1},
+            "grid": {"rows": 2, "cols": 2},
+        },
+    )
+
+    features = extract_feature_vector(sample)
+
+    assert features["total_fail_density"] == 1.0
+    assert features["grade_weighted_severity"] == 1.0
+    radial_values = [features[f"radial_zone_{idx:02d}_severity"] for idx in range(5)]
+    assert max(radial_values) == 1.0

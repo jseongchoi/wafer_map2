@@ -10,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from wafermap.data import PATTERN_CLASSES, load_sample
+from wafermap.data.schema import SyntheticSample
 
 INPUT_CHANNELS: tuple[str, ...] = ("severity", "wafer_mask", "valid_test_mask", "stby_mask")
 TARGET_CHANNELS: tuple[str, ...] = PATTERN_CLASSES
@@ -44,6 +45,17 @@ def load_segmentation_tensor(
     """
 
     sample = load_sample(sample_dir)
+    inputs = sample_to_input_tensor(sample, output_size=output_size)
+    targets = sample_to_target_tensor(sample, output_size=output_size)
+    return inputs, targets
+
+
+def sample_to_input_tensor(
+    sample: SyntheticSample,
+    output_size: int = 128,
+) -> NDArray[np.float32]:
+    """Convert one in-memory sample to fixed-size inference input channels."""
+
     severity = sample.severity.astype(np.float32) / 7.0
     inputs = np.stack(
         [
@@ -54,11 +66,20 @@ def load_segmentation_tensor(
         ],
         axis=0,
     ).astype(np.float32)
+    return inputs
+
+
+def sample_to_target_tensor(
+    sample: SyntheticSample,
+    output_size: int = 128,
+) -> NDArray[np.float32]:
+    """Convert synthetic oracle masks to fixed-size multi-label targets."""
+
     targets = np.stack(
         [_resize_max(sample.pattern_masks[idx] > 0, output_size) for idx in range(len(TARGET_CHANNELS))],
         axis=0,
     ).astype(np.float32)
-    return inputs, targets
+    return targets
 
 
 def load_batch(

@@ -1,9 +1,12 @@
 import importlib.util
 import json
+import re
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from wafermap.data import PATTERN_CLASSES, SyntheticSample
 
@@ -13,6 +16,16 @@ def _load_real_script():
     spec = importlib.util.spec_from_file_location("extract_real_unlabeled_features", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_png_batch_script():
+    path = Path(__file__).resolve().parents[1] / "scripts" / "analyze_png_raw_folders.py"
+    spec = importlib.util.spec_from_file_location("analyze_png_raw_folders", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -53,7 +66,7 @@ def _sample() -> SyntheticSample:
 
 def _manifest_entry(npz_path: Path) -> dict:
     return {
-        "sample_id": "real_like_npz",
+        "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
         "source_type": "npz_semantic_arrays",
         "arrays_npz": str(npz_path),
         "pseudonymized": True,
@@ -151,6 +164,7 @@ def test_real_unlabeled_manifest_templates_are_valid():
     for name in (
         "real_unlabeled_manifest_template_standard.json",
         "real_unlabeled_manifest_template_keymap.json",
+        "real_unlabeled_manifest_template_png.json",
     ):
         manifest = json.loads((root / "configs" / "eval" / name).read_text(encoding="utf-8"))
 
@@ -197,10 +211,397 @@ def test_load_npz_semantic_arrays_with_key_mapping(tmp_path):
     sample = module.load_real_like_sample(entry, manifest_path)
     errors, warnings = module.validate_real_like_sample(sample)
 
-    assert sample.sample_id == "real_like_npz"
+    assert sample.sample_id == "product_aaaaaaaaaa_wbbbbbbbbbb"
     assert sample.severity.dtype == np.uint8
     assert errors == []
     assert warnings == []
+
+
+def test_load_png_grayscale_raw_maps_grades_and_stby_chip(tmp_path):
+    module = _load_real_script()
+    raw = np.array(
+        [
+            [255, 255, 0, 31],
+            [255, 255, 151, 175],
+            [191, 207, 223, 255],
+            [0, 31, 151, 175],
+        ],
+        dtype=np.uint8,
+    )
+    png_path = tmp_path / "wafer.png"
+    Image.fromarray(raw).save(png_path)
+    entry = {
+        "sample_id": "product_aaaaaaaaaa_wcccccccccc",
+        "source_type": "png_grayscale_raw",
+        "png_path": str(png_path),
+        "pseudonymized": True,
+        "parser_name": "unit_png_parser",
+        "parser_version": "0.1.0",
+        "orientation": "not_rotated",
+        "chip_blocks": {"width": 2, "height": 2},
+        "grid": {"rows": 2, "cols": 2},
+        "allow_workspace_input": True,
+    }
+
+    sample = module.load_real_like_sample(entry, tmp_path / "manifest.json")
+    errors, warnings = module.validate_real_like_sample(sample)
+
+    assert sample.sample_id == "product_aaaaaaaaaa_wcccccccccc"
+    assert sample.severity.dtype == np.uint8
+    assert sample.stby_mask[0:2, 0:2].all()
+    assert sample.valid_test_mask[0:2, 0:2].sum() == 0
+    assert sample.severity[0:2, 0:2].sum() == 0
+    assert sample.severity[2, 3] == 7
+    assert sample.valid_test_mask[2, 3] == 1
+    assert errors == []
+    assert any("centered-ellipse wafer_mask" in warning for warning in warnings)
+
+
+def test_load_png_grayscale_raw_infers_chip_blocks_from_stby(tmp_path):
+    module = _load_real_script()
+    raw = np.zeros((6, 8), dtype=np.uint8)
+    raw[0:3, 2:4] = 255
+    png_path = tmp_path / "wafer.png"
+    Image.fromarray(raw).save(png_path)
+    entry = {
+        "sample_id": "product_aaaaaaaaaa_wdddddddddd",
+        "source_type": "png_grayscale_raw",
+        "png_path": str(png_path),
+        "pseudonymized": True,
+        "parser_name": "unit_png_parser",
+        "parser_version": "0.1.0",
+        "orientation": "not_rotated",
+        "allow_geometry_inference": True,
+        "allow_workspace_input": True,
+    }
+
+    sample = module.load_real_like_sample(entry, tmp_path / "manifest.json")
+
+    assert sample.metadata["chip_blocks"] == {"width": 2, "height": 3}
+    assert sample.metadata["grid"] == {"rows": 2, "cols": 4}
+    assert sample.stby_mask.sum() == 6
+
+
+def test_load_png_grayscale_raw_rejects_unknown_gray_values(tmp_path):
+    module = _load_real_script()
+    raw = np.array([[0, 31], [151, 99]], dtype=np.uint8)
+    png_path = tmp_path / "wafer.png"
+    Image.fromarray(raw).save(png_path)
+    entry = {
+        "sample_id": "product_aaaaaaaaaa_weeeeeeeeee",
+        "source_type": "png_grayscale_raw",
+        "png_path": str(png_path),
+        "pseudonymized": True,
+        "parser_name": "unit_png_parser",
+        "parser_version": "0.1.0",
+        "orientation": "not_rotated",
+        "chip_blocks": {"width": 1, "height": 1},
+        "grid": {"rows": 2, "cols": 2},
+        "allow_workspace_input": True,
+    }
+
+    with pytest.raises(ValueError, match="Unsupported PNG gray values"):
+        module.load_real_like_sample(entry, tmp_path / "manifest.json")
+
+
+def test_png_raw_folder_batch_builds_manifest_with_inferred_product_geometry(tmp_path):
+    module = _load_png_batch_script()
+    real_module = _load_real_script()
+    product_dir = tmp_path / "raw" / "Product A"
+    product_dir.mkdir(parents=True)
+    raw = np.array(
+        [
+            [255, 255, 0, 31],
+            [255, 255, 151, 175],
+            [191, 207, 223, 0],
+            [0, 31, 151, 175],
+        ],
+        dtype=np.uint8,
+    )
+    Image.fromarray(raw).save(product_dir / "wafer_001.png")
+
+    groups = module.discover_products(
+        tmp_path / "raw",
+        glob_pattern="*.png",
+        recursive=True,
+        limit_per_product=None,
+        use_folder_names=False,
+    )
+    manifest = module.build_manifest(
+        groups,
+        geometry_by_product={},
+        wafer_mask_strategy="centered_ellipse_from_png",
+        orientation="not_rotated",
+        allow_workspace_input=True,
+    )
+
+    real_module.validate_manifest(manifest)
+    entry = manifest["samples"][0]
+    assert re.fullmatch(r"product_[0-9a-f]{10}_w[0-9a-f]{10}", entry["sample_id"])
+    assert entry["chip_blocks"] == {"width": 2, "height": 2}
+    assert entry["grid"] == {"rows": 2, "cols": 2}
+    assert entry["source_type"] == "png_grayscale_raw"
+
+
+def test_png_raw_folder_batch_rejects_mixed_inferred_geometry(tmp_path):
+    module = _load_png_batch_script()
+    product_dir = tmp_path / "raw" / "prod_mixed"
+    product_dir.mkdir(parents=True)
+    raw_a = np.zeros((4, 4), dtype=np.uint8)
+    raw_a[0:2, 0:2] = 255
+    raw_b = np.zeros((6, 4), dtype=np.uint8)
+    raw_b[0:3, 0:2] = 255
+    Image.fromarray(raw_a).save(product_dir / "wafer_a.png")
+    Image.fromarray(raw_b).save(product_dir / "wafer_b.png")
+    groups = module.discover_products(
+        tmp_path / "raw",
+        glob_pattern="*.png",
+        recursive=True,
+        limit_per_product=None,
+        use_folder_names=False,
+    )
+
+    with pytest.raises(ValueError, match="Inconsistent inferred chip geometry"):
+        module.build_manifest(
+            groups,
+            geometry_by_product={},
+            wafer_mask_strategy="centered_ellipse_from_png",
+            orientation="not_rotated",
+            allow_workspace_input=True,
+        )
+
+
+def test_png_raw_folder_batch_accepts_explicit_geometry_when_no_stby(tmp_path):
+    module = _load_png_batch_script()
+    product_dir = tmp_path / "raw" / "prod_b"
+    product_dir.mkdir(parents=True)
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(product_dir / "wafer_001.png")
+    groups = module.discover_products(
+        tmp_path / "raw",
+        glob_pattern="*.png",
+        recursive=True,
+        limit_per_product=None,
+        use_folder_names=False,
+    )
+
+    manifest = module.build_manifest(
+        groups,
+        geometry_by_product={"prod_b": {"chip_blocks": {"width": 2, "height": 2}, "grid": {"rows": 2, "cols": 2}}},
+        wafer_mask_strategy="centered_ellipse_from_png",
+        orientation="not_rotated",
+        allow_workspace_input=True,
+    )
+
+    entry = manifest["samples"][0]
+    assert re.fullmatch(r"product_[0-9a-f]{10}_w[0-9a-f]{10}", entry["sample_id"])
+    assert entry["chip_blocks"] == {"width": 2, "height": 2}
+
+
+def test_png_raw_folder_batch_rejects_folder_name_sample_ids(tmp_path):
+    module = _load_png_batch_script()
+    product_dir = tmp_path / "raw" / "Sensitive Product Name"
+    product_dir.mkdir(parents=True)
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(product_dir / "wafer_001.png")
+
+    with pytest.raises(ValueError, match="sample_id must stay opaque"):
+        module.discover_products(
+            tmp_path / "raw",
+            glob_pattern="*.png",
+            recursive=True,
+            limit_per_product=None,
+            use_folder_names=True,
+        )
+
+
+def test_png_raw_folder_batch_restricts_workspace_manifest_output():
+    module = _load_png_batch_script()
+    leaky_path = module.ROOT / "outputs" / "reports" / "real_paths_manifest.json"
+    private_path = module.ROOT / "outputs" / "private" / "real_paths_manifest.json"
+
+    with pytest.raises(ValueError, match="outputs/private"):
+        module.validate_manifest_output_path(leaky_path, allow_workspace_manifest_output=False)
+
+    module.validate_manifest_output_path(private_path, allow_workspace_manifest_output=False)
+    module.validate_manifest_output_path(leaky_path, allow_workspace_manifest_output=True)
+
+
+def test_png_raw_folder_batch_production_run_requires_explicit_geometry(tmp_path, monkeypatch):
+    module = _load_png_batch_script()
+    repo = tmp_path / "repo"
+    raw_root = tmp_path / "secure_raw"
+    product_dir = raw_root / "prod_a"
+    product_dir.mkdir(parents=True)
+    png_path = product_dir / "wafer_001.png"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(png_path)
+    monkeypatch.setattr(module, "ROOT", repo)
+    args = module.parse_args(
+        [
+            "--raw-root",
+            str(raw_root),
+            "--production-run",
+            "--out-dir",
+            "outputs/reports/real_png_batch",
+            "--reference-features",
+            "outputs/pre_real_readiness/reports/synthetic_reference_features.csv",
+        ]
+    )
+    group = module.ProductGroup("prod_a", "product_aaaaaaaaaa", product_dir, [png_path])
+
+    with pytest.raises(ValueError, match="requires --geometry-json"):
+        module.validate_production_run(
+            args,
+            raw_root=raw_root,
+            out_dir=repo / "outputs" / "reports" / "real_png_batch",
+            manifest_path=repo / "outputs" / "private" / "real_png_batch_manifest.json",
+            groups=[group],
+            geometry_by_product={},
+        )
+
+
+def test_png_raw_folder_batch_production_run_requires_positive_actual_net_die(tmp_path, monkeypatch):
+    module = _load_png_batch_script()
+    repo = tmp_path / "repo"
+    raw_root = tmp_path / "secure_raw"
+    product_dir = raw_root / "prod_a"
+    product_dir.mkdir(parents=True)
+    png_path = product_dir / "wafer_001.png"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(png_path)
+    monkeypatch.setattr(module, "ROOT", repo)
+    args = module.parse_args(
+        [
+            "--raw-root",
+            str(raw_root),
+            "--production-run",
+            "--geometry-json",
+            "secure_geometry.json",
+            "--out-dir",
+            "outputs/reports/real_png_batch",
+            "--reference-features",
+            "outputs/pre_real_readiness/reports/synthetic_reference_features.csv",
+        ]
+    )
+    group = module.ProductGroup("prod_a", "product_aaaaaaaaaa", product_dir, [png_path])
+
+    with pytest.raises(ValueError, match="positive actual_net_die"):
+        module.validate_production_run(
+            args,
+            raw_root=raw_root,
+            out_dir=repo / "outputs" / "reports" / "real_png_batch",
+            manifest_path=repo / "outputs" / "private" / "real_png_batch_manifest.json",
+            groups=[group],
+            geometry_by_product={
+                "prod_a": {
+                    "chip_blocks": {"width": 2, "height": 2},
+                    "grid": {"rows": 2, "cols": 2},
+                    "actual_net_die": 0,
+                }
+            },
+        )
+
+
+def test_png_raw_folder_batch_production_run_accepts_guarded_contract(tmp_path, monkeypatch):
+    module = _load_png_batch_script()
+    repo = tmp_path / "repo"
+    raw_root = tmp_path / "secure_raw"
+    product_dir = raw_root / "prod_a"
+    product_dir.mkdir(parents=True)
+    png_path = product_dir / "wafer_001.png"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(png_path)
+    monkeypatch.setattr(module, "ROOT", repo)
+    args = module.parse_args(
+        [
+            "--raw-root",
+            str(raw_root),
+            "--production-run",
+            "--geometry-json",
+            "secure_geometry.json",
+            "--out-dir",
+            "outputs/reports/real_png_batch",
+            "--reference-features",
+            "outputs/pre_real_readiness/reports/synthetic_reference_features.csv",
+        ]
+    )
+    group = module.ProductGroup("prod_a", "product_aaaaaaaaaa", product_dir, [png_path])
+
+    module.validate_production_run(
+        args,
+        raw_root=raw_root,
+        out_dir=repo / "outputs" / "reports" / "real_png_batch",
+        manifest_path=repo / "outputs" / "private" / "real_png_batch_manifest.json",
+        groups=[group],
+        geometry_by_product={
+            "prod_a": {
+                "chip_blocks": {"width": 2, "height": 2},
+                "grid": {"rows": 2, "cols": 2},
+                "actual_net_die": 4,
+            }
+        },
+    )
+
+
+def test_png_raw_folder_batch_rejects_invalid_explicit_geometry():
+    module = _load_png_batch_script()
+
+    with pytest.raises(ValueError, match="width/height must be positive"):
+        module.normalize_geometry({"chip_blocks": {"width": 0, "height": 2}, "grid": {"rows": 2, "cols": 2}})
+
+    with pytest.raises(ValueError, match="cannot exceed grid"):
+        module.normalize_geometry(
+            {
+                "chip_blocks": {"width": 2, "height": 2},
+                "grid": {"rows": 2, "cols": 2},
+                "actual_net_die": 5,
+            }
+        )
+
+
+def test_png_raw_folder_batch_metadata_is_shareable_without_product_names(tmp_path, monkeypatch):
+    module = _load_png_batch_script()
+    repo = tmp_path / "repo"
+    raw_root = tmp_path / "secure_raw"
+    product_dir = raw_root / "Secret Product Name"
+    product_dir.mkdir(parents=True)
+    png_path = product_dir / "wafer_001.png"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(png_path)
+    monkeypatch.setattr(module, "ROOT", repo)
+    args = module.parse_args(
+        [
+            "--raw-root",
+            str(raw_root),
+            "--production-run",
+            "--geometry-json",
+            "secure_geometry.json",
+            "--out-dir",
+            "outputs/reports/real_png_batch",
+            "--reference-features",
+            "outputs/pre_real_readiness/reports/synthetic_reference_features.csv",
+            "--cpu-model",
+            "outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz",
+        ]
+    )
+    group = module.ProductGroup("Secret Product Name", "product_aaaaaaaaaa", product_dir, [png_path])
+
+    metadata = module.build_batch_metadata(
+        args,
+        groups=[group],
+        manifest_path=repo / "outputs" / "private" / "real_png_batch_manifest.json",
+        geometry_by_product={
+            "Secret Product Name": {
+                "chip_blocks": {"width": 2, "height": 2},
+                "grid": {"rows": 2, "cols": 2},
+                "actual_net_die": 4,
+            }
+        },
+    )
+
+    text = json.dumps(metadata, ensure_ascii=False)
+    assert metadata["production_run"] is True
+    assert metadata["geometry_contract"] == "explicit"
+    assert metadata["manifest_location"] == "outputs/private"
+    assert metadata["reference_features"] is True
+    assert metadata["cpu_model_scoring"] is True
+    assert "Secret Product Name" not in text
+    assert str(raw_root) not in text
 
 
 def test_load_npz_rejects_invalid_values_before_cast(tmp_path):
@@ -251,6 +652,7 @@ def test_output_paths_are_restricted_to_output_root(tmp_path, monkeypatch):
     assert allowed == (tmp_path / "outputs" / "report.json").resolve()
     with pytest.raises(ValueError, match="Output path must be under"):
         module.ensure_output_path(tmp_path / "leak.json")
+    assert module.ensure_output_path(tmp_path / "leak.json", allow_outside_root=True) == (tmp_path / "leak.json").resolve()
 
 
 def test_invalid_real_samples_write_sanity_under_output_root(tmp_path, monkeypatch):

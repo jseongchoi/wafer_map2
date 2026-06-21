@@ -23,18 +23,25 @@
    - FBM 배열, 합성 sample, 라벨 없는 실제 wafer manifest 작성 기준.
 
 6. [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md)
-   - 보안 환경의 `.npz` 입력에서 feature, sanity 결과, nearest-neighbor 결과, 리뷰 template을 만드는 절차.
+   - 보안 환경의 제품별 raw PNG 폴더 또는 `.npz` 입력에서 feature, sanity 결과, nearest-neighbor 결과, 리뷰 양식을 만드는 절차.
 
-7. [전문가 리뷰 절차](expert_review_protocol.md)
+7. [실제 raw PNG 운영 안내서](real_png_operator_runbook.md)
+   - raw PNG 폴더 준비, geometry JSON, 운영 실행, 자동 점검, 리뷰, 결과 공유 양식까지 한 번에 따라가는 절차.
+
+8. [전문가 리뷰 절차](expert_review_protocol.md)
    - top-k 검색 결과를 사람이 평가하고, 다음 feature/AI 보강 작업으로 연결하는 방법.
 
-8. [Real Wafer 리뷰 체크리스트](real_wafer_review_checklist.md)
+9. [Real Wafer 리뷰 체크리스트](real_wafer_review_checklist.md)
    - 실제 wafer 리뷰 전에 준비할 것, 실행 결과, 리뷰어가 채워야 할 항목, AI 모델 구현 상태.
+
+10. [기업 도입 준비도 평가](enterprise_readiness_assessment.md)
+   - 기업 파일럿/판매 관점에서 단계별 현재 상태, 판정 기준, 남은 최우선/후속 작업을 정리한 문서.
 
 ## 목적별 읽기 경로
 
 - 전체 맥락만 빠르게 파악: `project_overview.md` -> `roadmap.md`
 - 용어가 낯설 때: `glossary.md` -> `data_schema.md`
+- 실제 PNG를 넣고 결과만 공유할 때: `real_png_operator_runbook.md` -> `real_wafer_review_checklist.md`
 - 내일 실제 wafer로 검증할 일 확인: `real_wafer_review_checklist.md` -> `real_unlabeled_workflow.md`
 - 실험 과정과 판단 근거 확인: `experiment_history.md` -> `modeling_strategy.md` -> `validation_protocol.md`
 - 구현/연동 담당자 관점: `data_schema.md` -> `real_unlabeled_workflow.md` -> `expert_review_protocol.md`
