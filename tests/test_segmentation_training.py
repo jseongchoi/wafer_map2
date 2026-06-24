@@ -2,10 +2,26 @@ import importlib.util
 import json
 from pathlib import Path
 
+from wafermap.training.segmentation import INPUT_CHANNELS, sample_to_input_tensor
 from wafermap.synth import SyntheticConfig, generate_sample, save_sample
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_segmentation_input_tensor_includes_position_channels():
+    sample = generate_sample(
+        SyntheticConfig(count=1, target_net_die=36, chip_width=8, chip_height=6, seed=83),
+        0,
+    )
+
+    tensor = sample_to_input_tensor(sample, output_size=24)
+
+    assert tensor.shape == (len(INPUT_CHANNELS), 24, 24)
+    for channel in ("x_norm", "y_norm", "radial_norm", "angle_sin", "angle_cos", "edge_distance_norm"):
+        assert channel in INPUT_CHANNELS
+    assert tensor[INPUT_CHANNELS.index("radial_norm")].max() <= 1.0
+    assert tensor[INPUT_CHANNELS.index("edge_distance_norm")].min() >= 0.0
 
 
 def _load_script(name: str):

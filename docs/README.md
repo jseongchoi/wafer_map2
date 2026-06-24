@@ -4,25 +4,28 @@
 
 ## 먼저 읽을 문서
 
-1. [FBM Pattern Asset 기반 Hybrid Synthetic Data 파이프라인](fbm_pattern_asset_pipeline.md)
+1. [FBM 데이터 흐름 운영 가이드](fbm_data_flow_guide.md)
+   - 실제 FBM을 어디에 두고, 누끼 asset과 합성 label 데이터가 어디에 생기는지 설명합니다.
+
+2. [FBM Pattern Asset 기반 Hybrid Synthetic Data 파이프라인](fbm_pattern_asset_pipeline.md)
    - 현재 프로젝트의 본질, human asset과 procedural generator의 역할, U-Net 학습 경로를 설명합니다.
 
-2. [프로젝트 개요](project_overview.md)
+3. [프로젝트 개요](project_overview.md)
    - 지금 무엇이 구현됐고, 무엇이 아직 막혀 있는지 한 장으로 정리합니다.
 
-3. [로드맵](roadmap.md)
+4. [로드맵](roadmap.md)
    - 앞으로 어떤 순서로 완성도를 올릴지 단계별로 정리합니다.
 
-4. [불량 패턴 정리](pattern_taxonomy.md)
+5. [불량 패턴 정리](pattern_taxonomy.md)
    - `local`, `scratch`, `ring`, `edge`, `shot_grid`, `random`, `stby_pattern`의 의미를 정리합니다.
 
-5. [용어와 변수 설명](glossary.md)
+6. [용어와 변수 설명](glossary.md)
    - `severity`, `wafer_mask`, `manifest`, `top-k`, `retrieval_failure_mode`처럼 처음 보는 용어를 설명합니다.
 
-6. [실제 raw PNG 운영 안내서](real_png_operator_runbook.md)
+7. [실제 raw PNG 운영 안내서](real_png_operator_runbook.md)
    - 실제 wafer raw PNG 폴더를 안전하게 읽고 결과를 만드는 운영 절차입니다.
 
-7. [전문가 리뷰 절차](expert_review_protocol.md)
+8. [전문가 리뷰 절차](expert_review_protocol.md)
    - 모델/검색 결과를 사람이 어떻게 리뷰하고 다음 개선으로 연결할지 설명합니다.
 
 ## 현재 주 경로

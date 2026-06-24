@@ -13,7 +13,18 @@ from wafermap.assets import TARGET_FAMILIES
 from wafermap.data import PATTERN_CLASSES, load_sample
 from wafermap.data.schema import SyntheticSample
 
-INPUT_CHANNELS: tuple[str, ...] = ("severity", "wafer_mask", "valid_test_mask", "stby_mask")
+INPUT_CHANNELS: tuple[str, ...] = (
+    "severity",
+    "wafer_mask",
+    "valid_test_mask",
+    "stby_mask",
+    "x_norm",
+    "y_norm",
+    "radial_norm",
+    "angle_sin",
+    "angle_cos",
+    "edge_distance_norm",
+)
 TARGET_CHANNELS: tuple[str, ...] = TARGET_FAMILIES
 PATTERN_TO_INDEX = {name: idx for idx, name in enumerate(PATTERN_CLASSES)}
 
@@ -41,9 +52,9 @@ def load_segmentation_tensor(
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
     """Load one sample as fixed-size input and multi-label target tensors.
 
-    Inputs are CxHxW with channels severity, wafer mask, valid-test mask, stby mask.
-    Targets are KxHxW class masks. Target masks use max pooling to preserve thin
-    scratch/local defects during downsampling.
+    Inputs are CxHxW with semantic channels plus absolute-position channels.
+    Targets are KxHxW class masks. Target masks use max pooling to preserve
+    thin scratch/local defects during downsampling.
     """
 
     sample = load_sample(sample_dir)
@@ -59,16 +70,52 @@ def sample_to_input_tensor(
     """Convert one in-memory sample to fixed-size inference input channels."""
 
     severity = sample.severity.astype(np.float32) / 7.0
+    coords = coordinate_channels(sample.shape, sample.wafer_mask > 0)
     inputs = np.stack(
         [
             _resize_mean(severity, output_size),
             _resize_max(sample.wafer_mask > 0, output_size),
             _resize_max(sample.valid_test_mask > 0, output_size),
             _resize_max(sample.stby_mask > 0, output_size),
+            _resize_mean(coords["x_norm"], output_size),
+            _resize_mean(coords["y_norm"], output_size),
+            _resize_mean(coords["radial_norm"], output_size),
+            _resize_mean(coords["angle_sin"], output_size),
+            _resize_mean(coords["angle_cos"], output_size),
+            _resize_mean(coords["edge_distance_norm"], output_size),
         ],
         axis=0,
     ).astype(np.float32)
     return inputs
+
+
+def coordinate_channels(shape: tuple[int, int], wafer_mask: NDArray[np.bool_]) -> dict[str, NDArray[np.float32]]:
+    """Build absolute-position channels for process-location-aware models."""
+
+    height, width = shape
+    yy, xx = np.indices(shape, dtype=np.float32)
+    cy = (height - 1) / 2.0
+    cx = (width - 1) / 2.0
+    x_scale = max(cx, width - 1 - cx, 1.0)
+    y_scale = max(cy, height - 1 - cy, 1.0)
+    x_norm = (xx - cx) / x_scale
+    y_norm = (yy - cy) / y_scale
+    distance = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    wafer_distances = distance[wafer_mask]
+    wafer_radius = float(wafer_distances.max()) if wafer_distances.size else float(distance.max())
+    wafer_radius = max(wafer_radius, 1.0)
+    radial_norm = np.clip(distance / wafer_radius, 0.0, 1.0)
+    angle = np.arctan2(yy - cy, xx - cx)
+    edge_distance_norm = np.clip(1.0 - radial_norm, 0.0, 1.0)
+    edge_distance_norm = np.where(wafer_mask, edge_distance_norm, 0.0)
+    return {
+        "x_norm": x_norm.astype(np.float32),
+        "y_norm": y_norm.astype(np.float32),
+        "radial_norm": radial_norm.astype(np.float32),
+        "angle_sin": np.sin(angle).astype(np.float32),
+        "angle_cos": np.cos(angle).astype(np.float32),
+        "edge_distance_norm": edge_distance_norm.astype(np.float32),
+    }
 
 
 def sample_to_target_tensor(

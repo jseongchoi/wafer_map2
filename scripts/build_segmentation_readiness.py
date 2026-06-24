@@ -22,11 +22,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from wafermap.data import PATTERN_CLASSES, SyntheticSample, load_sample
-from wafermap.training.segmentation import TARGET_CHANNELS
+from wafermap.training.segmentation import INPUT_CHANNELS, TARGET_CHANNELS
 
 PATTERN_TO_INDEX = {name: idx for idx, name in enumerate(PATTERN_CLASSES)}
 FOCUS_CLASSES = ("scratch", "ring", "local", "stby_pattern")
-INPUT_CHANNELS = ("severity", "wafer_mask", "valid_test_mask", "stby_mask")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

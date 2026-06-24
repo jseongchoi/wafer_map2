@@ -31,6 +31,7 @@
 
 ## 핵심 문서
 
+- [FBM 데이터 흐름 운영 가이드](docs/fbm_data_flow_guide.md)
 - [FBM Pattern Asset 기반 딥러닝 파이프라인](docs/fbm_pattern_asset_pipeline.md)
 - [실제 raw PNG 운영 안내서](docs/real_png_operator_runbook.md)
 - [라벨 없는 실제 wafer 처리 절차](docs/real_unlabeled_workflow.md)

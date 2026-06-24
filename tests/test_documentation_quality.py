@@ -13,6 +13,7 @@ USER_FACING_DOCS = [
     DOCS / "index.html",
     DOCS / "README.md",
     DOCS / "glossary.md",
+    DOCS / "fbm_data_flow_guide.md",
     DOCS / "fbm_pattern_asset_pipeline.md",
     DOCS / "project_overview.md",
     DOCS / "experiment_history.md",
@@ -93,11 +94,13 @@ def test_documentation_guides_current_project_direction() -> None:
     overview = (DOCS / "project_overview.md").read_text(encoding="utf-8")
     roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
     pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
+    data_flow = (DOCS / "fbm_data_flow_guide.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
     assert "fbm_pattern_asset_pipeline.md" in docs_index
+    assert "fbm_data_flow_guide.md" in docs_index
     assert "project_overview.md" in docs_index
     assert "roadmap.md" in docs_index
     assert "glossary.md" in docs_index
@@ -109,6 +112,10 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "Small U-Net" in roadmap
     assert "active learning" in roadmap
     assert "procedural fallback" in pipeline
+    assert "data/pattern_assets" in data_flow
+    assert "data/synthetic/asset_composed" in data_flow
+    assert "asset_segmentation_manifest.csv" in data_flow
+    assert "coordinate-aware small U-Net" in data_flow
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
     assert "Segmentation Smoke Test" in experiment_history
