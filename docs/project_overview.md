@@ -2,112 +2,80 @@
 
 ## 목표
 
-이 프로젝트는 1채널 고해상도 Wafer Fail Bit Map에서 실제 wafer에도 쓸 수 있는 표현을 만드는 것이다.
-
-여기서 말하는 표현은 단일 classification label이 아니다. 유사 wafer 검색, 관심 불량 검색, defect score table, 모델 입력에 쓸 feature 기반 표현이다.
+WaferMap 프로젝트의 목표는 FBM(Fail Bit Map) wafer map을 해석하는 딥러닝 기반 시스템을 만드는 것입니다. 단순히 wafer 하나에 defect 이름을 붙이는 분류기가 아니라, 다음 기능을 동시에 달성해야 합니다.
 
 ```text
-FBM 배열 정리
--> 실제 wafer에서도 계산 가능한 feature 추출
--> 비슷한 wafer 검색
--> 관심 불량별 검색
--> defect score / feature table
--> 전문가 리뷰 결과 반영
--> 라벨 없는 실제 wafer 검증
+1. defect family별 pixel mask 검출
+2. defect 위치, 면적, 중심, edge 거리, component 수 수치화
+3. wafer-level family score 산출
+4. encoder embedding 기반 유사 wafer top-k 검색
+5. 모델 prediction을 사람이 수정해 다시 학습 데이터로 넣는 active learning loop
 ```
 
-## 현재 상태
+## 현재 핵심 구조
 
-- 합성 FBM generator는 Grade 0~7, wafer 밖 영역, 실제 test 영역, stby, edge/local/shot/ring/scratch 계열을 생성한다.
-- 전체 유사 wafer 검색은 실제 wafer에서도 계산 가능한 compact feature 50개를 기준으로 한다.
-- Scale 155장 top-k retrieval lift는 약 1.36x, holdout 120장은 약 1.40x다.
-- 관심 불량별 retrieval과 structured defect feature retrieval은 class, class_location, feature_key 기준에서 신호가 있다.
-- 단순 resize representation은 전체 유사 wafer 검색의 대체재로 부적합하다고 판단했다.
-- Patch proposal은 edge/local/stby 리뷰 후보를 줄이는 보조 도구로만 둔다.
-- Curve proposal은 ring/center arc 리뷰 후보를 줄이는 보조 도구로만 둔다.
-- Scratch는 rule/proposal에 더 깊게 투자하지 않고 segmentation 또는 scratch 전용 line feature 쪽으로 분리한다.
-- 라벨 없는 실제 wafer 처리 절차는 제품별 raw PNG 폴더 또는 `.npz` manifest에서 feature CSV, sanity JSON, nearest-neighbor CSV, 전문가 리뷰 양식까지 연결되어 있다.
-- 전체 유사 wafer 검색에서는 `polar_*`, `stby_polar_*` 위치 feature를 제외한다.
-
-## 목표 대비 진행 상황
-
-| 사용자가 원한 것 | 지금까지 한 일 | 확인한 근거 | 자세히 볼 곳 |
-| --- | --- | --- | --- |
-| 실제 wafer에도 적용 가능한 FBM feature | 합성 데이터의 oracle label 없이 계산 가능한 compact feature를 정리했다. 전체 검색은 50개 feature 기준으로 유지한다. | scale 155장 top-k lift 약 1.36x, holdout 120장 약 1.40x. | [모델링 전략](modeling_strategy.md), [로드맵](roadmap.md) |
-| 유사 wafer 검색 | feature 표준화와 nearest-neighbor 계산을 공통 유틸로 분리했다. 전체 검색에서는 위치 feature를 제외했다. | random baseline 대비 retrieval lift가 유지된다. | `src/wafermap/evaluation/nearest.py`, `src/wafermap/features/selection.py` |
-| 관심 불량별 검색 | class, class_location, feature_key 기준 retrieval을 분리해 검증했다. 위치 feature는 이 경로에서만 조건부로 쓴다. | feature_key/class_location에서 random 대비 lift가 관측됐다. | [모델링 전략](modeling_strategy.md) |
-| defect score / feature table / downstream task용 표현 | edge, shot, stby, ring, local, scratch proxy feature와 structured defect feature row 방향을 정리했다. | feature table을 검색, 리뷰, 모델 입력으로 연결할 수 있는 형태가 생겼다. | [데이터 형식](data_schema.md), [불량 패턴 정리](pattern_taxonomy.md) |
-| 실제 보안 환경 적용 | 제품별 raw PNG 폴더 batch, `png_grayscale_raw`, `real_unlabeled_manifest/v1`, `.npz` 입력 형식을 만들고, raw data를 repo에 저장하지 않는 절차를 구현했다. | PNG round-trip과 batch smoke에서 feature CSV, sanity JSON, HTML report 생성이 통과했다. | [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md), `scripts/analyze_png_raw_folders.py`, `scripts/extract_real_unlabeled_features.py` |
-| 전문가 리뷰 연결 | nearest-neighbor 결과를 reviewer CSV로 바꾸고, 리뷰 결과에서 실패 유형과 다음 작업을 집계한다. | 사람의 판단을 feature 보강 또는 AI 모델 후보로 연결하는 절차가 생겼다. | [전문가 리뷰 절차](expert_review_protocol.md), `scripts/summarize_expert_review.py` |
-| proposal 과투자 방지 | patch/curve proposal은 리뷰 후보 축소용으로 제한하고, scratch는 별도 track으로 분리했다. | resize-only와 proposal-only는 전체 검색을 대신할 수 없다고 정리했다. | [로드맵](roadmap.md), [모델링 전략](modeling_strategy.md) |
-| 외부 연구 참고 | wafer map clustering/manual labeling, graph spatial filtering, segmentation 연구를 참고해 현재 전략의 위치를 정리했다. | 현재 방향은 `feature -> retrieval/grouping -> expert review`이고, scratch/local은 morphology/segmentation 보강이 필요하다는 판단과 맞다. | 아래 참고 연구, [모델링 전략](modeling_strategy.md) |
-
-실험한 기법과 판단 과정은 [실험과 판단 기록](experiment_history.md)에 모아두었다.
-
-## 처음 목표와 맞게 가고 있나
-
-현재 방향은 처음 목표와 맞다.
-
-이유:
-
-- 실제 inference feature는 실제 데이터에서도 계산 가능한 값만 사용한다.
-- 합성 데이터의 oracle인 `label_*`, `*_mask_ratio`, `pattern_masks`, `pattern_intensity`는 검증용으로 분리해 두었다.
-- 전체 유사 wafer 검색과 위치-aware 검색의 feature 사용 기준을 분리했다.
-- Proposal 계열은 주 경로가 아니라 리뷰 후보를 줄이는 보조 도구로 제한했다.
-- 지금 우선순위는 새 모델 도입이 아니라 라벨 없는 실제 wafer 입력 형식과 전문가 리뷰 절차를 검증하는 것이다.
-
-가장 큰 리스크는 합성 데이터 성능을 실제 wafer 성능으로 착각하는 것이다. 지금 수치는 방법론 가능성의 근거이지 실제 wafer 성능 인증이 아니다.
-
-## 최종 점검 요약
-
-| 영역 | 현재 상태 | 판단 |
-| --- | --- | --- |
-| 합성 FBM generator | 다양한 defect family와 stby/valid-test/wafer 밖 영역을 생성한다. | 기준선 검증용으로 충분 |
-| 실제 데이터용 feature | 실제 wafer에도 계산 가능한 compact feature와 전체 검색 기준을 정리했다. | 주 경로 유지 |
-| 전체 유사 wafer 검색 | scale/holdout에서 random baseline 대비 lift가 있다. | 1차 솔루션 후보로 유효 |
-| 관심 불량별 검색 | class/class_location/feature_key 기준 신호가 있다. | defect별 search 방향 유효 |
-| Resize/proposal | resize-only는 대체재가 아니고 proposal은 리뷰 후보 축소용이다. | 과투자 방지 완료 |
-| 라벨 없는 실제 wafer 처리 | 제품별 raw PNG 폴더 또는 `.npz` manifest에서 feature/sanity/NN/리뷰 양식까지 생성된다. | 실제 리뷰 직전 단계 |
-| 전문가 리뷰 | reviewer decision, failure mode, next action을 summary로 연결한다. | 실제 검증 대기 |
-| AI 모델 | segmentation smoke training 배관은 있으나 실사용 deep model은 아직 아니다. | 실제 리뷰 후 target 결정 |
-
-현재 결론:
+현재 프로젝트의 중심은 **라벨 있는 hybrid synthetic data 생성 파이프라인**입니다.
 
 ```text
-1차 기준선 솔루션은 잡혔다.
-아직 최종 솔루션이 확정된 것은 아니다.
-다음 확인 단계는 실제 wafer 전문가 리뷰다.
+Pattern Asset Builder
+  사람이 local/scratch/ring 같은 실제 defect를 pixel mask로 누끼 저장
+
+Procedural Generator
+  scratch cold-start, edge, shot_grid, random을 코드로 생성
+
+Hybrid Synthetic Composer
+  human asset과 procedural defect를 base wafer에 합성
+  합성 위치와 mask를 알고 있으므로 자동 label 생성
+
+Segmentation / Embedding Pipeline
+  readiness manifest, segmentation smoke, embedding smoke, U-Net entrypoint 생성
 ```
 
-## 지금 우선해야 할 작업
+## Family별 데이터 생성 책임
 
-1. 보안 환경의 제품별 raw PNG 폴더에서 batch script를 실행하고 sanity 결과를 확인한다.
-2. 제품별 chip geometry 추론이 흔들리는 경우 `--geometry-json`으로 보완한다.
-3. 필요하면 `.npz` manifest 경로도 별도 smoke로 확인한다.
-4. Nearest-neighbor 결과를 전문가 리뷰 양식으로 평가한다.
-5. 리뷰어가 적은 `retrieval_failure_mode`, `next_action`을 feature 보강 또는 AI 모델 후보로 연결한다.
-6. Scratch/local처럼 약한 계열은 morphology 또는 segmentation 쪽으로 분리한다.
+| Family | 현재 데이터 생성 방식 | 판단 |
+|---|---|---|
+| `local` | human asset primary | 실제 blob texture와 군집 형태가 중요합니다. |
+| `scratch` | human asset primary + procedural fallback | 실제 scratch asset이 최종 기준이지만, cold-start 학습을 위해 radial/spin-arc scratch를 코드로 보강합니다. |
+| `ring` | human asset primary | partial ring, 끊긴 ring, 두께와 반경이 실제 공정 signature를 담습니다. |
+| `edge` | procedural primary, asset optional | wafer edge 거리와 angular sector rule로 안정적으로 합성할 수 있습니다. |
+| `shot_grid` | procedural primary, asset optional | chip/shot 반복 좌표로 합성하는 편이 자연스럽습니다. |
+| `random` | procedural only | 구조 없는 산발 fail baseline이므로 사람이 누끼 따는 대상이 아닙니다. |
 
-## 하지 말아야 할 일
+## 구현된 주요 산출물
 
-- 실제 wafer raw image/array를 repo에 저장하지 않는다.
-- 합성 데이터의 oracle label/mask를 실제 inference feature에 섞지 않는다.
-- 전체 유사 wafer 검색에 `polar_*`, `stby_polar_*`를 넣지 않는다.
-- Proposal recall을 최종 성능처럼 해석하지 않는다.
-- AutoEncoder나 대형 모델을 1차 해결책처럼 붙이지 않는다.
+| 영역 | 산출물 | 상태 |
+|---|---|---|
+| Pattern annotation | `scripts/run_pattern_asset_editor.py` | 구현됨 |
+| Asset library report | `scripts/build_pattern_asset_report.py` | 구현됨 |
+| Hybrid synthetic data | `scripts/compose_synthetic_from_assets.py` | 구현됨 |
+| End-to-end pipeline | `scripts/run_pattern_asset_pipeline.py` | 구현됨 |
+| Segmentation readiness | `scripts/build_segmentation_readiness.py` | 구현됨 |
+| Segmentation smoke | `scripts/train_segmentation_smoke.py` | 구현됨 |
+| Embedding smoke | `scripts/train_embedding_smoke.py` | 구현됨 |
+| Small U-Net entrypoint | `scripts/train_unet_segmentation.py` | 구현됨, 현재 환경은 PyTorch 미설치 |
+| 이해용 HTML report | `outputs/reports/pattern_asset_project_report.html` | 생성됨 |
 
-## 참고 연구의 위치
+## 현재 검증 결과
 
-외부 연구는 현재 방향을 점검하는 참고 자료다. 곧장 대형 모델로 넘어가야 한다는 의미는 아니다.
+최근 pipeline 실행 기준:
 
-- Iterative Cluster Harvesting for Wafer Map Defect Patterns
-  - feature extraction, dimensionality reduction, clustering, manual labeling 지원 흐름이 현재 `feature -> retrieval/grouping -> expert review` 방향과 맞다.
-  - https://arxiv.org/abs/2404.15436
+- `local`: positive sample 8개
+- `scratch`: positive sample 11개
+- `ring`: positive sample 20개
+- `edge`: positive sample 10개
+- `shot_grid`: positive sample 9개
+- `random`: positive sample 20개
+- embedding top-1 lift: 약 `1.53x`
+- 전체 테스트: `111 passed`
 
-- Graph-theoretic spatial filtering for mixed-type wafer bin maps
-  - 인접 defect chip의 spatial dependence를 이용한 filtering/clustering 관점은 local/scratch morphology 보강의 참고선이다.
-  - https://arxiv.org/abs/2006.13824
+## 현재 남은 병목
 
-- WaferSegClassNet
-  - mixed-type wafer defect classification/segmentation을 함께 다루며, scratch/local/overlap 보강을 segmentation 쪽으로 분리한 현재 판단과 맞다.
-  - https://arxiv.org/abs/2207.00960
+1. 현재 Codex 작업 환경에는 PyTorch가 없어 small U-Net 실제 학습은 실행하지 못했습니다.
+2. `scratch`는 procedural fallback으로 label을 만들 수 있지만, 최종 realism을 위해 실제 scratch human asset이 필요합니다.
+3. 실제 wafer batch에서 모델 prediction을 검토하고 수정하는 active learning loop를 더 돌려야 합니다.
+4. 실제 제품별 geometry/shot layout 정보가 들어오면 `edge`와 `shot_grid` procedural generator를 더 정확하게 보정해야 합니다.
+
+## 결론
+
+프로젝트는 이제 “막연한 feature 실험” 단계가 아니라, **라벨 있는 synthetic data를 만들고, multi-label segmentation/embedding 모델로 연결하는 구조**로 정렬되어 있습니다. 다음 핵심 작업은 PyTorch 학습 환경에서 `scripts/train_unet_segmentation.py`를 실행하고, 실제 wafer 기반 human asset과 prediction 수정 루프를 반복하는 것입니다.

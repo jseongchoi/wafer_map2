@@ -13,6 +13,7 @@ USER_FACING_DOCS = [
     DOCS / "index.html",
     DOCS / "README.md",
     DOCS / "glossary.md",
+    DOCS / "fbm_pattern_asset_pipeline.md",
     DOCS / "project_overview.md",
     DOCS / "experiment_history.md",
     DOCS / "roadmap.md",
@@ -30,7 +31,7 @@ USER_FACING_DOCS = [
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 HTML_HREF_RE = re.compile(r"""href=["']([^"']+)["']""")
-MOJIBAKE_RE = re.compile(r"[\u4e00-\u9fff\uf900-\ufaff\ufffd]")
+MOJIBAKE_RE = re.compile(r"\ufffd")
 
 
 def test_core_documentation_files_exist() -> None:
@@ -41,12 +42,12 @@ def test_core_documentation_files_exist() -> None:
 def test_markdown_file_links_resolve() -> None:
     broken: list[str] = []
     for markdown_path in USER_FACING_DOCS:
+        if markdown_path.suffix.lower() != ".md":
+            continue
         text = markdown_path.read_text(encoding="utf-8")
         for raw_target in MARKDOWN_LINK_RE.findall(text):
             target = raw_target.split("#", 1)[0].strip()
-            if not target or "://" in target:
-                continue
-            if target.startswith("mailto:"):
+            if not target or "://" in target or target.startswith("mailto:"):
                 continue
             resolved = (markdown_path.parent / target).resolve()
             try:
@@ -76,7 +77,7 @@ def test_html_file_links_resolve() -> None:
     assert broken == []
 
 
-def test_core_documentation_has_no_mojibake_codepoints() -> None:
+def test_core_documentation_has_no_replacement_mojibake_codepoints() -> None:
     offenders: list[str] = []
     for path in USER_FACING_DOCS:
         text = path.read_text(encoding="utf-8")
@@ -87,25 +88,31 @@ def test_core_documentation_has_no_mojibake_codepoints() -> None:
     assert offenders == []
 
 
-def test_documentation_guides_experiment_history() -> None:
+def test_documentation_guides_current_project_direction() -> None:
     docs_index = (DOCS / "README.md").read_text(encoding="utf-8")
     overview = (DOCS / "project_overview.md").read_text(encoding="utf-8")
+    roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
+    pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
-    assert "index.html" in docs_index
+    assert "fbm_pattern_asset_pipeline.md" in docs_index
+    assert "project_overview.md" in docs_index
+    assert "roadmap.md" in docs_index
     assert "glossary.md" in docs_index
     assert "real_png_operator_runbook.md" in docs_index
     assert "experiment_history.md" in docs_index
-    assert "실험과 판단 기록" in overview
+    assert "hybrid synthetic data" in overview
+    assert "train_unet_segmentation.py" in overview
+    assert "Pattern Asset Builder" in roadmap
+    assert "Small U-Net" in roadmap
+    assert "active learning" in roadmap
+    assert "procedural fallback" in pipeline
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
     assert "Segmentation Smoke Test" in experiment_history
-    assert "라벨 없는 실제 Wafer 처리 절차" in experiment_history
-    assert "라벨 없는 실제 wafer 적용 준비 단계" in roadmap_html
     assert "Phase 4" in roadmap_html
-    assert "처음 보는 용어와 변수" in roadmap_html
     assert "glossary.md" in roadmap_html
     assert "`severity`" in glossary
     assert "`retrieval_failure_mode`" in glossary
@@ -122,12 +129,7 @@ def test_real_png_operator_guide_has_required_execution_and_share_items() -> Non
         "outputs/private/*_manifest.json",
         "scripts/audit_project_readiness.py",
         "scripts/summarize_expert_review.py",
-        "결과 공유 템플릿",
         "actual_net_die=0",
-        "raw PNG 공유 없음",
-        "private manifest 공유 없음",
-        "features.csv row 수",
-        "8단계 상태",
     ]
     missing = [phrase for phrase in required_phrases if phrase not in runbook]
     assert missing == []

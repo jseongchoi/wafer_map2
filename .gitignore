@@ -15,8 +15,8 @@ data/interim/**
 data/processed/**
 data/synthetic/**
 data/labels/**
+data/pattern_assets/**
 outputs/**
-other_sample/outputs/**
 
 # Keep directory placeholders
 !data/

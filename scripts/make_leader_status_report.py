@@ -113,12 +113,6 @@ def refactor_table() -> str:
             "outputs/**, data/synthetic/**는 .gitignore 대상이고 재생성 산출물로 관리된다.",
             "HTML 보고서는 의사결정용 산출물로 유지하되 source of truth는 scripts/docs/configs로 둔다.",
         ),
-        (
-            "other_sample",
-            "주의",
-            "사용자 reference sample/실험 코드가 별도 폴더에 남아 있다. 현재 pipeline에는 직접 연결하지 않는다.",
-            "reference 목적을 문서에 남기거나, 확정되면 configs/synth preset로 흡수한다.",
-        ),
     ]
     return "\n".join(
         "<tr>"

@@ -136,3 +136,24 @@ def test_embedding_smoke_training_runs_from_manifest(tmp_path):
     assert payload["retrieval"]["top1_mean_jaccard"] == payload["retrieval"]["top1_mean_jaccard"]
     assert report.exists()
     assert embeddings.exists()
+
+
+def test_unet_training_dependency_check_writes_report(tmp_path):
+    unet = _load_script("train_unet_segmentation.py")
+    report = tmp_path / "unet.html"
+    metrics = tmp_path / "unet.json"
+
+    unet.main(
+        [
+            "--out",
+            str(report),
+            "--metrics",
+            str(metrics),
+            "--check-deps",
+        ]
+    )
+
+    payload = json.loads(metrics.read_text(encoding="utf-8"))
+    assert payload["status"] == "dependency_check"
+    assert "torch_available" in payload
+    assert report.exists()

@@ -10,8 +10,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from wafermap.data import PATTERN_CLASSES
 from wafermap.training.embedding import EmbeddingDataset, retrieval_metrics
+from wafermap.training.segmentation import TARGET_CHANNELS
 
 
 MODEL_VERSION = "cpu_shared_encoder/v1"
@@ -41,7 +41,7 @@ def initialize_cpu_encoder(
     output_size: int,
     hidden_dim: int,
     embedding_dim: int,
-    label_names: tuple[str, ...] = PATTERN_CLASSES,
+    label_names: tuple[str, ...] = TARGET_CHANNELS,
     seed: int = 20260618,
 ) -> CPUEncoderModel:
     if vectors.ndim != 2 or vectors.shape[0] == 0:

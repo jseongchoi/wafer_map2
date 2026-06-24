@@ -5,6 +5,13 @@ from wafermap.reporting.defect_summary import (
     DefectRegionSummary,
     summarize_sample_defects,
 )
+from wafermap.reporting.defect_interpretation import (
+    DEFECT_FAMILIES,
+    DefectScore,
+    score_feature_row,
+    score_feature_rows,
+    top_defects,
+)
 from wafermap.reporting.expert_review import (
     CLOCK_POSITION_MATCHES,
     DOMINANT_DEFECTS,
@@ -22,8 +29,10 @@ from wafermap.reporting.expert_review import (
 
 __all__ = [
     "CLOCK_POSITION_MATCHES",
+    "DEFECT_FAMILIES",
     "DOMINANT_DEFECTS",
     "DefectRegionSummary",
+    "DefectScore",
     "MISSED_MAJOR_DEFECT_VALUES",
     "NEXT_ACTIONS",
     "REQUIRED_NEIGHBOR_COLUMNS",
@@ -33,7 +42,10 @@ __all__ = [
     "TEMPLATE_COLUMNS",
     "build_template_rows",
     "clock_position_from_xy",
+    "score_feature_row",
+    "score_feature_rows",
     "summarize_sample_defects",
+    "top_defects",
     "validate_neighbor_rows",
     "write_template_csv",
 ]

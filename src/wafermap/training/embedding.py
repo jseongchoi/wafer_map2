@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from wafermap.data import PATTERN_CLASSES
+from wafermap.training.segmentation import TARGET_CHANNELS
 from wafermap.training.segmentation import load_segmentation_tensor
 
 
@@ -34,7 +34,7 @@ class PCAModel:
 def select_label_covered_rows(
     rows: list[dict[str, str]],
     max_samples: int,
-    label_names: tuple[str, ...] = PATTERN_CLASSES,
+    label_names: tuple[str, ...] = TARGET_CHANNELS,
 ) -> list[dict[str, str]]:
     """Pick a small row set while trying to cover every positive class once."""
 
@@ -70,7 +70,7 @@ def load_embedding_dataset(
     repo_root: str | Path,
     output_size: int,
     max_samples: int,
-    label_names: tuple[str, ...] = PATTERN_CLASSES,
+    label_names: tuple[str, ...] = TARGET_CHANNELS,
 ) -> EmbeddingDataset:
     """Load synthetic manifest rows as flattened segmentation input tensors."""
 

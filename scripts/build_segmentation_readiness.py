@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from wafermap.data import PATTERN_CLASSES, SyntheticSample, load_sample
+from wafermap.training.segmentation import TARGET_CHANNELS
 
 PATTERN_TO_INDEX = {name: idx for idx, name in enumerate(PATTERN_CLASSES)}
 FOCUS_CLASSES = ("scratch", "ring", "local", "stby_pattern")
@@ -66,10 +67,10 @@ def sample_manifest_row(sample_dir: Path, sample: SyntheticSample, split: str, r
         "metadata_path": relpath(sample_dir / "metadata.json", root),
         "actual_net_die": sample.metadata.get("actual_net_die", ""),
         "input_channels": "|".join(INPUT_CHANNELS),
-        "target_channels": "|".join(PATTERN_CLASSES),
+        "target_channels": "|".join(TARGET_CHANNELS),
     }
     active_count = 0
-    for class_name in PATTERN_CLASSES:
+    for class_name in TARGET_CHANNELS:
         class_mask = sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0
         ratio = mask_ratio(class_mask & wafer, denominator)
         row[f"has_{class_name}"] = int(ratio > 0.0)
@@ -107,7 +108,7 @@ def save_gallery(samples: list[SyntheticSample], out: Path, max_rows: int) -> No
             ax = axes[row_idx, col_idx]
             ax.imshow(base[::stride, ::stride], cmap="turbo", vmin=0.0, vmax=1.0, interpolation="nearest")
             if column != "input":
-                mask = sample.pattern_masks[PATTERN_TO_INDEX[column]] > 0
+                mask = sample.stby_mask > 0 if column == "stby_pattern" else sample.pattern_masks[PATTERN_TO_INDEX[column]] > 0
                 overlay = np.ma.masked_where(~mask[::stride, ::stride], mask[::stride, ::stride])
                 ax.imshow(overlay, cmap=colors[column], alpha=0.58, interpolation="nearest")
             title = f"{sample.sample_id}\n{column}" if col_idx == 0 else column
@@ -125,11 +126,11 @@ def update_gallery_candidates(
 ) -> None:
     scores: dict[str, float] = {"sample_id": sample.sample_id, "path": str(sample_dir)}
     for class_name in FOCUS_CLASSES:
-        scores[class_name] = float((sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0).sum())
+        scores[class_name] = float((sample.stby_mask > 0).sum()) if class_name == "stby_pattern" else float((sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0).sum())
     scratch = sample.pattern_masks[PATTERN_TO_INDEX["scratch"]] > 0
-    stby = sample.pattern_masks[PATTERN_TO_INDEX["stby_pattern"]] > 0
+    stby = sample.stby_mask > 0
     scores["scratch_stby_overlap"] = float((scratch & stby).sum())
-    scores["active_target_count"] = float(sum((sample.pattern_masks[idx] > 0).any() for idx in range(len(PATTERN_CLASSES))))
+    scores["active_target_count"] = float(sum((sample.pattern_masks[PATTERN_TO_INDEX[name]] > 0).any() for name in TARGET_CHANNELS))
     rows.append(scores)
 
 
@@ -153,7 +154,7 @@ def selected_gallery_paths(candidates: list[dict[str, Any]], max_rows: int) -> l
 
 def summarize_class_accumulators(all_ratios: dict[str, list[float]]) -> list[dict[str, Any]]:
     rows = []
-    for class_name in PATTERN_CLASSES:
+    for class_name in TARGET_CHANNELS:
         ratios = all_ratios[class_name]
         positives = [value for value in ratios if value > 0.0]
         positive_array = np.array(positives, dtype=np.float64)
@@ -276,7 +277,7 @@ def html_report(metrics: dict[str, Any], gallery: Path, manifest: Path, metrics_
   <ul>
     <li>데이터셋: {metrics['sample_count']} samples, train {metrics['split_counts']['train']} / val {metrics['split_counts']['val']}</li>
     <li>입력 semantic channels: {html.escape(', '.join(INPUT_CHANNELS))}</li>
-    <li>target channels: {html.escape(', '.join(PATTERN_CLASSES))}</li>
+    <li>target channels: {html.escape(', '.join(TARGET_CHANNELS))}</li>
     <li>{html.escape(conclusion)}</li>
   </ul>
 
@@ -332,11 +333,11 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"No synthetic samples found under {data_root}")
     root = ROOT
     manifest_rows = []
-    class_ratios: dict[str, list[float]] = {name: [] for name in PATTERN_CLASSES}
+    class_ratios: dict[str, list[float]] = {name: [] for name in TARGET_CHANNELS}
     pair_sums: dict[tuple[str, str], float] = {}
     pair_cooccurrences: dict[tuple[str, str], int] = {}
-    for left_idx, left_name in enumerate(PATTERN_CLASSES):
-        for right_name in PATTERN_CLASSES[left_idx + 1 :]:
+    for left_idx, left_name in enumerate(TARGET_CHANNELS):
+        for right_name in TARGET_CHANNELS[left_idx + 1 :]:
             pair = (left_name, right_name)
             pair_sums[pair] = 0.0
             pair_cooccurrences[pair] = 0
@@ -356,16 +357,17 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
         update_gallery_candidates(gallery_candidates, path, sample)
 
         class_masks: dict[str, np.ndarray] = {}
-        for class_name in PATTERN_CLASSES:
+        for class_name in TARGET_CHANNELS:
             class_mask = (sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0) & wafer
             class_masks[class_name] = class_mask
             class_ratios[class_name].append(mask_ratio(class_mask, denominator))
+        stby_mask = (sample.stby_mask > 0) & wafer
 
         overlap_wafer = wafer[:: args.overlap_stride, :: args.overlap_stride]
         overlap_denominator = int(overlap_wafer.sum())
-        for left_idx, left_name in enumerate(PATTERN_CLASSES):
+        for left_idx, left_name in enumerate(TARGET_CHANNELS):
             left = class_masks[left_name]
-            for right_name in PATTERN_CLASSES[left_idx + 1 :]:
+            for right_name in TARGET_CHANNELS[left_idx + 1 :]:
                 right = class_masks[right_name]
                 pair = (left_name, right_name)
                 pair_cooccurrences[pair] += int(left.any() and right.any())
@@ -381,8 +383,8 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
             scratch_count += 1
             ring_cooccur += int(class_masks["ring"].any())
             local_cooccur += int(class_masks["local"].any())
-            stby_cooccur += int(class_masks["stby_pattern"].any())
-            stby_overlap_ratios.append(float((scratch & class_masks["stby_pattern"]).sum() / max(int(scratch.sum()), 1)))
+            stby_cooccur += int(stby_mask.any())
+            stby_overlap_ratios.append(float((scratch & stby_mask).sum() / max(int(scratch.sum()), 1)))
 
     split_counts = {
         "train": sum(1 for row in manifest_rows if row["split"] == "train"),
@@ -392,7 +394,7 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
         "sample_count": len(dirs),
         "data_root": repo_path(data_root),
         "input_channels": list(INPUT_CHANNELS),
-        "target_channels": list(PATTERN_CLASSES),
+        "target_channels": list(TARGET_CHANNELS),
         "split_counts": split_counts,
         "overlap_stride": int(args.overlap_stride),
         "class_summary": summarize_class_accumulators(class_ratios),
