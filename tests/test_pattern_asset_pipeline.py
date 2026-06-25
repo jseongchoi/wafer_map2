@@ -189,6 +189,96 @@ def test_prediction_mask_json_can_prefill_editor_masks(tmp_path):
     assert masks["ring"] == []
 
 
+def test_model_proposal_json_loads_as_editor_proposals(tmp_path):
+    editor = _load_script("run_pattern_asset_editor.py")
+    proposal_path = tmp_path / "proposals.json"
+    proposal_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "fbm_model_proposals/v1",
+                "source": "umap_segment_v0",
+                "samples": [
+                    {
+                        "sample_id": "wafer_a",
+                        "shape": [2, 3],
+                        "proposals": [
+                            {
+                                "family": "edge",
+                                "rle": [[1, 2]],
+                                "confidence": 0.91,
+                                "description": "external edge segment",
+                                "parameters": {"embedding_cluster": 4},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    proposals = editor.load_model_proposals(proposal_path, "wafer_a", (2, 3), (4, 6))
+
+    assert len(proposals) == 1
+    assert proposals[0]["family"] == "edge"
+    assert proposals[0]["confidence"] == 0.91
+    assert proposals[0]["pixel_count"] == 8
+    assert proposals[0]["parameters"]["source"] == "umap_segment_v0"
+    assert proposals[0]["parameters"]["embedding_cluster"] == 4
+    mask = editor.rle_to_mask(proposals[0]["rle"], (4, 6))
+    assert int(mask.sum()) == 8
+
+
+def test_pattern_asset_editor_downsamples_for_editing_and_upsamples_masks():
+    editor = _load_script("run_pattern_asset_editor.py")
+
+    assert editor.editor_shape((2000, 1000), 768) == (768, 384)
+    assert editor.editor_shape((100, 80), 768) == (100, 80)
+    assert editor.editor_shape((100, 80), 0) == (100, 80)
+
+    edit_mask = np.array([[1, 0], [0, 1]], dtype=np.uint8)
+    source_mask = editor.resize_mask_nearest(edit_mask, (4, 4))
+
+    assert source_mask.shape == (4, 4)
+    assert source_mask[:2, :2].all()
+    assert source_mask[2:, 2:].all()
+    assert not source_mask[:2, 2:].any()
+    assert not source_mask[2:, :2].any()
+
+
+def test_pattern_asset_editor_auto_proposes_global_geometry():
+    editor = _load_script("run_pattern_asset_editor.py")
+    sample = generate_sample(SyntheticConfig(count=1, target_net_die=80, chip_width=6, chip_height=6, seed=51), 0)
+    sample.severity[:] = 0
+    sample.pattern_masks[:] = 0
+    radius, _theta = editor.polar_geometry(sample.wafer_mask > 0)
+    valid = sample.valid_test_mask > 0
+    sample.severity[valid & (radius >= 0.90)] = 6
+    sample.severity[valid & (np.abs(radius - 0.52) <= 0.015)] = 7
+
+    proposals = editor.analyze_pattern_proposals(sample, sample.shape, min_grade=5)
+    families = {proposal["family"] for proposal in proposals}
+
+    assert {"edge", "ring"}.issubset(families)
+    for proposal in proposals:
+        mask = editor.rle_to_mask(proposal["rle"], sample.shape)
+        assert mask.sum() == proposal["pixel_count"]
+        assert proposal["confidence"] > 0
+
+
+def test_pattern_asset_editor_exposes_client_side_color_schemes():
+    editor = _load_script("run_pattern_asset_editor.py")
+
+    assert 'id="colorScheme"' in editor.EDITOR_HTML
+    assert "const COLOR_SCHEMES" in editor.EDITOR_HTML
+    assert "function renderBase" in editor.EDITOR_HTML
+    assert "sample.stby_mask_b64" in editor.EDITOR_HTML
+    assert 'id="loadModelProposals"' in editor.EDITOR_HTML
+    assert "function loadModelProposals" in editor.EDITOR_HTML
+    assert "<summary>Proposals</summary>" in editor.EDITOR_HTML
+    assert "<summary>Output</summary>" in editor.EDITOR_HTML
+
+
 def test_pattern_asset_pipeline_writes_stby_excluded_manifest_and_project_report(tmp_path):
     editor = _load_script("run_pattern_asset_editor.py")
     pipeline = _load_script("run_pattern_asset_pipeline.py")
