@@ -104,9 +104,8 @@ python scripts/interpret_fbm.py `
 
 ```powershell
 python scripts/interpret_fbm.py `
-  --input D:/secure_fbm/raw_png `
-  --production-run `
-  --geometry-json D:/secure_fbm/product_geometry.json `
+  --input data/raw `
+  --geometry-json data/raw/product_geometry.json `
   --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
   --out outputs/interpretation
 ```
@@ -141,11 +140,11 @@ python -m pytest -q --basetemp .pytest_tmp
 - asset library report 생성
 - 저장된 asset을 이용한 max 합성
 
-## 보안 원칙
+## 데이터 파일 원칙
 
-- 실제 wafer raw image/array는 repo에 저장하지 않습니다.
-- 실제 wafer 입력은 보안 환경의 제품별 raw PNG 폴더 또는 `.npz` manifest로만 참조합니다.
-- 실제 path가 들어간 batch manifest 원본은 기본적으로 `outputs/private/`에 생성되며 공유하지 않습니다.
-- 결과를 공유할 때는 파일 단위로만 공유하고, `manifest`, 실제 path, lot/tool/recipe/chamber/wafer id가 포함되지 않았는지 확인합니다.
-- Repo에는 code, config, schema, synthetic preset, 익명화된 feature/report만 남깁니다.
+- 실제 wafer raw image/array, 사람이 딴 pattern asset, 합성 sample, model checkpoint는 대용량/로컬 데이터라 repo에 저장하지 않습니다.
+- 로컬 개발 입력은 `data/raw/`에 둘 수 있고, 인트라넷 운영 입력은 원하는 로컬/네트워크 경로를 그대로 쓸 수 있습니다.
+- batch manifest는 기본적으로 `outputs/manifests/`에 생성됩니다.
+- 결과 리포트는 기본적으로 `outputs/reports/` 또는 명령에서 지정한 폴더에 생성됩니다.
+- Repo에는 code, config, schema, 문서, 테스트만 남깁니다.
 - 합성 데이터의 oracle label/mask는 검증용이며, 실제 inference feature에 섞지 않습니다.

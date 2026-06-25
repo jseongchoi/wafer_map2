@@ -6,8 +6,6 @@ import argparse
 import csv
 import html
 import json
-import os
-import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -16,6 +14,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from wafermap.cli import positive_int
+from wafermap.reporting.files import relative_path
 from wafermap.reporting import (
     CLOCK_POSITION_MATCHES,
     DOMINANT_DEFECTS,
@@ -36,18 +36,6 @@ REQUIRED_COLUMNS = (
     "missed_major_defect",
     "safe_comment",
 )
-SENSITIVE_COMMENT_PATTERNS = {
-    "windows_path": re.compile(r"[A-Za-z]:[\\/][^\s]+"),
-    "unc_path": re.compile(r"\\\\[^\s]+"),
-    "unix_sensitive_path": re.compile(r"/(?:home|mnt|data|secure|Users)/[^\s]+"),
-    "lot_identifier": re.compile(r"\blot\s*[:=_-]?\s*[A-Za-z0-9_.-]+", re.IGNORECASE),
-    "wafer_identifier": re.compile(r"\bwafer\s*[:=_-]?\s*[A-Za-z0-9_.-]+", re.IGNORECASE),
-    "tool_identifier": re.compile(r"\btool\s*[:=_-]?\s*[A-Za-z0-9_.-]+", re.IGNORECASE),
-    "recipe_identifier": re.compile(r"\brecipe\s*[:=_-]?\s*[A-Za-z0-9_.-]+", re.IGNORECASE),
-    "chamber_identifier": re.compile(r"\bchamber\s*[:=_-]?\s*[A-Za-z0-9_.-]+", re.IGNORECASE),
-}
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--review", default="outputs/reports/expert_review_template.csv")
@@ -55,16 +43,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--metrics", default="outputs/reports/expert_review_summary_metrics.json")
     parser.add_argument("--top-k", type=positive_int, default=5)
     return parser.parse_args(argv)
-
-
-def positive_int(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a positive integer") from exc
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -89,25 +67,6 @@ def parse_rank(row: dict[str, str]) -> int:
         return int(float(row.get("rank", "")))
     except ValueError:
         return 10**9
-
-
-def find_sensitive_comment_flags(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
-    flags: list[dict[str, Any]] = []
-    for idx, row in enumerate(rows, start=2):
-        comment = row.get("safe_comment", "")
-        for issue, pattern in SENSITIVE_COMMENT_PATTERNS.items():
-            match = pattern.search(comment)
-            if match:
-                flags.append(
-                    {
-                        "csv_line": idx,
-                        "query_sample_id": row.get("query_sample_id", ""),
-                        "neighbor_sample_id": row.get("neighbor_sample_id", ""),
-                        "issue": issue,
-                        "snippet": match.group(0)[:80],
-                    }
-                )
-    return flags
 
 
 def summarize_rows(rows: list[dict[str, str]], top_k: int) -> dict[str, Any]:
@@ -177,7 +136,6 @@ def summarize_rows(rows: list[dict[str, str]], top_k: int) -> dict[str, Any]:
         "next_action_counts": value_counts(valid_rows, "next_action"),
         "next_action_queue": next_action_queue(valid_rows),
         "invalid_values": invalid_rows,
-        "sensitive_comment_flags": find_sensitive_comment_flags(rows),
     }
     metrics["interpretation"] = interpretation(metrics)
     return metrics
@@ -284,10 +242,6 @@ def interpretation(metrics: dict[str, Any]) -> str:
     return "부분 유효: same/partial 판단을 defect family별로 보고 다음 feature tuning 우선순위를 정한다."
 
 
-def relpath(target: Path, base_file: Path) -> str:
-    return Path(os.path.relpath(Path(target).resolve(), base_file.resolve().parent)).as_posix()
-
-
 def html_report(metrics: dict[str, Any], review_path: Path, metrics_path: Path) -> str:
     defect_rows = "\n".join(
         "<tr>"
@@ -298,16 +252,6 @@ def html_report(metrics: dict[str, Any], review_path: Path, metrics_path: Path) 
         f"<td>{item['missed_major_defect_rate']:.3f}</td>"
         "</tr>"
         for item in metrics["dominant_defect_metrics"]
-    )
-    sensitive_rows = "\n".join(
-        "<tr>"
-        f"<td>{item['csv_line']}</td>"
-        f"<td>{html.escape(item['query_sample_id'])}</td>"
-        f"<td>{html.escape(item['neighbor_sample_id'])}</td>"
-        f"<td>{html.escape(item['issue'])}</td>"
-        f"<td>{html.escape(item['snippet'])}</td>"
-        "</tr>"
-        for item in metrics["sensitive_comment_flags"]
     )
     invalid_rows = "\n".join(
         "<tr>"
@@ -397,7 +341,6 @@ def html_report(metrics: dict[str, Any], review_path: Path, metrics_path: Path) 
     <tr><td>Query top-k accepted rate</td><td>{metrics['query_topk_accept_rate']:.3f}</td></tr>
     <tr><td>Clock-position accept rate</td><td>{metrics['clock_position_accept_rate']:.3f}</td></tr>
     <tr><td>Invalid value count</td><td>{metrics['invalid_value_count']}</td></tr>
-    <tr><td>Sensitive comment flags</td><td>{len(metrics['sensitive_comment_flags'])}</td></tr>
   </table>
   <h2>Dominant Defect Metrics</h2>
   <table>
@@ -434,14 +377,9 @@ def html_report(metrics: dict[str, Any], review_path: Path, metrics_path: Path) 
     <tr><th>CSV line</th><th>Field</th><th>Value</th><th>Query</th><th>Neighbor</th></tr>
     {invalid_rows}
   </table>
-  <h2>Sensitive Comment Flags</h2>
-  <table>
-    <tr><th>CSV line</th><th>Query</th><th>Neighbor</th><th>Issue</th><th>Snippet</th></tr>
-    {sensitive_rows}
-  </table>
   <h2>Inputs</h2>
   <ul>
-    <li>Review CSV: <code>{html.escape(relpath(review_path, metrics_path))}</code></li>
+    <li>Review CSV: <code>{html.escape(relative_path(review_path, metrics_path))}</code></li>
     <li>Metrics JSON: <code>{html.escape(metrics_path.name)}</code></li>
   </ul>
 </body>

@@ -16,13 +16,12 @@
 
 | 이름 | 뜻 | 왜 필요한가 |
 | --- | --- | --- |
-| `manifest` | 여러 wafer sample의 raw PNG 또는 `.npz` 경로와 metadata를 적은 JSON 파일이다. | 실제 raw data를 repo에 넣지 않고 보안 경로만 참조하기 위해 쓴다. |
-| `sample_id` | wafer sample을 가리키는 익명 id다. | 리뷰와 검색 결과에서 wafer를 구분한다. |
+| `manifest` | 여러 wafer sample의 raw PNG 또는 `.npz` 경로와 metadata를 적은 JSON 파일이다. | batch 실행, 에디터, feature 추출이 같은 입력 목록을 보게 한다. |
+| `sample_id` | wafer sample을 가리키는 id다. | 리뷰와 검색 결과에서 wafer를 구분한다. 사람이 읽기 쉬운 이름을 써도 된다. |
 | `png_grayscale_raw` | 실제 8-bit grayscale PNG를 직접 읽는 source type이다. | gray value를 Grade 0~7과 stby 후보로 변환한다. |
-| `png_path` | raw PNG 파일 경로다. | 제품별 PNG batch나 manifest에서 입력 파일을 참조한다. 원본 path가 들어가므로 공유하지 않는다. |
+| `png_path` | raw PNG 파일 경로다. | 제품별 PNG batch나 manifest에서 입력 파일을 참조한다. |
 | `arrays_npz` | 해당 sample의 `.npz` 파일 경로다. | `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`를 읽는 위치다. |
 | `array_keys` | 원본 `.npz` 안의 key 이름이 표준 이름과 다를 때 쓰는 mapping이다. | 예를 들어 원본 key가 `grade`이면 이를 `severity`로 연결한다. |
-| `pseudonymized` | sample id와 metadata가 익명화되었는지 표시한다. | 보안 원칙을 지키기 위한 확인값이다. |
 | `parser_name` / `parser_version` | 실제 FBM을 `.npz`로 바꾼 parser의 이름과 버전이다. | 추후 parser 변경으로 결과가 달라졌는지 추적한다. |
 | `orientation` | wafer map 방향 정보다. | 회전/flip이 있으면 clock 위치와 edge 위치 해석이 달라진다. |
 | `chip_blocks` | 한 chip이 array에서 차지하는 block 크기다. | chip 단위 feature와 geometry 검증에 필요하다. |
@@ -75,8 +74,8 @@
 | 이름 | 뜻 | 채우는 방법 |
 | --- | --- | --- |
 | `review_case_id` | query-neighbor pair를 구분하는 id다. | 자동 생성된다. |
-| `query_sample_id` | 검색 기준 wafer의 익명 id다. | 자동 생성된다. |
-| `neighbor_sample_id` | 검색된 neighbor wafer의 익명 id다. | 자동 생성된다. |
+| `query_sample_id` | 검색 기준 wafer의 id다. | 자동 생성되거나 manifest에서 온다. |
+| `neighbor_sample_id` | 검색된 neighbor wafer의 id다. | 자동 생성되거나 manifest에서 온다. |
 | `rank` | neighbor 순위다. | 1이면 가장 가까운 wafer다. |
 | `distance` | feature 공간에서 query와 neighbor 사이의 거리다. | 낮을수록 feature 기준으로 가깝다. |
 | `reviewer_decision` | 사람이 봤을 때 비슷한지 판단한 값이다. | `same_family`, `partial_match`, `mismatch`, `not_sure` 중 선택한다. |
@@ -87,7 +86,7 @@
 | `missed_major_defect` | neighbor가 query의 중요한 defect를 놓쳤는지 표시한다. | 놓쳤으면 `yes`. |
 | `retrieval_failure_mode` | 검색이 틀렸다면 왜 틀렸는지 적는 값이다. | 예: `wrong_family`, `right_family_wrong_location`, `parser_or_mask_issue`. |
 | `next_action` | 다음에 무엇을 보강할지 적는 값이다. | 예: `feature_weight_tuning`, `segmentation_candidate`, `parser_validation`. |
-| `safe_comment` | 보안 정보 없는 짧은 메모다. | lot, wafer id, 실제 path는 쓰지 않는다. |
+| `safe_comment` | 리뷰어 메모다. | 판단 근거를 자유롭게 적는다. |
 
 ## 7. Defect Family
 

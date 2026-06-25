@@ -112,7 +112,7 @@ pattern_intensity    # synthetic validation only
 
 ## 6. 라벨 없는 실제 Wafer Manifest
 
-실제 wafer는 repo에 저장하지 않고, 보안 환경의 raw PNG 또는 `.npz`를 manifest로 참조한다.
+실제 wafer는 raw PNG 또는 `.npz`를 manifest로 참조한다. 파일은 `data/raw`, 인트라넷 공유 폴더, 로컬 절대경로 중 편한 위치에 둘 수 있다.
 
 Top-level:
 
@@ -128,11 +128,10 @@ Top-level:
 
 ```json
 {
-  "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
+  "sample_id": "product_a_wafer_001",
   "source_type": "npz_semantic_arrays",
-  "arrays_npz": "D:/secure_fbm/real_like_001_arrays.npz",
-  "pseudonymized": true,
-  "parser_name": "secure_fbm_parser",
+  "arrays_npz": "data/raw/product_a/wafer_001_arrays.npz",
+  "parser_name": "fbm_npz_parser",
   "parser_version": "0.1.0",
   "orientation": "not_rotated",
   "chip_blocks": { "width": 100, "height": 50 },
@@ -144,11 +143,10 @@ Top-level:
 
 ```json
 {
-  "sample_id": "product_aaaaaaaaaa_wcccccccccc",
+  "sample_id": "product_a_wafer_001",
   "source_type": "png_grayscale_raw",
-  "png_path": "D:/secure_fbm/raw_png/product_a/wafer_001.png",
-  "pseudonymized": true,
-  "parser_name": "secure_png_gray_parser",
+  "png_path": "data/raw/product_a/wafer_001.png",
+  "parser_name": "png_raw_folder_batch",
   "parser_version": "0.1.0",
   "orientation": "not_rotated",
   "wafer_mask_strategy": "centered_ellipse_from_png",
@@ -182,12 +180,11 @@ raw_root/
 }
 ```
 
-보안 규칙:
+Manifest 기준:
 
-- `sample_id`는 `product_<10hex>_w<10hex>` 형식의 opaque id만 사용한다.
-- `png_path`, `arrays_npz`, optional `metadata_json`은 기본적으로 workspace 밖 보안 경로여야 한다.
-- 실제 path가 들어간 manifest 원본은 공유하지 않는다.
-- 실제 file path, lot id, wafer id, tool, recipe, chamber 정보는 repo 산출물에 남기지 않는다.
+- `sample_id`는 비어 있지 않으면 된다. 사람이 읽기 쉬운 wafer 이름을 써도 된다.
+- `png_path`, `arrays_npz`, optional `metadata_json`은 상대경로와 절대경로를 모두 허용한다.
+- `scripts/analyze_png_raw_folders.py`의 기본 manifest 위치는 `outputs/manifests/<run_name>_manifest.json`이다.
 
 ## 7. Feature Table 기준
 

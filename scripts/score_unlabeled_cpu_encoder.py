@@ -6,7 +6,6 @@ import argparse
 import csv
 import html
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(ROOT / "src"))
 
 import extract_real_unlabeled_features as real_loader  # noqa: E402
+from wafermap.reporting.files import relative_path  # noqa: E402
 from wafermap.training.cpu_encoder import load_cpu_encoder_model, predict_cpu_encoder  # noqa: E402
 from wafermap.training.segmentation import sample_to_input_tensor  # noqa: E402
 
@@ -32,28 +32,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--sanity-out", default="outputs/reports/real_cpu_encoder_sanity.json")
     parser.add_argument("--report-out", default="outputs/reports/real_cpu_encoder_report.html")
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument(
-        "--allow-output-outside-root",
-        action="store_true",
-        help="Allow derived outputs outside outputs/. Use only for isolated synthetic smoke tests.",
-    )
     return parser.parse_args(argv)
 
 
 def output_path(path: str | Path) -> Path:
     path = Path(path)
     return path.resolve() if path.is_absolute() else (ROOT / path).resolve()
-
-
-def report_output_path(path: str | Path, *, allow_outside_root: bool = False) -> Path:
-    resolved = output_path(path)
-    if not allow_outside_root and not real_loader._is_inside(resolved, real_loader.OUTPUT_ROOT):
-        raise ValueError(f"Output path must be under {real_loader.OUTPUT_ROOT}: {path}")
-    return resolved
-
-
-def relpath(target: Path, base_file: Path) -> str:
-    return os.path.relpath(target.resolve(), base_file.resolve().parent).replace("\\", "/")
 
 
 def load_samples(manifest_path: Path) -> tuple[list[Any], list[dict[str, Any]]]:
@@ -223,7 +207,7 @@ def html_report(
         for row in sanity
     )
     neighbor_link = (
-        f'<li>Nearest synthetic neighbors: <code>{html.escape(relpath(neighbors_path, report_path))}</code></li>'
+        f'<li>Nearest synthetic neighbors: <code>{html.escape(relative_path(neighbors_path, report_path))}</code></li>'
         if neighbors_path is not None
         else "<li>Nearest synthetic neighbors: not available in the model file</li>"
     )
@@ -257,9 +241,9 @@ def html_report(
   </table>
   <h2>Outputs</h2>
   <ul>
-    <li>Predictions: <code>{html.escape(relpath(predictions_path, report_path))}</code></li>
+    <li>Predictions: <code>{html.escape(relative_path(predictions_path, report_path))}</code></li>
     {neighbor_link}
-    <li>Sanity JSON: <code>{html.escape(relpath(sanity_path, report_path))}</code></li>
+    <li>Sanity JSON: <code>{html.escape(relative_path(sanity_path, report_path))}</code></li>
   </ul>
 </body>
 </html>
@@ -286,10 +270,10 @@ def main(argv: list[str] | None = None) -> None:
             probs[sample_idx] = valid_probs[out_idx]
             embeddings[sample_idx] = valid_embeddings[out_idx]
 
-    predictions_path = report_output_path(args.predictions_out, allow_outside_root=args.allow_output_outside_root)
-    neighbors_path = report_output_path(args.neighbors_out, allow_outside_root=args.allow_output_outside_root)
-    sanity_path = report_output_path(args.sanity_out, allow_outside_root=args.allow_output_outside_root)
-    report_path = report_output_path(args.report_out, allow_outside_root=args.allow_output_outside_root)
+    predictions_path = output_path(args.predictions_out)
+    neighbors_path = output_path(args.neighbors_out)
+    sanity_path = output_path(args.sanity_out)
+    report_path = output_path(args.report_out)
     write_predictions(predictions_path, samples, sanity, model.label_names, probs, embeddings)
     wrote_neighbors = write_neighbors(neighbors_path, valid_samples, valid_embeddings, reference, model.label_names, args.top_k)
     sanity_path.parent.mkdir(parents=True, exist_ok=True)

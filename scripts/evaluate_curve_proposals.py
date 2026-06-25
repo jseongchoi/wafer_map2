@@ -127,24 +127,6 @@ def polar_grid(grid_size: int, wafer: NDArray[np.float32]) -> tuple[NDArray[np.f
     return radius.astype(np.float32), theta.astype(np.float32)
 
 
-def polar_bin_means(
-    score: NDArray[np.float32],
-    wafer: NDArray[np.float32],
-    radius: NDArray[np.float32],
-    theta: NDArray[np.float32],
-    radial_bins: int,
-    angular_bins: int,
-) -> NDArray[np.float32]:
-    valid = wafer > 0.2
-    r_idx = np.minimum((radius[valid] * radial_bins).astype(np.int32), radial_bins - 1)
-    a_idx = np.minimum(((theta[valid] / (2 * np.pi)) * angular_bins).astype(np.int32), angular_bins - 1)
-    flat = r_idx * angular_bins + a_idx
-    sums = np.bincount(flat, weights=score[valid].astype(np.float64), minlength=radial_bins * angular_bins)
-    counts = np.bincount(flat, minlength=radial_bins * angular_bins)
-    means = np.divide(sums, np.maximum(counts, 1), out=np.zeros_like(sums), where=counts > 0)
-    return means.reshape(radial_bins, angular_bins).astype(np.float32)
-
-
 def pixel_radius_theta(
     shape: tuple[int, int],
     wafer: NDArray[np.bool_],
@@ -228,14 +210,6 @@ def circular_bin_mask(indices: NDArray[np.int32], start: int, end: int, bins: in
     if width >= bins:
         return np.ones(indices.shape, dtype=bool)
     return ((indices - start) % bins) < width
-
-
-def polar_rect_mean(polar_score: NDArray[np.float32], r0: int, r1: int, a0: int, a1: int) -> float:
-    angular_bins = polar_score.shape[1]
-    a_width = max(1, a1 - a0)
-    cols = (np.arange(a_width, dtype=np.int32) + a0) % angular_bins
-    values = polar_score[r0:r1, :][:, cols]
-    return float(values.mean()) if values.size else 0.0
 
 
 def build_candidates(
@@ -398,31 +372,6 @@ def random_candidates(
     return candidates
 
 
-def target_occupancy(sample: CurveSample, class_name: str, grid_size: int) -> NDArray[np.float32]:
-    class_idx = PATTERN_CLASSES.index(class_name)
-    target = sample.pattern_masks[class_idx].astype(np.float32)
-    y_edges, x_edges = grid_edges(sample.severity.shape, grid_size)
-    return pooled_mean(target, np.ones(target.shape, dtype=np.float32), y_edges, x_edges)
-
-
-def coverage_recall(
-    target: NDArray[np.float32],
-    candidates: list[CurveCandidate],
-    radius: NDArray[np.float32],
-    theta: NDArray[np.float32],
-    wafer: NDArray[np.float32],
-    radial_bins: int,
-    angular_bins: int,
-) -> float:
-    target_mass = float(target.sum())
-    if target_mass <= 0:
-        return 0.0
-    covered = np.zeros(target.shape, dtype=bool)
-    for candidate in candidates:
-        covered |= candidate_mask(candidate, radius, theta, wafer, radial_bins, angular_bins)
-    return float(target[covered].sum() / target_mass)
-
-
 def candidate_bin_mask(candidate: CurveCandidate, radial_bins: int, angular_bins: int) -> NDArray[np.bool_]:
     r_idx = np.arange(radial_bins, dtype=np.int32)[:, None]
     a_idx = np.arange(angular_bins, dtype=np.int32)[None, :]
@@ -440,20 +389,6 @@ def polar_recall(target_bins: NDArray[np.float32], candidates: list[CurveCandida
     for candidate in candidates:
         covered |= candidate_bin_mask(candidate, radial_bins, angular_bins)
     return float(target_bins[covered].sum() / target_mass)
-
-
-def curve_score_map(class_name: str, maps: dict[str, NDArray[np.float32]]) -> NDArray[np.float32]:
-    if class_name == "ring":
-        score = 0.35 * maps["severity"] + 0.30 * maps["severity_peak"] + 0.25 * maps["fail"] + 0.15 * maps["high"]
-    else:
-        score = (
-            0.25 * maps["severity"]
-            + 0.45 * maps["severity_peak"]
-            + 0.25 * maps["fail"]
-            + 0.15 * maps["high"]
-            + 0.10 * maps["stby"]
-        )
-    return (score * maps["wafer"]).astype(np.float32)
 
 
 def evaluate_sample(

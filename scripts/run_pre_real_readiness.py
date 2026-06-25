@@ -64,12 +64,12 @@ def repo_path(target: str | Path) -> str:
         return str(target)
 
 
-def shareable_path(target: str | Path, placeholder: str = "<external_path>") -> str:
+def display_path(target: str | Path) -> str:
     path = Path(target)
     try:
         return path.resolve().relative_to(ROOT.resolve()).as_posix()
     except (OSError, ValueError):
-        return placeholder
+        return str(path.resolve())
 
 
 def sha256_file(path: Path) -> str:
@@ -108,7 +108,7 @@ def collect_provenance(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "schema_version": "pre_real_readiness_provenance/v1",
         "config": {
-            "path": shareable_path(config_path, "<external_config>"),
+            "path": display_path(config_path),
             "sha256": sha256_file(config_path),
         },
         "pipeline_inputs": pipeline_inputs,
@@ -120,13 +120,13 @@ def collect_provenance(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def display_command(command: list[str]) -> list[str]:
-    redacted = []
+    displayed = []
     for idx, value in enumerate(command):
         if idx == 0 and Path(value).name.lower().startswith("python"):
-            redacted.append("python")
+            displayed.append("python")
         else:
-            redacted.append(repo_path(value))
-    return redacted
+            displayed.append(repo_path(value))
+    return displayed
 
 
 def utc_now_iso() -> str:
@@ -305,7 +305,7 @@ def html_report(summary: dict[str, Any], out: Path) -> str:
 </head>
 <body>
   <h1>Pre-Real WaferMap Readiness</h1>
-  <div class="note">This report proves the synthetic-to-real pipeline can run end to end before confidential raw PNG data is available.</div>
+  <div class="note">This report proves the synthetic-to-real pipeline can run end to end before real raw PNG data is available.</div>
   <h2>Status: {html.escape(summary['status'])}</h2>
   <ul>
     <li>Synthetic samples: {summary['synthetic_count']}</li>
@@ -342,27 +342,27 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     reports = out_root / "reports"
     figures = out_root / "figures"
     models = out_root / "models"
-    private = out_root / "private"
+    manifests = out_root / "manifests"
     logs = out_root / "logs"
-    for path in (reports, figures, models, private, logs):
+    for path in (reports, figures, models, manifests, logs):
         path.mkdir(parents=True, exist_ok=True)
 
     reference_features = reports / "synthetic_reference_features.csv"
     segmentation_manifest = reports / "segmentation_manifest.csv"
     model_path = models / "fbm_cpu_encoder_model.npz"
-    score_manifest = private / "synthetic_unlabeled_score_manifest.json"
+    score_manifest = manifests / "synthetic_unlabeled_score_manifest.json"
     score_predictions = reports / "synthetic_unlabeled_cpu_encoder_predictions.csv"
     score_neighbors = reports / "synthetic_unlabeled_cpu_encoder_neighbors.csv"
     score_sanity = reports / "synthetic_unlabeled_cpu_encoder_sanity.json"
     score_report = reports / "synthetic_unlabeled_cpu_encoder_report.html"
     png_geometry = reports / "synthetic_png_geometry.json"
     png_batch_dir = reports / "synthetic_png_batch"
-    png_batch_manifest = private / "synthetic_png_batch_manifest.json"
+    png_batch_manifest = manifests / "synthetic_png_batch_manifest.json"
     summary_json = reports / "pre_real_readiness_summary.json"
     summary_html = reports / "pre_real_readiness_report.html"
-    legacy_shareable_score_manifest = reports / "synthetic_unlabeled_score_manifest.json"
-    if legacy_shareable_score_manifest.exists():
-        legacy_shareable_score_manifest.unlink()
+    legacy_report_score_manifest = reports / "synthetic_unlabeled_score_manifest.json"
+    if legacy_report_score_manifest.exists():
+        legacy_report_score_manifest.unlink()
 
     py = sys.executable
     steps = []
@@ -500,7 +500,6 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
                 str(score_sanity),
                 "--report-out",
                 str(score_report),
-                "--allow-output-outside-root",
                 "--top-k",
                 str(args.top_k),
             ],
@@ -520,13 +519,10 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
                 str(png_batch_dir),
                 "--manifest-out",
                 str(png_batch_manifest),
-                "--allow-workspace-manifest-output",
-                "--allow-output-outside-root",
                 "--glob",
                 "raw_grayscale.png",
                 "--geometry-json",
                 str(png_geometry),
-                "--allow-workspace-input",
                 "--reference-features",
                 str(reference_features),
                 "--cpu-model",
@@ -542,12 +538,13 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "python",
         "scripts/analyze_png_raw_folders.py",
         "--raw-root",
-        "<SECURE_RAW_PNG_ROOT>",
-        "--production-run",
+        "data/raw",
         "--geometry-json",
-        "<SECURE_PRODUCT_GEOMETRY_JSON>",
+        "data/raw/product_geometry.json",
         "--out-dir",
         "outputs/reports/real_png_batch",
+        "--manifest-out",
+        "outputs/manifests/real_png_batch_manifest.json",
         "--reference-features",
         repo_path(reference_features),
         "--cpu-model",

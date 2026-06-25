@@ -29,9 +29,9 @@ nearest-neighbor CSV
 
 기본 컬럼:
 
-- `query_sample_id`: 익명화된 query id
+- `query_sample_id`: query wafer id
 - `rank`: nearest-neighbor rank
-- `neighbor_sample_id`: 익명화된 neighbor id
+- `neighbor_sample_id`: neighbor wafer id
 - `distance`: feature space distance
 - `reviewer_decision`: 같은 불량 계열인지 판단
 - `query_defect_family`: query wafer에서 리뷰어가 본 주된 결함군
@@ -41,7 +41,7 @@ nearest-neighbor CSV
 - `missed_major_defect`: query의 중요한 불량을 neighbor가 놓쳤는지 판단
 - `retrieval_failure_mode`: mismatch/partial-match의 구조적 실패 유형
 - `next_action`: 다음 feature/model 보강 후보
-- `safe_comment`: 보안 정보 없는 짧은 코멘트
+- `safe_comment`: 리뷰어 자유 메모
 
 ## 허용 라벨
 
@@ -172,15 +172,6 @@ python scripts/summarize_expert_review.py `
 - `query_topk_accept_rate`: `80%` 이상
 - `missed_major_defect_rate`: `5%` 이하
 - `parser_or_mask_issue`: `0`
-- 민감정보 comment 또는 `sensitive_comment`: `0`
-
-## 보안 규칙
-
-- 실제 wafer raw image/array는 repo에 저장하지 않는다.
-- 실제 파일 경로, lot id, wafer id, tool id, recipe, chamber 정보는 `safe_comment`에 쓰지 않는다.
-- sample id는 익명 id만 사용한다.
-- synthetic reference의 `label_*` 컬럼은 reviewer 양식에 복사하지 않는다.
-- review summary는 comment 안의 민감 패턴을 flag만 하고, 원본 데이터를 저장하지 않는다.
 
 ## 다음 의사결정
 

@@ -147,7 +147,6 @@ def test_cpu_encoder_train_and_score_pipeline(tmp_path):
             str(tmp_path / "score_sanity.json"),
             "--report-out",
             str(tmp_path / "score_report.html"),
-            "--allow-output-outside-root",
             "--top-k",
             "2",
         ]

@@ -99,7 +99,7 @@ def refactor_table() -> str:
             "Real loader 크기",
             "주의",
             "extract_real_unlabeled_features.py가 loader, validator, nearest-neighbor, HTML report를 함께 가진 MVP 구조다.",
-            "실제 보안 npz 1회 검증 후 validator와 report helper를 src로 승격한다.",
+            "실제 npz 또는 raw PNG 1회 검증 후 validator와 report helper를 src로 승격한다.",
         ),
         (
             "Report scripts 중복",
@@ -323,7 +323,7 @@ def build_html() -> str:
   <ol>
     <li>이 보고서의 synthetic gallery와 neighbor gallery를 보고 현실성/유사성 판단을 남긴다.</li>
     <li><code>outputs/reports/expert_review_template.csv</code>의 일부 row를 채워서 accepted/mismatch 기준을 만든다.</li>
-    <li>실제 보안 환경에서 semantic npz export가 가능한지 확인한다.</li>
+    <li>실제 semantic npz 또는 raw PNG batch export가 가능한지 확인한다.</li>
     <li>그 다음 holdout synthetic stress test로 generator 과적합 여부를 확인한다.</li>
   </ol>
 </body>

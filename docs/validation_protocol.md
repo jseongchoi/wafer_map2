@@ -1,152 +1,130 @@
-# 검증 방법
+# 검증 프로토콜
 
-## 1. 목적
+이 문서는 FBM defect pattern pipeline을 어떤 기준으로 검증할지 정의한다. 검증의 핵심은 “모델이 무언가를 맞췄다”가 아니라, 실제 업무자가 wafer map을 보고 납득할 수 있는 위치, family, 수치가 나오는지 확인하는 것이다.
 
-실제 wafer 데이터와 label을 repo에 포함할 수 없기 때문에 validation은 세 축으로 진행한다.
+## 1. 입력 검증
 
-- 합성 데이터 내부 검증: generator가 의도한 구조와 mask를 올바르게 저장하는지 확인
-- 전문가 시각 검증: 사용자의 현업 경험을 기준으로 합성 wafer가 그럴듯한지 평가
-- 방법론 검증: 실제 데이터에서도 계산 가능한 feature만으로 유사 wafer 검색, grouping, score 해석이 가능한지 확인
+실제 입력은 두 가지 형식을 우선 지원한다.
 
-## 2. 합성 데이터 내부 검증
+| 형식 | 용도 |
+| --- | --- |
+| `png_grayscale_raw` | 실제 Grade 0~7 이미지. 제품별 폴더 batch 처리에 적합 |
+| `npz_semantic_arrays` | `severity`, `wafer_mask`, `valid_test_mask`, `stby_mask`를 직접 가진 semantic 배열 |
 
-Generator가 만든 sample마다 다음을 자동 확인한다.
+PNG 입력 sanity:
 
 ```text
-wafer_mask 밖의 severity가 0인가?
-stby_mask가 chip boundary에 맞는 rectangular 영역인가?
-valid_test_mask = 0인 곳과 stby_mask = 1인 곳이 일치하는가?
-pattern_masks가 multi-label overlap을 허용하는가?
-grade 값이 0~7 범위인가?
-net die count가 목표 net die 수에 가까운가?
-metadata와 array shape가 일치하는가?
+gray value가 0, 31, 151, 175, 191, 207, 223, 255 중 하나인가?
+255 전체 chip은 stby로 분리되는가?
+일부 pixel만 255인 chip은 Grade 7 fail로 유지되는가?
+제품별 chip block과 grid가 PNG shape와 맞는가?
+wafer_mask가 실제 net die layout과 맞는가?
 ```
 
-## 3. Realism Metric
+## 2. 누끼/마스크 검증
 
-실제 데이터를 repo로 가져올 수 없어도, 보안 환경에서 같은 feature extractor를 실행해 집계 통계만 비교할 수 있다.
-
-PNG raw 입력 sanity:
+누끼 asset은 family별로 저장한다.
 
 ```text
-허용 gray value가 0, 31, 151, 175, 191, 207, 223, 255뿐인가?
-chip 전체가 255인 영역만 stby로 분리되는가?
-일부 pixel만 255인 영역은 Grade 7로 유지되는가?
-제품별 chip_blocks와 grid가 PNG shape와 정확히 맞는가?
-wafer_mask_strategy가 제품 layout과 맞는가?
+data/masks/blob/
+data/masks/ring/
+data/masks/scratch/
+data/masks/edge/
+data/masks/random/
 ```
 
-비교 대상 metric:
+검증 기준:
+
+- 한 defect가 여러 조각으로 저장되지 않았는지 확인한다.
+- ring처럼 연결된 패턴은 하나의 component 또는 하나의 asset으로 보존한다.
+- 사람이 따기 어려운 random/edge는 editor asset만 고집하지 않고 코드형 generator를 허용한다.
+- mask preview에서 원본 wafer, 선택 영역, 저장된 binary mask를 함께 확인한다.
+
+## 3. 합성 데이터 검증
+
+합성 데이터는 반드시 image, label mask, metadata를 같이 만든다.
 
 ```text
-grade histogram
-stby chip count distribution
-stby area ratio
-fail density
-grade-weighted severity
-radial density profile
-angular density profile
-edge density ratio
-edge-chip outer-face gradient
-local hotspot distribution
-shot-relative contrast
-nearest-neighbor distance distribution
-tile-level severity distribution
+outputs/synthetic_dataset/<run>/images/*.png
+outputs/synthetic_dataset/<run>/masks/*.npz
+outputs/synthetic_dataset/<run>/metadata.csv
+outputs/synthetic_dataset/<run>/preview.html
 ```
 
-Visual realism 확인 기준:
+필수 metadata:
 
 ```text
-wafer body가 preview에서 즉시 보여야 한다.
-edge는 smooth circle보다 net die/chip layout을 반영한 stair-step boundary가 적합하다.
-wafer 밖 영역과 in-wafer Grade 0은 mask로 구분되어야 한다.
-scratch/ring/edge/local은 실제 FBM처럼 sparse/noisy field 안에 묻힌 신호에 가까워야 한다.
-stby는 왜곡 요인이자 의미 있는 패턴 신호로 둘 다 검토되어야 한다.
+sample_id
+base_wafer_id
+family_list
+family_count
+mask_path
+image_path
+center_x
+center_y
+area_pixels
+severity_before
+severity_after
 ```
 
-## 4. 전문가 Review Scorecard
+## 4. 모델 검증
 
-각 synthetic batch에 대해 사용자가 1~5점으로 평가한다.
+추천 baseline은 U-Net 계열 multi-label segmentation이다. 한 wafer에 여러 defect family가 동시에 있을 수 있으므로 softmax 단일 클래스보다 sigmoid multi-channel output이 적합하다.
+
+출력:
 
 ```text
-visual realism
-grade realism
-stby realism
-scratch realism
-ring realism
-edge realism
-local/random realism
-shot-relative realism
-overlap realism
-overall usefulness
+family별 probability mask
+family별 area / centroid / bbox / radial position / angular position
+wafer-level family score
+embedding vector
+top-k similar wafer
 ```
 
-점수 기준:
+평가 metric:
 
 ```text
-1 = 실제와 거의 다름
-2 = 일부 요소만 유사
-3 = prototype 개발용으로는 가능
-4 = 실제와 상당히 유사
-5 = 실제와 구분하기 어려운 수준
-```
-
-## 5. Real Label 없이 방법론 검증
-
-현재 핵심 검증은 FBM 자체에서 정보를 뽑아 유사 wafer를 찾을 수 있는지다.
-
-검증 항목:
-
-```text
-1. 실제 데이터용 feature만 사용
-   - synthetic mask ratio와 label은 feature에서 제외
-   - 실제 wafer에서도 계산 가능한 feature만 사용
-
-2. Similarity search
-   - nearest-neighbor의 synthetic validation label Jaccard가 random pair보다 높은지 확인
-   - top-k를 3, 5, 10으로 바꿔도 lift가 유지되는지 확인
-   - 전체 평균 lift와 class별 lift를 분리해서 본다.
-   - 전체 lift가 높아도 scratch/local 같은 작은 결함 class가 약하면 “정밀 결함 분해 완료”로 해석하지 않는다.
-
-3. Grouping stability
-   - feature subset/noise 반복 실험
-   - co-association heatmap
-   - 권장 coarse K 확인
-
-4. Feature family ablation
-   - edge, shot, stby, radial, angular, morphology feature를 제거했을 때 검색 품질 변화 확인
-   - 관련 defect 관점의 lift가 예상대로 낮아지는지 확인
-   - feature 제거 후 lift가 오히려 올라가는 경우는 해당 feature가 잡음일 수 있으므로 보강 또는 제거 후보로 표시한다.
-
-5. Visual nearest-neighbor review
-   - query wafer와 top neighbor gallery 생성
-   - 전문가가 같은 계열로 볼 수 있는지 확인
-   - 특히 scratch/local/ring은 synthetic label metric보다 expert visual review를 더 중요하게 본다.
-```
-
-## 6. Segmentation 검증
-
-Synthetic label을 사용할 수 있는 다음 단계에서는 segmentation baseline을 검증한다.
-
-```text
-per-class IoU
-Dice/F1
-overlap detection recall
+per-family Dice/F1
+per-family IoU
 small defect recall
-stby-hidden origin recall
-clock-position report consistency
+overlap defect recall
+centroid distance
+area error
+top-k retrieval accept rate
+missed major defect rate
 ```
 
-## 7. 보안 경계
+## 5. 실제 리뷰 검증
 
-Repo에는 실제 wafer image, raw array, lot/process 민감 정보를 저장하지 않는다.
+실제 wafer에는 완전한 ground truth가 없을 수 있다. 그래서 전문가 리뷰를 모델 개선 루프의 중심으로 둔다.
 
-허용 가능한 정보:
+리뷰 항목:
 
 ```text
-익명화된 집계 통계
-수동으로 작성한 realism feedback
-synthetic config template
-feature schema
-code
+query_sample_id
+model_family
+reviewer_family
+position_correct
+mask_quality
+missed_major_defect
+false_positive_family
+comment
 ```
+
+판정 기준:
+
+- `accepted_match_rate`: top-k 또는 모델 제안이 같은 계열로 보이는 비율
+- `query_topk_accept_rate`: query별 최소 1개 이상 납득 가능한 neighbor가 있는 비율
+- `missed_major_defect_rate`: 사람이 볼 때 큰 defect를 모델이 놓친 비율
+- `family_confusion`: 어떤 family끼리 자주 헷갈리는지
+
+## 6. 개선 루프
+
+1. 실제 FBM batch를 넣는다.
+2. 리포트와 preview를 본다.
+3. 틀린 family, 위치 오류, 누락 defect를 CSV로 기록한다.
+4. 필요한 family의 mask asset 또는 generator를 보강한다.
+5. synthetic dataset을 다시 만든다.
+6. segmentation 모델과 embedding 검색을 다시 평가한다.
+
+이 루프가 쌓이면 “무엇을 잘 못하는지”가 보이고, 그때부터는 딥러닝 모델 개선이 실제 업무 문제와 직접 연결된다.

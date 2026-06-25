@@ -1,8 +1,4 @@
-"""Extract observable features from real-like unlabeled FBM samples.
-
-The input manifest must point to local files outside git-tracked real data.
-Only derived feature/report outputs should be written by this script.
-"""
+"""Extract observable features from real-like unlabeled FBM samples."""
 
 from __future__ import annotations
 
@@ -10,7 +6,6 @@ import argparse
 import csv
 import html
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,6 +15,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from wafermap.cli import positive_int
 from wafermap.data import (
     PATTERN_CLASSES,
     SyntheticSample,
@@ -34,6 +30,7 @@ from wafermap.features import (
     shared_observable_feature_names as shared_compact_feature_names,
 )
 from wafermap.reporting import build_template_rows, write_template_csv
+from wafermap.reporting.files import relative_path
 from wafermap.real import (
     SOURCE_TYPE_NPZ_SEMANTIC_ARRAYS,
     SOURCE_TYPE_PNG_GRAYSCALE_RAW,
@@ -47,16 +44,6 @@ from wafermap.real import (
 )
 
 LABEL_PREFIX = "label_"
-OUTPUT_ROOT = ROOT / "outputs"
-
-def positive_int(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a positive integer") from exc
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -74,11 +61,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Copy reference label_* columns into the neighbor CSV. Use only with approved synthetic references.",
     )
-    parser.add_argument(
-        "--allow-output-outside-root",
-        action="store_true",
-        help="Allow derived outputs outside outputs/. Use only for isolated synthetic smoke tests.",
-    )
     return parser.parse_args(argv)
 
 
@@ -93,23 +75,8 @@ def resolve_manifest_path(path: str | Path, manifest_path: Path) -> Path:
     return (manifest_path.parent / path).resolve()
 
 
-def _is_inside(path: Path, parent: Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _ensure_real_input_outside_workspace(path: Path, entry: dict[str, Any], label: str) -> None:
-    if _is_inside(path, ROOT) and entry.get("allow_workspace_input") is not True:
-        raise ValueError(f"{label} must live outside the workspace for real inputs: {path}")
-
-
-def ensure_output_path(path: Path, *, allow_outside_root: bool = False) -> Path:
+def resolve_output_path(path: Path) -> Path:
     resolved = path.resolve()
-    if not allow_outside_root and not _is_inside(resolved, OUTPUT_ROOT):
-        raise ValueError(f"Output path must be under {OUTPUT_ROOT}: {path}")
     return resolved
 
 
@@ -127,9 +94,6 @@ def load_real_like_sample(entry: dict[str, Any], manifest_path: Path) -> Synthet
         raise ValueError(f"Unsupported source_type: {source_type}")
 
     arrays_path = resolve_manifest_path(entry["arrays_npz"], manifest_path)
-    _ensure_real_input_outside_workspace(arrays_path, entry, "arrays_npz")
-    if entry.get("metadata_json"):
-        _ensure_real_input_outside_workspace(resolve_manifest_path(entry["metadata_json"], manifest_path), entry, "metadata_json")
     key_map = {
         "severity": "severity",
         "wafer_mask": "wafer_mask",
@@ -190,7 +154,6 @@ def load_real_like_sample(entry: dict[str, Any], manifest_path: Path) -> Synthet
 
 def _load_png_grayscale_raw_sample(entry: dict[str, Any], manifest_path: Path) -> SyntheticSample:
     png_path = resolve_manifest_path(entry["png_path"], manifest_path)
-    _ensure_real_input_outside_workspace(png_path, entry, "png_path")
     raw = load_png_gray_values(png_path)
     severity = severity_from_png_gray(raw)
     metadata = metadata_from_png_entry(entry, raw)
@@ -216,12 +179,6 @@ def _load_png_grayscale_raw_sample(entry: dict[str, Any], manifest_path: Path) -
         chip_index=chip_index,
         metadata=metadata,
     )
-
-
-def _array_or_default(arrays: Any, key: str | None, default: np.ndarray) -> np.ndarray:
-    if key and key in arrays.files:
-        return arrays[key]
-    return default
 
 
 def _require_array(arrays: Any, key: str, logical_name: str) -> np.ndarray:
@@ -520,10 +477,6 @@ def write_sanity_json(path: Path, records: list[dict[str, Any]], feature_drift: 
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def relpath(target: Path, base_file: Path) -> str:
-    return Path(os.path.relpath(Path(target).resolve(), base_file.resolve().parent)).as_posix()
-
-
 def html_report(
     sanity_records: list[dict[str, Any]],
     features_out: Path,
@@ -547,12 +500,12 @@ def html_report(
         for item in sanity_records
     )
     neighbor_link = (
-        f'<li><a href="{html.escape(relpath(neighbors_out, report_out))}">Nearest-neighbor CSV</a></li>'
+        f'<li><a href="{html.escape(relative_path(neighbors_out, report_out))}">Nearest-neighbor CSV</a></li>'
         if neighbors_out is not None
         else ""
     )
     review_template_link = (
-        f'<li><a href="{html.escape(relpath(review_template_out, report_out))}">Expert review form CSV</a></li>'
+        f'<li><a href="{html.escape(relative_path(review_template_out, report_out))}">Expert review form CSV</a></li>'
         if review_template_out is not None
         else ""
     )
@@ -596,7 +549,7 @@ def html_report(
 </head>
 <body>
   <h1>Real-Unlabeled FBM Feature Report</h1>
-  <div class="note">이 리포트는 보안 raw wafer를 저장하지 않고 observable feature와 sanity status만 남기는 workflow용이다. Stby는 Grade 7이 아니라 unobserved missing-test mask로 분리되어야 한다.</div>
+  <div class="note">이 리포트는 real/unlabeled wafer 입력에서 observable feature와 sanity status를 확인하는 workflow용이다. Stby는 Grade 7이 아니라 unobserved missing-test mask로 분리되어야 한다.</div>
   <div class="summary">
     <div class="card"><div>Samples</div><div class="metric">{len(sanity_records)}</div></div>
     <div class="card"><div>PASS</div><div class="metric">{passed}</div></div>
@@ -610,8 +563,8 @@ def html_report(
   {drift_section}
   <h2>Outputs</h2>
   <ul>
-    <li><a href="{html.escape(relpath(features_out, report_out))}">Observable feature CSV</a></li>
-    <li><a href="{html.escape(relpath(sanity_out, report_out))}">Sanity JSON</a></li>
+    <li><a href="{html.escape(relative_path(features_out, report_out))}">Observable feature CSV</a></li>
+    <li><a href="{html.escape(relative_path(sanity_out, report_out))}">Sanity JSON</a></li>
     {neighbor_link}
     {review_template_link}
   </ul>
@@ -626,14 +579,11 @@ def main() -> None:
     manifest = read_json(manifest_path)
     validate_manifest(manifest)
     entries = manifest.get("samples", [])
-    features_out = ensure_output_path(Path(args.features_out), allow_outside_root=args.allow_output_outside_root)
-    sanity_out = ensure_output_path(Path(args.sanity_out), allow_outside_root=args.allow_output_outside_root)
-    report_out = ensure_output_path(Path(args.report_out), allow_outside_root=args.allow_output_outside_root)
-    neighbors_out = ensure_output_path(Path(args.neighbors_out), allow_outside_root=args.allow_output_outside_root)
-    review_template_out = ensure_output_path(
-        Path(args.review_template_out),
-        allow_outside_root=args.allow_output_outside_root,
-    )
+    features_out = resolve_output_path(Path(args.features_out))
+    sanity_out = resolve_output_path(Path(args.sanity_out))
+    report_out = resolve_output_path(Path(args.report_out))
+    neighbors_out = resolve_output_path(Path(args.neighbors_out))
+    review_template_out = resolve_output_path(Path(args.review_template_out))
 
     samples = [load_real_like_sample(entry, manifest_path) for entry in entries]
     sanity_records = []

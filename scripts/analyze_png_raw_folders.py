@@ -16,10 +16,8 @@ existing real-unlabeled feature extraction workflow on that manifest.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
-import secrets
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -30,6 +28,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from wafermap.cli import positive_int
 from wafermap.real import SOURCE_TYPE_PNG_GRAYSCALE_RAW, load_png_gray_values, manifest_payload, resolve_png_geometry
 
 PARSER_NAME = "png_raw_folder_batch"
@@ -51,26 +50,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--out-dir", default="outputs/reports/png_raw_batch")
     parser.add_argument(
         "--manifest-out",
-        help="Private manifest output path. Defaults to outputs/private/<out-dir-name>_manifest.json.",
-    )
-    parser.add_argument(
-        "--allow-workspace-manifest-output",
-        action="store_true",
-        help="Allow --manifest-out under the workspace outside outputs/private. Use only for local smoke tests.",
-    )
-    parser.add_argument(
-        "--allow-output-outside-root",
-        action="store_true",
-        help="Allow derived report outputs outside outputs/. Use only for isolated synthetic smoke tests.",
+        help="Manifest output path. Defaults to outputs/manifests/<out-dir-name>_manifest.json.",
     )
     parser.add_argument("--glob", default="*.png", help="PNG filename pattern inside each product folder.")
     parser.add_argument("--no-recursive", action="store_true", help="Only scan PNGs directly under each product folder.")
     parser.add_argument("--limit-per-product", type=positive_int)
-    parser.add_argument(
-        "--use-folder-names",
-        action="store_true",
-        help="Disabled for real data security; sample_id always uses opaque generated aliases.",
-    )
     parser.add_argument(
         "--geometry-json",
         help=(
@@ -84,35 +68,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("centered_ellipse_from_png", "full_grid_from_png"),
     )
     parser.add_argument("--orientation", default="not_rotated")
-    parser.add_argument(
-        "--allow-workspace-input",
-        action="store_true",
-        help="Allow PNG inputs under the current workspace. Useful for local smoke tests only.",
-    )
-    parser.add_argument(
-        "--production-run",
-        action="store_true",
-        help=(
-            "Enable real-data production guardrails: raw input outside workspace, explicit per-product "
-            "geometry with actual_net_die, private manifest, reports output, and reference features."
-        ),
-    )
     parser.add_argument("--manifest-only", action="store_true", help="Only write the manifest; do not run extraction.")
     parser.add_argument("--reference-features", help="Optional reference feature CSV for nearest-neighbor review.")
     parser.add_argument("--cpu-model", help="Optional CPU encoder .npz model for unlabeled scoring after extraction.")
     parser.add_argument("--top-k", type=positive_int, default=5)
     parser.add_argument("--include-reference-labels", action="store_true")
     return parser.parse_args(argv)
-
-
-def positive_int(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a positive integer") from exc
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
 
 
 def load_geometry_json(path: str | None) -> dict[str, dict[str, Any]]:
@@ -130,10 +91,7 @@ def discover_products(
     glob_pattern: str,
     recursive: bool,
     limit_per_product: int | None,
-    use_folder_names: bool,
 ) -> list[ProductGroup]:
-    if use_folder_names:
-        raise ValueError("--use-folder-names is disabled; sample_id must stay opaque for shareable outputs")
     if not raw_root.exists() or not raw_root.is_dir():
         raise ValueError(f"raw-root must be an existing directory: {raw_root}")
 
@@ -149,7 +107,9 @@ def discover_products(
             png_paths = png_paths[:limit_per_product]
         if not png_paths:
             continue
-        alias = opaque_product_alias()
+        alias = safe_token(product_dir.name)
+        if any(group.alias == alias for group in groups):
+            alias = f"{alias}_{idx:02d}"
         groups.append(ProductGroup(product_dir.name, alias, product_dir.resolve(), [path.resolve() for path in png_paths]))
 
     if not groups:
@@ -162,20 +122,12 @@ def safe_token(value: str) -> str:
     return token or "product"
 
 
-def stable_hash(value: str, length: int = 10) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:length]
-
-
-def opaque_product_alias() -> str:
-    return f"product_{secrets.token_hex(5)}"
-
-
 def stable_wafer_alias(group: ProductGroup, png_path: Path) -> str:
     try:
-        rel = png_path.relative_to(group.path).as_posix()
+        rel_path = png_path.relative_to(group.path)
     except ValueError:
-        rel = png_path.name
-    return f"w{stable_hash(rel.lower())}"
+        rel_path = Path(png_path.name)
+    return safe_token(rel_path.with_suffix("").as_posix().replace("/", "_"))
 
 
 def geometry_for_product(
@@ -188,52 +140,6 @@ def geometry_for_product(
         validate_product_png_shapes(group, geometry)
         return geometry
     return infer_geometry_from_product_pngs(group)
-
-
-def validate_production_run(
-    args: argparse.Namespace,
-    *,
-    raw_root: Path,
-    out_dir: Path,
-    manifest_path: Path,
-    groups: list[ProductGroup],
-    geometry_by_product: dict[str, dict[str, Any]],
-) -> None:
-    if not args.production_run:
-        return
-    if args.allow_workspace_input:
-        raise ValueError("--production-run forbids --allow-workspace-input")
-    if args.allow_workspace_manifest_output:
-        raise ValueError("--production-run forbids --allow-workspace-manifest-output")
-    if args.allow_output_outside_root:
-        raise ValueError("--production-run forbids --allow-output-outside-root")
-    if args.manifest_only:
-        raise ValueError("--production-run must generate reports, not manifest-only output")
-    if _is_inside(raw_root, ROOT):
-        raise ValueError("--production-run raw-root must be outside the workspace")
-    reports_root = (ROOT / "outputs" / "reports").resolve()
-    if not _is_inside(out_dir, reports_root):
-        raise ValueError("--production-run out-dir must be under outputs/reports")
-    private_root = (ROOT / "outputs" / "private").resolve()
-    if not _is_inside(manifest_path, private_root):
-        raise ValueError("--production-run manifest-out must be under outputs/private")
-    if not args.geometry_json:
-        raise ValueError("--production-run requires --geometry-json with explicit product geometry")
-    if not args.reference_features:
-        raise ValueError("--production-run requires --reference-features for reviewer nearest-neighbor output")
-
-    missing = []
-    invalid_net_die = []
-    for group in groups:
-        explicit = geometry_by_product.get(group.folder_name) or geometry_by_product.get(group.alias)
-        if explicit is None:
-            missing.append(group.folder_name)
-        elif int(explicit.get("actual_net_die", 0)) <= 0:
-            invalid_net_die.append(group.folder_name)
-    if missing:
-        raise ValueError(f"--production-run geometry-json missing products: {', '.join(missing[:10])}")
-    if invalid_net_die:
-        raise ValueError(f"--production-run geometry-json requires positive actual_net_die: {', '.join(invalid_net_die[:10])}")
 
 
 def normalize_geometry(payload: dict[str, Any]) -> dict[str, Any]:
@@ -324,7 +230,6 @@ def build_manifest(
     geometry_by_product: dict[str, dict[str, Any]],
     wafer_mask_strategy: str,
     orientation: str,
-    allow_workspace_input: bool,
 ) -> dict[str, Any]:
     samples: list[dict[str, Any]] = []
     for group in groups:
@@ -334,7 +239,6 @@ def build_manifest(
                 "sample_id": f"{group.alias}_{stable_wafer_alias(group, png_path)}",
                 "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
                 "png_path": str(png_path),
-                "pseudonymized": True,
                 "parser_name": PARSER_NAME,
                 "parser_version": PARSER_VERSION,
                 "orientation": orientation,
@@ -344,8 +248,6 @@ def build_manifest(
             }
             if "actual_net_die" in geometry:
                 entry["actual_net_die"] = geometry["actual_net_die"]
-            if allow_workspace_input:
-                entry["allow_workspace_input"] = True
             samples.append(entry)
     return manifest_payload(samples)
 
@@ -353,6 +255,17 @@ def build_manifest(
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def resolve_output_dir(path: str | Path) -> Path:
+    path = Path(path)
+    return path.resolve() if path.is_absolute() else (ROOT / path).resolve()
+
+
+def manifest_output_path(manifest_out: str | None, out_dir: Path) -> Path:
+    if manifest_out:
+        return Path(manifest_out).resolve()
+    return (ROOT / "outputs" / "manifests" / f"{safe_token(out_dir.name)}_manifest.json").resolve()
 
 
 def utc_now_iso() -> str:
@@ -376,40 +289,17 @@ def build_batch_metadata(
     return {
         "schema_version": "png_raw_batch_metadata/v1",
         "generated_at": utc_now_iso(),
-        "production_run": bool(args.production_run),
         "product_count": len(groups),
         "png_sample_count": sum(len(group.png_paths) for group in groups),
         "geometry_contract": "explicit" if args.geometry_json else "inferred_from_stby_smoke",
         "explicit_geometry_product_count": explicit_count,
         "actual_net_die_product_count": actual_net_die_count,
         "wafer_mask_strategy": args.wafer_mask_strategy,
-        "manifest_location": "outputs/private" if _is_inside(manifest_path, ROOT / "outputs" / "private") else "external_or_test",
+        "manifest_path": str(manifest_path),
         "reference_features": bool(args.reference_features),
         "cpu_model_scoring": bool(args.cpu_model),
         "top_k": int(args.top_k),
     }
-
-
-def validate_manifest_output_path(path: Path, *, allow_workspace_manifest_output: bool) -> None:
-    if not _is_inside(path, ROOT):
-        return
-    private_root = (ROOT / "outputs" / "private").resolve()
-    if _is_inside(path, private_root):
-        return
-    if allow_workspace_manifest_output:
-        return
-    raise ValueError(
-        "--manifest-out inside the workspace must be under outputs/private unless "
-        "--allow-workspace-manifest-output is set"
-    )
-
-
-def _is_inside(path: Path, parent: Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
 
 
 def run_extraction(args: argparse.Namespace, manifest_path: Path, out_dir: Path) -> None:
@@ -435,8 +325,6 @@ def run_extraction(args: argparse.Namespace, manifest_path: Path, out_dir: Path)
         command.extend(["--reference-features", args.reference_features])
     if args.include_reference_labels:
         command.append("--include-reference-labels")
-    if args.allow_output_outside_root:
-        command.append("--allow-output-outside-root")
     subprocess.run(command, check=True)
 
 
@@ -461,21 +349,18 @@ def run_cpu_scoring(args: argparse.Namespace, manifest_path: Path, out_dir: Path
         "--top-k",
         str(args.top_k),
     ]
-    if args.allow_output_outside_root:
-        command.append("--allow-output-outside-root")
     subprocess.run(command, check=True)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     raw_root = Path(args.raw_root).resolve()
-    out_dir = (ROOT / args.out_dir).resolve() if not Path(args.out_dir).is_absolute() else Path(args.out_dir).resolve()
+    out_dir = resolve_output_dir(args.out_dir)
     groups = discover_products(
         raw_root,
         glob_pattern=args.glob,
         recursive=not args.no_recursive,
         limit_per_product=args.limit_per_product,
-        use_folder_names=args.use_folder_names,
     )
     geometry_by_product = load_geometry_json(args.geometry_json)
     manifest = build_manifest(
@@ -483,24 +368,8 @@ def main(argv: list[str] | None = None) -> None:
         geometry_by_product=geometry_by_product,
         wafer_mask_strategy=args.wafer_mask_strategy,
         orientation=args.orientation,
-        allow_workspace_input=args.allow_workspace_input,
     )
-    if args.manifest_out:
-        manifest_path = Path(args.manifest_out).resolve()
-    else:
-        manifest_path = (ROOT / "outputs" / "private" / f"{safe_token(out_dir.name)}_manifest.json").resolve()
-    validate_production_run(
-        args,
-        raw_root=raw_root,
-        out_dir=out_dir,
-        manifest_path=manifest_path,
-        groups=groups,
-        geometry_by_product=geometry_by_product,
-    )
-    validate_manifest_output_path(
-        manifest_path,
-        allow_workspace_manifest_output=args.allow_workspace_manifest_output,
-    )
+    manifest_path = manifest_output_path(args.manifest_out, out_dir)
     batch_metadata = build_batch_metadata(
         args,
         groups=groups,

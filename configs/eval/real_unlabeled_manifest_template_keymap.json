@@ -3,11 +3,10 @@
   "feature_schema_version": "observable_fbm_features/v1",
   "samples": [
     {
-      "sample_id": "product_aaaaaaaaaa_wcccccccccc",
+      "sample_id": "product_a_wafer_002",
       "source_type": "npz_semantic_arrays",
-      "arrays_npz": "D:/secure_fbm/real_like_002_arrays.npz",
-      "pseudonymized": true,
-      "parser_name": "secure_fbm_parser",
+      "arrays_npz": "data/raw/product_a/wafer_002_arrays.npz",
+      "parser_name": "fbm_npz_parser",
       "parser_version": "0.1.0",
       "orientation": "not_rotated",
       "array_keys": {

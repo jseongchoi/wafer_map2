@@ -1,387 +1,122 @@
 # 실험과 판단 기록
 
-이 문서는 지금까지 어떤 기법을 시도했고, 어떤 이유로 현재 방향을 선택했는지 설명한다.
-
-빠르게 전체 맥락만 보고 싶으면 [프로젝트 개요](project_overview.md)와 [Real Wafer 리뷰 체크리스트](real_wafer_review_checklist.md)를 먼저 보면 된다. 이 문서는 "왜 그렇게 판단했는가"를 확인할 때 읽는다.
-
-## 핵심 결론
-
-현재까지의 결론은 다음이다.
-
-```text
-실제 wafer에서도 계산 가능한 feature + nearest-neighbor 검색은 1차 기준선으로 쓸 만하다.
-단순 resize representation은 전체 유사 wafer 검색의 대체재로 부족하다.
-patch/curve proposal은 최종 판정 도구가 아니라 리뷰 후보를 줄이는 보조 도구다.
-scratch/local은 rule/proposal 튜닝보다 morphology 또는 segmentation 쪽으로 분리하는 편이 맞다.
-최종 판단은 실제 wafer 전문가 리뷰를 통과해야 한다.
-```
-
-따라서 현재 주 경로는 다음이다.
-
-```text
-보안 환경의 실제 wafer .npz
--> sanity / feature drift 확인
--> compact feature 추출
--> nearest-neighbor 검색
--> 전문가 리뷰 양식
--> 실패 유형 / 다음 작업 정리
-```
-
-## 1. 문제 정의와 데이터 형식
-
-처음부터 목표는 불량 하나를 맞히는 분류 모델이 아니었다.
-
-목표는 1채널 고해상도 Wafer Fail Bit Map에서 실제 wafer에도 계산 가능한 feature 표현을 만들고, 그 표현으로 유사 wafer 검색, 관심 불량 검색, defect score table, 후속 작업을 가능하게 하는 것이다.
-
-그래서 먼저 분석에 필요한 입력 형식을 정했다.
-
-- `severity`: Grade 0~7
-- `wafer_mask`: wafer 내부와 wafer 밖 영역 구분
-- `valid_test_mask`: 실제 test 여부
-- `stby_mask`: stby fail chip 영역
-- `chip_index`: 권장 die/chip id
-
-중요한 결정:
-
-- stby는 Grade 7로 섞지 않는다.
-- wafer 밖 영역과 in-wafer Grade 0은 `wafer_mask`로 구분한다.
-- 합성 데이터의 oracle인 `pattern_masks`, `pattern_intensity`, `label_*`, `*_mask_ratio`는 검증용이다.
-- 실제 inference feature에는 합성 데이터 oracle을 넣지 않는다.
+이 문서는 WaferMap 프로젝트가 왜 현재 구조로 정리됐는지 설명한다. 결론부터 말하면, 단순 rule 기반 feature만으로 끝내기보다 “실제 FBM에서 defect mask asset을 만들고, 그 asset으로 라벨이 있는 합성 데이터를 만들고, multi-label segmentation과 embedding retrieval로 확장하는 구조”가 현재 목표에 가장 맞다.
 
 관련 문서:
 
-- [데이터 형식](data_schema.md)
-- [불량 패턴 정리](pattern_taxonomy.md)
-
-## 2. 합성 FBM Generator
-
-실제 wafer raw data를 repo에 둘 수 없기 때문에, 먼저 합성 데이터로 방법론을 검증했다.
-
-생성한 계열:
-
-- Grade 0~7 severity
-- wafer 밖 영역 / 실제 test 영역 / stby 분리
-- edge gradient와 localized edge sector
-- shot-relative 반복 패턴
-- local hotspot
-- stby-origin 또는 stby가 origin을 가리는 형태
-- ring / partial ring / center arc
-- scratch-like arc 또는 radial line
-- mixed overlap
-
-이 generator의 역할은 "실제와 완전히 같은 wafer 생산기"가 아니다. 다음을 확인하기 위한 검증 장치다.
-
-- feature extractor가 입력 형식을 제대로 지키는가
-- oracle label 없이 실제 데이터용 feature만으로 유사 wafer 검색 신호가 생기는가
-- defect family별로 어떤 feature가 강하고 약한가
-- 실제 리뷰 전에 전체 절차가 끝까지 연결되는가
-
-주의할 점:
-
-- 합성 데이터 성능은 실제 wafer 성능 인증이 아니다.
-- generator와 feature extractor가 같은 가정을 공유할 수 있으므로 실제 wafer 전문가 리뷰가 필요하다.
-
-관련 문서:
-
-- [검증 방법](validation_protocol.md)
-- [로드맵](roadmap.md)
-
-## 3. 실제 데이터용 Feature 기준선
-
-첫 기준선은 사람이 해석할 수 있고 실제 wafer에서도 계산 가능한 feature다.
-
-주요 feature family:
-
-- fail density와 grade-weighted severity
-- stby ratio
-- radial profile
-- angular profile
-- edge density와 edge sector contrast
-- ring radial peak
-- scratch angular peak proxy
-- local hotspot / morphology proxy
-- shot-relative lower-left, bottom-edge, left-edge contrast
-
-전체 유사 wafer 검색 기준:
-
-```text
-compact feature 50개
-```
-
-전체 검색에서 제외하는 것:
-
-```text
-label_*
-*_mask_ratio
-pattern_masks
-pattern_intensity
-polar_*
-stby_polar_*
-```
-
-`polar_*`, `stby_polar_*`는 위치가 중요한 검색에서만 조건부로 쓴다. 예를 들어 `class_location`, `feature_key`처럼 위치 자체가 검색 조건인 경우다.
-
-구현 위치:
-
-- `src/wafermap/features/selection.py`
-- `src/wafermap/features/wafer_vector.py`
-
-## 4. 전체 유사 Wafer 검색
-
-실험 방법:
-
-1. 합성 데이터 feature CSV를 만든다.
-2. compact feature만 고른다.
-3. feature를 표준화한다.
-4. Euclidean nearest-neighbor를 계산한다.
-5. synthetic label Jaccard는 검증 metric으로만 사용한다.
-6. random neighbor 대비 top-k lift를 본다.
-
-확인된 결과:
-
-- scale 155장 top-k retrieval lift 약 1.36x
-- holdout 120장 top-k retrieval lift 약 1.40x
-
-해석:
-
-- 실제 데이터용 feature만으로도 비슷한 wafer를 더 가깝게 찾는 신호가 있다.
-- 이것은 최종 실제 wafer 성능 인증이 아니라 1차 기준선 후보의 근거다.
-- scratch/local처럼 작은 구조 결함은 전체 lift가 좋아도 별도로 봐야 한다.
-
-공통화한 구현:
-
-- `src/wafermap/evaluation/nearest.py`
-- `src/wafermap/features/selection.py`
-
-## 5. 관심 불량별 검색
-
-전체 유사도 검색과 별도로 관심 불량별 검색을 실험했다.
-
-기준:
-
-- `class`
-- `class_location`
-- `feature_key`
-
-판단:
-
-- class/class_location/feature_key 기준에서 random 대비 신호가 있었다.
-- 위치가 중요한 target에서는 polar feature를 조건부로 쓸 수 있다.
-- 단, 전체 유사 wafer 검색에는 polar feature를 넣지 않는다.
-
-이 결정이 중요한 이유:
-
-- 전체 유사도와 위치-aware 검색은 목적이 다르다.
-- 전체 feature에 위치 feature를 섞으면 실제 wafer 검색이 위치 편향에 과하게 끌릴 수 있다.
-- 관심 불량 검색에서는 위치 자체가 검색 조건이므로 위치 feature가 의미를 가진다.
-
-관련 문서:
-
+- [프로젝트 개요](project_overview.md)
+- [데이터 흐름 가이드](fbm_data_flow_guide.md)
+- [패턴 asset 파이프라인](fbm_pattern_asset_pipeline.md)
 - [모델링 전략](modeling_strategy.md)
-- [전문가 리뷰 절차](expert_review_protocol.md)
+- [검증 방법](validation_protocol.md)
 
-## 6. 단순 Resize Representation 비교
+## 1. 초기 접근: rule feature와 유사 wafer 검색
 
-단순 resize representation도 비교했다.
+처음에는 wafer map에서 radial, angular, edge, hotspot, stby, density 같은 feature를 뽑고 nearest-neighbor 검색으로 비슷한 wafer를 찾는 방향을 검토했다.
 
-아이디어:
+좋았던 점:
 
-- wafer image를 작은 grid로 줄인다.
-- 줄인 벡터로 nearest-neighbor 검색을 수행한다.
+- 라벨이 없어도 시작할 수 있다.
+- 실제 wafer batch를 넣으면 sanity, drift, top-k neighbor를 바로 볼 수 있다.
+- 전문가 리뷰용 후보를 빠르게 만들 수 있다.
 
-판단:
+한계:
 
-- 전체 유사 wafer 검색의 대체재로는 부적합하다.
-- 고해상도 wafer의 stby, edge/local/ring/scratch 의미 분해를 보장하지 않는다.
-- 현업 리뷰에서 "왜 가까운지" 설명하기 어렵다.
+- “어느 위치에 어떤 defect family가 있다”는 segmentation mask를 직접 주지는 않는다.
+- blob, scratch, ring, random이 섞이면 수치 feature만으로 설명이 부족하다.
+- 모델 학습용 정답 mask가 없으면 딥러닝 모델의 실패 원인을 해석하기 어렵다.
 
-따라서 resize-only representation은 주 경로에서 제외했다.
+따라서 feature retrieval은 버리는 것이 아니라, segmentation 모델 이후의 embedding 검색과 리뷰 후보 생성에 붙이는 보조 축으로 남긴다.
 
-## 7. Patch Proposal
+## 2. resize-only representation
 
-patch proposal은 edge/local/stby 후보 영역을 줄이는 보조 실험이었다.
-
-역할:
-
-- 전체 wafer를 다 보지 않고 의심 영역 후보를 만든다.
-- edge/local/stby 리뷰 후보를 좁힌다.
+`resize-only representation`은 원본 FBM을 단순 resize해서 모델 입력으로 넣는 접근이다.
 
 판단:
 
-- proposal recall을 최종 성능처럼 해석하지 않는다.
-- proposal 튜닝을 계속 깊게 파는 것은 현재 목표와 맞지 않다.
-- 주 경로는 라벨 없는 실제 wafer 처리 절차와 전문가 리뷰다.
+- 빠른 baseline으로는 유용하다.
+- 하지만 wafer outside, stby, Grade 0 정상 영역, Grade 7 fail 영역이 섞이면 모델이 잘못된 shortcut을 배울 수 있다.
+- 절대좌표가 중요한 FBM 특성상 x/y coordinate channel과 wafer mask를 함께 주는 편이 더 타당하다.
 
-## 8. Curve Proposal
-
-curve proposal은 ring/center arc 후보를 찾기 위한 보조 실험이었다.
-
-역할:
-
-- radial profile과 curve 후보로 ring/arc 리뷰 후보를 만든다.
-- ring radius/width mismatch 같은 실패 유형을 리뷰에서 볼 수 있게 한다.
-
-판단:
-
-- curve proposal은 ring/center arc 후보 축소용이다.
-- 전체 유사 wafer 검색의 대체재가 아니다.
-- scratch까지 rule로 억지 확장하지 않는다.
-
-## 9. Scratch / Local 판단
-
-scratch와 local은 현재 기준선에서 가장 조심해야 하는 계열이다.
-
-관찰:
-
-- scratch는 holdout에서 불안정하다.
-- scratch는 길이, 방향, 연속성, 곡률이 중요하다.
-- local은 작은 connected-component topology가 중요하다.
-- wafer-level scalar feature만으로는 놓칠 수 있다.
-
-현재 판단:
-
-- scratch rule/proposal에 더 과투자하지 않는다.
-- scratch 전용 line feature 또는 segmentation 쪽으로 분리한다.
-- local은 connected-component morphology를 먼저 보고, 부족하면 segmentation 후보로 올린다.
-
-이 판단은 "약한 것만 AI로 한다"가 아니다. 실제 리뷰에서 어떤 family가 약한지 확인한 뒤, 그 문제에 맞는 모델을 붙이겠다는 뜻이다. 전체를 AI로 덮는 선택지는 남아 있지만, 비교 기준과 리뷰 label 없이 먼저 대형 모델로 가면 실패 원인을 해석하기 어렵다.
-
-## 10. Segmentation Smoke Test
-
-AI 모델 배관도 최소 수준으로 확인했다.
-
-구현된 것:
-
-- synthetic-label segmentation dataset helper
-- NumPy-only 1x1 sigmoid segmentation smoke training
-- weighted BCE loss 연결
-- multi-label mask target 연결
-
-의미:
-
-- 이것은 실사용 segmentation model이 아니다.
-- U-Net, SegFormer, DINO embedding 같은 운영 모델도 아직 아니다.
-- 향후 scratch/local/stby overlap이 실제 리뷰에서 반복적으로 실패할 때 넘어갈 수 있는 최소 배관 검증이다.
-
-## 10A. Synthetic Embedding Smoke Test
-
-딥러닝 모델로 넘어가기 전 representation 배관을 추가했다.
-
-구현된 것:
-
-- segmentation manifest의 synthetic tensor를 flatten input으로 읽는다.
-- standardized PCA projection으로 deterministic embedding을 만든다.
-- validation wafer의 top-k nearest neighbor가 synthetic defect label을 얼마나 공유하는지 Jaccard로 본다.
-- embedding CSV, metric JSON, HTML report를 남긴다.
-
-의미:
-
-- 이것은 운영 encoder가 아니다.
-- WaferSegClassNet 계열의 shared encoder / contrastive pretraining으로 넘어가기 전 기준선이다.
-- 실제 데이터가 들어오기 전에도 "학습 입력 생성 -> embedding 산출 -> retrieval metric 기록" 흐름을 계속 검증할 수 있다.
-
-## 10B. CPU Shared Encoder Baseline
-
-실제 데이터가 들어오기 전까지 학습과 inference 배관을 끝까지 닫기 위해 NumPy 기반 CPU 모델을 추가했다.
-
-구현된 것:
-
-- `scripts/train_cpu_encoder_model.py`
-- `src/wafermap/training/cpu_encoder.py`
-- shared MLP encoder, embedding head, multi-label classifier
-- BCE loss와 label-similarity pairwise loss를 함께 사용
-- `.npz` 모델 저장, validation prediction CSV, metric JSON, HTML report 출력
-- `scripts/score_unlabeled_cpu_encoder.py`로 라벨 없는 manifest에 class probability와 synthetic neighbor를 출력
-
-의미:
-
-- 이것은 GPU용 운영 모델이 아니다.
-- CPU 한계 안에서 실제 데이터 투입 전까지 train/inference/report 경로를 완성하는 기준선이다.
-- 실제 wafer 결과가 들어오면 score 자체보다 sanity, drift, neighbor, 전문가 리뷰 결과를 보고 모델 목표를 조정한다.
-
-## 11. 라벨 없는 실제 Wafer 처리 절차
-
-현재 가장 중요한 산출물이다.
-
-구현된 흐름:
+현재 방향:
 
 ```text
-manifest
--> .npz load
--> schema validation
--> feature extraction
--> sanity JSON
--> feature drift summary
--> nearest-neighbor CSV
--> 전문가 리뷰 양식 CSV
--> HTML report
+input channels =
+  severity normalized
+  wafer_mask
+  valid_test_mask
+  stby_mask
+  x_coord
+  y_coord
 ```
 
-보안 원칙:
+## 3. patch proposal
 
-- 실제 wafer raw image/array는 repo에 저장하지 않는다.
-- 실제 file path, lot id, wafer id, tool id, recipe, chamber는 공유 산출물에 남기지 않는다.
-- `sample_id`는 익명 id만 사용한다.
+`patch proposal`은 wafer 전체를 바로 segmentation하기 전에, 의심 영역을 patch 단위로 잘라 후보를 만드는 접근이다.
 
-현재 이 절차는 synthetic smoke test를 통과했고, 실제 wafer 리뷰 직전 단계다.
+판단:
 
-관련 문서:
+- local blob이나 scratch 후보를 빠르게 줄이는 데는 좋다.
+- 그러나 ring, edge, shot-relative pattern처럼 wafer 전체 맥락이 중요한 family는 patch만 보면 의미가 사라질 수 있다.
 
-- [라벨 없는 실제 wafer 처리 절차](real_unlabeled_workflow.md)
-- [Real Wafer 리뷰 체크리스트](real_wafer_review_checklist.md)
+현재 방향:
 
-## 12. 전문가 리뷰
+- editor에서는 사람이 직접 defect mask를 만들 수 있게 한다.
+- 모델은 wafer 전체 입력을 받는 U-Net 계열을 baseline으로 둔다.
+- patch proposal은 추후 active learning에서 “리뷰할 후보 영역”을 줄이는 보조 기능으로 쓴다.
 
-nearest-neighbor 결과는 바로 정답이 아니다. 전문가가 봐야 한다.
+## 4. Segmentation Smoke Test
 
-리뷰어가 판단하는 것:
+`Segmentation Smoke Test`는 synthetic mask를 정답으로 놓고 작은 모델이 최소한의 학습 신호를 받을 수 있는지 확인하는 단계다.
 
-- 같은 defect family인가
-- 위치/clock이 비슷한가
-- query의 주요 defect를 neighbor가 놓쳤는가
-- mismatch라면 실패 유형이 무엇인가
-- 다음 작업은 feature 보강인가, parser validation인가, segmentation 후보인가
+목표:
 
-집계 지표:
+- image와 multi-channel mask가 서로 맞는지 확인한다.
+- family별 label channel이 올바른지 확인한다.
+- 학습 코드가 Dice/IoU를 계산하고 preview를 생성하는지 확인한다.
 
-- `same_family_rate`
-- `partial_match_rate`
-- `accepted_match_rate`
-- `missed_major_defect_rate`
-- `query_topk_accept_rate`
-- `retrieval_failure_mode_counts`
-- `next_action_queue`
+이 단계의 성공은 “실제 성능이 좋다”는 뜻이 아니다. 학습 파이프라인이 끊기지 않았고, 라벨 정의가 코드에서 일관되게 흐른다는 뜻이다.
 
-이 리뷰의 목적은 모델을 바로 크게 만드는 것이 아니라, 실제로 어떤 family가 약한지 근거를 쌓는 것이다.
+## 5. 실제 FBM 누끼와 합성 데이터로 방향 전환
 
-관련 문서:
+사용자 피드백에서 핵심이 명확해졌다.
 
-- [전문가 리뷰 절차](expert_review_protocol.md)
+```text
+1. 실제 wafer map을 본다.
+2. 불량 유형별로 사람이 누끼를 딴다.
+3. family별 mask asset 폴더에 저장한다.
+4. mask asset을 실제 또는 base wafer에 합성한다.
+5. 어떤 위치에 어떤 defect를 넣었는지 metadata로 남긴다.
+6. multi-label segmentation 모델을 학습한다.
+7. 모델 출력 mask, 수치화, embedding retrieval을 실제 wafer 검증에 쓴다.
+```
 
-## 13. 외부 연구 참고 위치
+이 구조는 의료 AI의 병변 segmentation과 유사하다. 병변 mask를 만들고, augmentation과 합성 데이터를 통해 label을 늘리고, 모델이 위치와 형태를 함께 예측하게 만든다.
 
-외부 논문은 현재 방향을 점검하는 기준으로 사용했다.
+## 6. 현재 권장 모델
 
-- Iterative Cluster Harvesting for Wafer Map Defect Patterns
-  - feature extraction, dimensionality reduction, clustering, manual labeling을 반복하는 흐름이 현재 `feature -> retrieval/grouping -> expert review` 전략과 맞다.
-  - https://arxiv.org/abs/2404.15436
+추천 baseline:
 
-- Graph-Theoretic Spatial Filtering for Mixed-Type Wafer Bin Maps
-  - 인접 defect chip의 spatial dependence를 이용한다. local/scratch morphology 보강의 참고선이다.
-  - https://arxiv.org/abs/2006.13824
+- Small U-Net
+- multi-label sigmoid output
+- family별 mask channel
+- 좌표 channel 포함
+- loss는 BCE + Dice 조합
 
-- WaferSegClassNet
-  - mixed-type wafer defect classification/segmentation을 함께 다룬다. scratch/local/overlap을 segmentation 쪽으로 분리하는 판단을 뒷받침한다.
-  - https://arxiv.org/abs/2207.00960
+출력:
 
-## 현재 남은 검증
+- family probability mask
+- family별 면적, 중심, bbox, radial/angle 위치
+- wafer-level family score
+- embedding vector
+- top-k similar wafer
 
-다음은 합성 데이터로 더 밀어붙이는 일이 아니라 실제 wafer 리뷰로 확인해야 한다.
+## 7. 계속 확인해야 할 질문
 
-1. real wafer 5~20장을 `.npz`로 export한다.
-2. manifest 형식과 stby/valid-test/wafer 밖 영역 처리가 맞는지 sanity 결과로 확인한다.
-3. reference 대비 feature drift가 parser 문제인지, 실제 분포 차이인지 본다.
-4. nearest-neighbor top-k를 전문가 리뷰 양식으로 평가한다.
-5. 실패 유형과 `next_action_queue`를 보고 feature 보강 또는 AI model 쪽 작업을 결정한다.
+- 실제 raw PNG의 gray value contract가 제품별로 같은가?
+- ring처럼 하나의 pattern이 여러 component로 쪼개지는 문제를 editor에서 어떻게 막을까?
+- random defect는 누끼 asset보다 procedural generator가 나은가?
+- edge defect는 rule generator로 충분한가, 아니면 실제 mask asset도 필요한가?
+- synthetic label로 학습한 모델이 실제 FBM에서 어떤 family를 가장 자주 놓치는가?
 
-이 과정을 통과하면 현재 feature 기반 검색을 실제 triage용 최소 버전으로 유지할지, 특정 defect family에 segmentation/self-supervised model을 붙일지 판단할 수 있다.
+이 질문에 대한 답은 실제 wafer 5~20장 batch와 전문가 리뷰에서 나온다.

@@ -170,8 +170,8 @@ def phase_rows(
             "name": "Real-Unlabeled Adaptation",
             "status": "대기",
             "progress": "0%",
-            "evidence": "Real wafer data는 보안상 repo에 저장하지 않는다.",
-            "next": "보안 환경에서 real data를 복사하지 않고 feature extraction/inference가 가능한 workflow를 설계한다.",
+            "evidence": "Real wafer data는 data/raw 또는 사내 파일 경로에서 읽는 흐름으로 정리한다.",
+            "next": "real data batch에서 feature extraction/inference와 review report가 바로 이어지도록 workflow를 정리한다.",
         },
         {
             "phase": "Phase 5",
@@ -392,7 +392,7 @@ def html_report(
     <li>현재 고정한 155장 scale pilot을 기준으로 real-unlabeled inference workflow를 설계한다.</li>
     <li>Scratch/local처럼 작은 공간 불량은 morphology feature와 segmentation baseline으로 더 보강한다.</li>
     <li>필요하면 generator runtime을 더 줄인 뒤 200장 이상 full batch를 재시도한다. 현재 노트북 CPU에서는 155장이 실용적인 scale check다.</li>
-    <li>보안 환경에서 real wafer를 복사하지 않고 feature extraction과 nearest-neighbor review만 실행하는 sanity-check workflow를 설계한다.</li>
+    <li>real wafer batch에서 feature extraction과 nearest-neighbor review를 실행하는 sanity-check workflow를 정리한다.</li>
   </ol>
 </body>
 </html>

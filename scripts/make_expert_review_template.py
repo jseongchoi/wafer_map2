@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import csv
 import html
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -25,6 +24,7 @@ from wafermap.reporting import (
     build_template_rows,
     write_template_csv,
 )
+from wafermap.reporting.files import relative_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,10 +42,6 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     write_template_csv(path, rows)
-
-
-def relpath(target: Path, base_file: Path) -> str:
-    return Path(os.path.relpath(Path(target).resolve(), base_file.resolve().parent)).as_posix()
 
 
 def html_report(
@@ -88,7 +84,7 @@ def html_report(
 </head>
 <body>
   <h1>FBM Expert Review Template</h1>
-  <p>이 템플릿은 nearest-neighbor 결과를 전문가가 빠르게 평가하기 위한 최소 형식이다. 실제 wafer 원본, 보안 경로, synthetic oracle label은 포함하지 않는다.</p>
+  <p>이 템플릿은 nearest-neighbor 결과를 전문가가 빠르게 평가하기 위한 최소 형식이다. 실제 wafer 원본 이미지는 별도 뷰어에서 확인하고, 이 파일에는 query-neighbor 판단과 reviewer memo를 남긴다.</p>
   {warning_block}
   <div class="summary">
     <div class="card"><div>Review cases</div><div class="metric">{len(rows)}</div></div>
@@ -106,7 +102,7 @@ def html_report(
     <tr><td><code>missed_major_defect</code></td><td>{', '.join(MISSED_MAJOR_DEFECT_VALUES)}</td><td>검색 결과가 query의 중요한 불량을 놓쳤는지 표시한다.</td></tr>
     <tr><td><code>retrieval_failure_mode</code></td><td>{', '.join(RETRIEVAL_FAILURE_MODES)}</td><td>mismatch 또는 partial match의 원인을 다음 보강 track으로 분류한다.</td></tr>
     <tr><td><code>next_action</code></td><td>{', '.join(NEXT_ACTIONS)}</td><td>리뷰 결과를 feature tuning, location-aware retrieval, segmentation 후보 같은 후속 작업으로 연결한다.</td></tr>
-    <tr><td><code>safe_comment</code></td><td>free text</td><td>lot, tool, recipe, chamber, raw path 같은 보안 정보를 쓰지 않는다.</td></tr>
+    <tr><td><code>safe_comment</code></td><td>free text</td><td>리뷰어가 판단 근거를 자유롭게 적는다.</td></tr>
   </table>
   <h2>Preview</h2>
   <table>
@@ -115,8 +111,8 @@ def html_report(
   </table>
   <h2>Outputs</h2>
   <ul>
-    <li>Input neighbors: <code>{html.escape(relpath(neighbors_path, report_path))}</code></li>
-    <li>Review form: <code>{html.escape(relpath(template_path, report_path))}</code></li>
+    <li>Input neighbors: <code>{html.escape(relative_path(neighbors_path, report_path))}</code></li>
+    <li>Review form: <code>{html.escape(relative_path(template_path, report_path))}</code></li>
   </ul>
 </body>
 </html>

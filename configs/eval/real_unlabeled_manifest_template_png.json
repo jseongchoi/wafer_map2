@@ -3,11 +3,10 @@
   "feature_schema_version": "observable_fbm_features/v1",
   "samples": [
     {
-      "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
+      "sample_id": "product_a_wafer_001",
       "source_type": "png_grayscale_raw",
-      "png_path": "D:/secure_fbm/real_like_001.png",
-      "pseudonymized": true,
-      "parser_name": "secure_png_gray_parser",
+      "png_path": "data/raw/product_a/wafer_001.png",
+      "parser_name": "fbm_png_gray_parser",
       "parser_version": "0.1.0",
       "orientation": "not_rotated",
       "wafer_mask_strategy": "centered_ellipse_from_png",

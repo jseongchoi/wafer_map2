@@ -5,16 +5,16 @@
 핵심은 아래 한 줄입니다.
 
 ```text
-real FBM -> private manifest -> pattern asset -> hybrid synthetic sample -> segmentation manifest -> U-Net
+real FBM -> manifest -> pattern asset -> hybrid synthetic sample -> segmentation manifest -> U-Net
 ```
 
 ## 1. 전체 폴더 계약
 
 | 단계 | 폴더/파일 | 역할 | Git 포함 여부 |
 |---|---|---|---|
-| 실제 FBM 입력 | `D:/secure_fbm/raw_png/<product>/*.png` | 운영 기준 원본 raw PNG 위치 | 포함 금지 |
+| 실제 FBM 입력 | `data/raw/<product>/*.png` 또는 인트라넷 경로 | 원본 raw PNG 위치 | `.gitignore`로 제외 |
 | 개발용 FBM 입력 | `data/raw/<product>/*.png` | 로컬 smoke test용 원본 PNG 위치 | `.gitignore`로 제외 |
-| private manifest | `outputs/private/<run_name>_manifest.json` | 실제 PNG 경로가 들어 있는 내부 manifest | `.gitignore`로 제외 |
+| manifest | `outputs/manifests/<run_name>_manifest.json` | 실제 PNG 경로와 geometry가 들어 있는 실행 manifest | `.gitignore`로 제외 |
 | 공유 가능 실제 분석 결과 | `outputs/reports/<run_name>/` | sanity, feature, neighbor, review report | `.gitignore`로 제외 |
 | 사람이 누끼 딴 defect asset | `data/pattern_assets/<family>/<asset_id>/` | 합성 데이터에 붙일 defect 조각 | `.gitignore`로 제외 |
 | 합성 학습 sample | `data/synthetic/asset_composed/<sample_id>/` | 라벨 있는 synthetic wafer sample | `.gitignore`로 제외 |
@@ -25,10 +25,10 @@ real FBM -> private manifest -> pattern asset -> hybrid synthetic sample -> segm
 
 ## 2. 실제 FBM은 어디에 두는가
 
-운영 기준으로는 workspace 밖에 둡니다.
+기본 개발 위치는 workspace 안의 `data/raw`입니다. 인트라넷 운영에서는 원하는 로컬/네트워크 경로를 그대로 써도 됩니다.
 
 ```text
-D:/secure_fbm/raw_png/
+data/raw/
   product_a/
     wafer_001.png
     wafer_002.png
@@ -36,10 +36,10 @@ D:/secure_fbm/raw_png/
     wafer_101.png
 ```
 
-개발 테스트만 할 때는 아래 위치를 쓸 수 있습니다.
+인트라넷 운영 폴더 예시는 아래처럼 둘 수 있습니다.
 
 ```text
-data/raw/
+Z:/fbm/raw_png/
   product_a/
     wafer_001.png
     wafer_002.png
@@ -61,13 +61,12 @@ PNG 조건은 다음과 같습니다.
 
 Pattern Asset Editor는 원본 폴더를 직접 받지 않고 manifest를 받습니다. 먼저 raw PNG 폴더를 manifest로 바꿉니다.
 
-운영 기준 실행:
+실행:
 
 ```powershell
 python scripts/analyze_png_raw_folders.py `
-  --raw-root D:/secure_fbm/raw_png `
-  --production-run `
-  --geometry-json D:/secure_fbm/product_geometry.json `
+  --raw-root data/raw `
+  --geometry-json data/raw/product_geometry.json `
   --out-dir outputs/reports/real_png_batch `
   --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
   --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz
@@ -76,19 +75,18 @@ python scripts/analyze_png_raw_folders.py `
 생성 위치:
 
 ```text
-outputs/private/real_png_batch_manifest.json
+outputs/manifests/real_png_batch_manifest.json
 outputs/reports/real_png_batch/batch_metadata.json
 outputs/reports/real_png_batch/features.csv
 outputs/reports/real_png_batch/sanity.json
 outputs/reports/real_png_batch/report.html
 ```
 
-로컬 개발용으로 `data/raw` 안의 PNG를 빠르게 manifest만 만들 때:
+PNG를 빠르게 manifest만 만들 때:
 
 ```powershell
 python scripts/analyze_png_raw_folders.py `
   --raw-root data/raw `
-  --allow-workspace-input `
   --manifest-only `
   --out-dir outputs/reports/local_raw_batch
 ```
@@ -96,7 +94,7 @@ python scripts/analyze_png_raw_folders.py `
 생성 위치:
 
 ```text
-outputs/private/local_raw_batch_manifest.json
+outputs/manifests/local_raw_batch_manifest.json
 ```
 
 ## 4. 누끼 딴 defect 이미지는 어디에 저장되는가
@@ -105,7 +103,7 @@ outputs/private/local_raw_batch_manifest.json
 
 ```powershell
 python scripts/run_pattern_asset_editor.py `
-  --manifest outputs/private/real_png_batch_manifest.json `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
   --sample-id <보고 싶은 sample_id> `
   --assets-root data/pattern_assets
 ```
@@ -322,7 +320,7 @@ edge_distance_norm
 
 ## 10. 최소 운영 순서
 
-1. 실제 FBM PNG를 `D:/secure_fbm/raw_png/<product>/` 또는 개발용 `data/raw/<product>/`에 둡니다.
+1. 실제 FBM PNG를 `data/raw/<product>/` 또는 인트라넷의 원하는 raw PNG 폴더에 둡니다.
 2. `scripts/analyze_png_raw_folders.py`로 manifest를 만듭니다.
 3. `scripts/run_pattern_asset_editor.py`로 `local`, `scratch`, `ring` asset을 저장합니다.
 4. `scripts/build_pattern_asset_report.py`로 asset 품질을 봅니다.

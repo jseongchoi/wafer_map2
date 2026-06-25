@@ -7,7 +7,6 @@ import csv
 import hashlib
 import html
 import json
-import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -40,19 +39,6 @@ PRE_REAL_FRESHNESS_INPUTS = (
     "scripts/analyze_png_raw_folders.py",
     "scripts/extract_real_unlabeled_features.py",
 )
-SHAREABLE_SCAN_ROOTS = (
-    "outputs/reports",
-    "outputs/pre_real_readiness/reports",
-)
-SHAREABLE_SUFFIXES = {".csv", ".html", ".json", ".log", ".txt"}
-SENSITIVE_OUTPUT_PATTERNS = (
-    ("private manifest key", re.compile(r'"(?:png_path|arrays_npz|metadata_json)"\s*:')),
-    ("workspace override flag", re.compile(r'"allow_workspace_input"\s*:\s*true')),
-    ("absolute Windows path", re.compile(r"[A-Za-z]:(?:\\\\|/)")),
-    ("absolute user path", re.compile(r"(?:/home/|/Users/)")),
-)
-
-
 @dataclass(frozen=True)
 class StageDefinition:
     stage_id: str
@@ -67,7 +53,7 @@ STAGES: tuple[StageDefinition, ...] = (
     StageDefinition(
         stage_id="0_problem_schema_contract",
         title="문제와 스키마 기준",
-        goal="Wafer map 의미, 보안 경계, 입력/출력 기준을 정의한다.",
+        goal="Wafer map 의미와 입력/출력 기준을 정의한다.",
         required_paths=(
             "docs/project_overview.md",
             "docs/data_schema.md",
@@ -103,7 +89,7 @@ STAGES: tuple[StageDefinition, ...] = (
             "src/wafermap/real/png_raw.py",
         ),
         evidence_paths=("tests/test_real_png_raw.py", "tests/test_real_unlabeled_workflow.py"),
-        next_actions=("보안 폴더 하나를 실행해 geometry, gray value, stby 기본 검사 결과를 확인한다.",),
+        next_actions=("제품별 raw PNG 폴더 하나를 실행해 geometry, gray value, stby 기본 검사 결과를 확인한다.",),
     ),
     StageDefinition(
         stage_id="3_observable_features",
@@ -158,21 +144,21 @@ STAGES: tuple[StageDefinition, ...] = (
     StageDefinition(
         stage_id="7_real_go_live_preflight",
         title="실제 실행 전 최종 점검",
-        goal="실제 데이터가 오기 전에 batch 명령, private manifest, PNG 읽기, 리포트, CPU scoring 경로를 확인한다.",
+        goal="실제 데이터가 오기 전에 batch 명령, manifest, PNG 읽기, 리포트, CPU scoring 경로를 확인한다.",
         required_paths=("scripts/analyze_png_raw_folders.py", "scripts/run_pre_real_readiness.py", "docs/real_unlabeled_workflow.md"),
         evidence_paths=("tests/test_pre_real_readiness.py",),
         next_actions=(
             "큰 pipeline 변경 후에는 outputs/pre_real_readiness를 최신 상태로 갱신한다.",
-            "생성된 real_png_batch_command를 보안 환경 실제 데이터 실행 기준으로 쓴다.",
+            "생성된 real_png_batch_command를 실제 데이터 실행 기준으로 쓴다.",
         ),
     ),
     StageDefinition(
         stage_id="8_real_data_actual_batch",
         title="실제 데이터 Batch",
-        goal="보안 제품별 폴더의 실제 raw PNG를 실행하고 원본 노출 없이 파생 리포트를 확인한다.",
+        goal="제품별 폴더의 실제 raw PNG를 실행하고 파생 리포트를 확인한다.",
         required_paths=("scripts/analyze_png_raw_folders.py", "docs/real_unlabeled_workflow.md"),
         evidence_paths=(
-            "outputs/private/real_png_batch_manifest.json",
+            "outputs/manifests/real_png_batch_manifest.json",
             "outputs/reports/real_png_batch/features.csv",
             "outputs/reports/real_png_batch/sanity.json",
             "outputs/reports/real_png_batch/batch_metadata.json",
@@ -181,8 +167,8 @@ STAGES: tuple[StageDefinition, ...] = (
             "outputs/reports/real_png_batch/review_template.csv",
         ),
         next_actions=(
-            "보안 제품별 폴더에 raw PNG를 넣고 scripts/analyze_png_raw_folders.py를 실행한다.",
-            "Manifest와 실제 경로를 제외한 파생 리포트만 공유한다.",
+            "제품별 폴더에 raw PNG를 넣고 scripts/analyze_png_raw_folders.py를 실행한다.",
+            "features/sanity/report/review_template 산출물을 확인한다.",
         ),
     ),
 )
@@ -233,12 +219,6 @@ def audit_stage(stage: StageDefinition, pre_real_summary: Path) -> dict[str, Any
         notes.extend(readiness["notes"])
         if readiness["status"] != "PASS":
             missing_evidence.append(pre_real_evidence_gap(pre_real_summary, readiness))
-        leakage_findings = scan_shareable_outputs()
-        if leakage_findings:
-            notes.extend(leakage_findings[:10])
-            if len(leakage_findings) > 10:
-                notes.append(f"Additional shareable output leakage findings: {len(leakage_findings) - 10}")
-            missing_evidence.append("shareable output leakage scan")
 
     if stage.stage_id == "8_real_data_actual_batch":
         notes.extend(inspect_real_go_live_outputs())
@@ -418,7 +398,7 @@ def inspect_real_go_live_outputs() -> list[str]:
     expected_sample_count: int | None = None
     cpu_model_scoring = False
     sanity_samples: list[Any] | None = None
-    manifest_path = ROOT / "outputs" / "private" / "real_png_batch_manifest.json"
+    manifest_path = ROOT / "outputs" / "manifests" / "real_png_batch_manifest.json"
     if manifest_path.exists():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
@@ -426,8 +406,6 @@ def inspect_real_go_live_outputs() -> list[str]:
             samples = manifest.get("samples", [])
             if any(sample.get("source_type") != SOURCE_TYPE_PNG_GRAYSCALE_RAW for sample in samples):
                 notes.append("Real go-live manifest must contain only png_grayscale_raw samples.")
-            if any(sample.get("allow_workspace_input") is True for sample in samples):
-                notes.append("Real go-live manifest must not set allow_workspace_input=true.")
         except Exception as exc:  # noqa: BLE001 - audit should report contract issues, not crash.
             notes.append(f"Real go-live manifest 기준 검사 실패: {exc}")
 
@@ -448,36 +426,14 @@ def inspect_real_go_live_outputs() -> list[str]:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if metadata.get("schema_version") != "png_raw_batch_metadata/v1":
                 notes.append("Real go-live batch metadata schema is missing or unsupported.")
-            production_run = metadata.get("production_run") is True
-            if not production_run:
-                notes.append("Real go-live batch must be produced with --production-run.")
-            if metadata.get("geometry_contract") != "explicit":
-                notes.append("Real go-live batch must use explicit product geometry.")
-            if metadata.get("manifest_location") != "outputs/private":
-                notes.append("Real go-live batch manifest must be stored under outputs/private.")
-            if metadata.get("reference_features") is not True:
-                notes.append("Real go-live batch must include reference features for reviewer output.")
             expected_sample_count = int(metadata.get("png_sample_count", 0))
             cpu_model_scoring = metadata.get("cpu_model_scoring") is True
             if expected_sample_count <= 0:
                 notes.append("Real go-live batch metadata has no PNG samples.")
                 expected_sample_count = None
-            if production_run:
-                product_count = int(metadata.get("product_count", 0))
-                explicit_count = int(metadata.get("explicit_geometry_product_count", 0))
-                actual_net_die_count = int(metadata.get("actual_net_die_product_count", 0))
-                if product_count <= 0:
-                    notes.append("Real go-live batch metadata has no products.")
-                elif explicit_count != product_count:
-                    notes.append(
-                        "Real go-live explicit geometry count mismatch: "
-                        f"{explicit_count} of {product_count} products."
-                    )
-                elif actual_net_die_count != product_count:
-                    notes.append(
-                        "Real go-live positive actual_net_die count mismatch: "
-                        f"{actual_net_die_count} of {product_count} products."
-                    )
+            product_count = int(metadata.get("product_count", 0))
+            if product_count <= 0:
+                notes.append("Real go-live batch metadata has no products.")
         except Exception as exc:  # noqa: BLE001
             notes.append(f"Real go-live batch metadata check failed: {exc}")
     if expected_sample_count is not None:
@@ -529,35 +485,6 @@ def _append_min_csv_count_issue(notes: list[str], path: Path, label: str, minimu
         return
     if row_count < minimum:
         notes.append(f"Real go-live {label} row count is too small: found {row_count}, expected at least {minimum}.")
-
-
-def scan_shareable_outputs(roots: tuple[str, ...] = SHAREABLE_SCAN_ROOTS) -> list[str]:
-    findings: list[str] = []
-    for root_text in roots:
-        root = ROOT / root_text
-        if not root.exists():
-            continue
-        for path in sorted(item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in SHAREABLE_SUFFIXES):
-            if _is_under_private_output(path):
-                continue
-            try:
-                text = path.read_text(encoding="utf-8", errors="ignore")
-            except OSError as exc:
-                findings.append(f"Could not scan shareable output {relative(path)}: {exc}")
-                continue
-            for label, pattern in SENSITIVE_OUTPUT_PATTERNS:
-                if pattern.search(text):
-                    findings.append(f"Shareable output contains {label}: {relative(path)}")
-                    break
-    return findings
-
-
-def _is_under_private_output(path: Path) -> bool:
-    try:
-        path.resolve().relative_to((ROOT / "outputs" / "private").resolve())
-        return True
-    except ValueError:
-        return False
 
 
 def build_audit(pre_real_summary: Path) -> dict[str, Any]:

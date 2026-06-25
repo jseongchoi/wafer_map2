@@ -121,7 +121,7 @@ def test_review_summary_computes_query_topk_acceptance():
     }
 
 
-def test_review_summary_flags_sensitive_comments():
+def test_review_summary_allows_freeform_comments():
     module = _load_script("summarize_expert_review")
     rows = [
         {
@@ -136,12 +136,11 @@ def test_review_summary_flags_sensitive_comments():
             "missed_major_defect": "no",
             "retrieval_failure_mode": "none",
             "next_action": "keep_baseline",
-            "safe_comment": "looks like lot ABC123 from C:/secure/raw.npy",
+            "safe_comment": "looks like lot ABC123 from C:/raw/raw.npy",
         }
     ]
 
     metrics = module.summarize_rows(rows, top_k=1)
 
-    issues = {item["issue"] for item in metrics["sensitive_comment_flags"]}
-    assert "lot_identifier" in issues
-    assert "windows_path" in issues
+    assert "sensitive_comment_flags" not in metrics
+    assert metrics["valid_review_rows"] == 1

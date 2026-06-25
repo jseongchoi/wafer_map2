@@ -87,12 +87,13 @@ def test_pre_real_readiness_pipeline_runs_end_to_end(tmp_path):
     assert Path(payload["outputs"]["synthetic_unlabeled_predictions"]).exists()
     assert Path(payload["outputs"]["synthetic_unlabeled_neighbors"]).exists()
     assert Path(payload["outputs"]["synthetic_png_batch_report"]).exists()
-    assert "<SECURE_RAW_PNG_ROOT>" in payload["real_png_batch_command"]
+    assert "data/raw" in payload["real_png_batch_command"]
+    assert "data/raw/product_geometry.json" in payload["real_png_batch_command"]
     provenance = payload["provenance"]
     assert provenance["schema_version"] == "pre_real_readiness_provenance/v1"
     assert provenance["config"]["sha256"]
     assert provenance["config"]["path"].endswith("small_synth.json")
-    assert ":" not in provenance["config"]["path"]
+    assert Path(provenance["config"]["path"]).exists()
     assert any(item["path"] == "scripts/run_pre_real_readiness.py" for item in provenance["pipeline_inputs"])
     assert "commit" in provenance["git"]
     assert "dirty" in provenance["git"]

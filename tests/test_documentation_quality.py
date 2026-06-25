@@ -130,11 +130,9 @@ def test_real_png_operator_guide_has_required_execution_and_share_items() -> Non
 
     required_phrases = [
         "scripts/analyze_png_raw_folders.py",
-        "--production-run",
         "--geometry-json",
+        "outputs/manifests/real_png_batch_manifest.json",
         "outputs/reports/real_png_batch",
-        "outputs/private/*_manifest.json",
-        "scripts/audit_project_readiness.py",
         "scripts/summarize_expert_review.py",
         "actual_net_die=0",
     ]

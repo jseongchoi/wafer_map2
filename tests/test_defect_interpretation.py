@@ -114,7 +114,6 @@ def test_interpret_fbm_existing_feature_csv_writes_compact_user_outputs(tmp_path
             str(sanity),
             "--out",
             str(out),
-            "--allow-output-outside-root",
         ]
     )
 
@@ -153,7 +152,8 @@ def test_render_wafer_previews_from_manifest(tmp_path):
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     out = tmp_path / "out"
 
-    image_map = module.render_wafer_previews(manifest_path, out)
+    samples = module.load_manifest_samples(manifest_path)
+    image_map = module.render_wafer_previews_from_samples(samples, out)
 
     image_path = image_map["preview_unit"]
     assert image_path.exists()

@@ -31,10 +31,9 @@ def test_validate_manifest_accepts_raw_png_contract():
         manifest_payload(
             [
                 {
-                    "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
+                    "sample_id": "product_a_wafer_001",
                     "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
                     "png_path": "product_a/wafer_001.png",
-                    "pseudonymized": True,
                     "parser_name": "png_raw_folder_batch",
                     "parser_version": "0.1.0",
                     "orientation": "not_rotated",
@@ -49,12 +48,11 @@ def test_validate_manifest_accepts_raw_png_contract():
 def test_validate_manifest_requires_raw_png_geometry_unless_inference_is_explicit():
     payload = manifest_payload(
         [
-            {
-                "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
-                "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
-                "png_path": "product_a/wafer_001.png",
-                "pseudonymized": True,
-                "parser_name": "png_raw_folder_batch",
+                {
+                    "sample_id": "product_a_wafer_001",
+                    "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
+                    "png_path": "product_a/wafer_001.png",
+                    "parser_name": "png_raw_folder_batch",
                 "parser_version": "0.1.0",
                 "orientation": "not_rotated",
             }
@@ -88,32 +86,13 @@ def test_validate_manifest_rejects_duplicate_sample_ids():
         validate_manifest(payload)
 
 
-def test_validate_manifest_rejects_raw_png_without_pseudonymized_flag():
-    payload = manifest_payload(
-        [
-            {
-                "sample_id": "product_aaaaaaaaaa_wbbbbbbbbbb",
-                "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
-                "png_path": "product_a/wafer_001.png",
-                "parser_name": "png_raw_folder_batch",
-                "parser_version": "0.1.0",
-                "orientation": "not_rotated",
-            }
-        ]
-    )
-
-    with pytest.raises(ValueError, match="pseudonymized=true"):
-        validate_manifest(payload)
-
-
-def test_validate_manifest_rejects_real_source_non_opaque_sample_id():
+def test_validate_manifest_accepts_readable_real_sample_id_without_extra_flag():
     payload = manifest_payload(
         [
             {
                 "sample_id": "lot123_wafer07",
                 "source_type": SOURCE_TYPE_PNG_GRAYSCALE_RAW,
                 "png_path": "product_a/wafer_001.png",
-                "pseudonymized": True,
                 "parser_name": "png_raw_folder_batch",
                 "parser_version": "0.1.0",
                 "orientation": "not_rotated",
@@ -123,5 +102,4 @@ def test_validate_manifest_rejects_real_source_non_opaque_sample_id():
         ]
     )
 
-    with pytest.raises(ValueError, match="opaque sample_id"):
-        validate_manifest(payload)
+    validate_manifest(payload)
