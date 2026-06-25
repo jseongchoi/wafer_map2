@@ -40,7 +40,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", default="configs/synth/debug.json")
     parser.add_argument("--out-root", default="outputs/pre_real_readiness")
     parser.add_argument("--data-dir", help="Synthetic sample directory. Defaults to <out-root>/synthetic.")
-    parser.add_argument("--count", type=int, default=20)
+    parser.add_argument("--count", type=int, default=40)
     parser.add_argument("--output-size", type=int, default=32)
     parser.add_argument("--hidden-dim", type=int, default=32)
     parser.add_argument("--embedding-dim", type=int, default=16)
