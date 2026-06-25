@@ -1,5 +1,37 @@
 # WaferMap Defect Intelligence
 
+## Current Direction: CVAT-First Dataset Pipeline
+
+The primary annotation workflow is moving to CVAT. The in-repo Pattern Asset Editor is now a legacy fallback/reference tool, not the main UI we keep expanding.
+
+Near-term scope:
+
+```text
+real/unlabeled wafer manifest
+-> CVAT image package
+-> CVAT annotation export
+-> pattern asset import
+-> real/base wafer synthetic dataset composition
+```
+
+Model training and model evaluation are intentionally deferred until the dataset creation path is stable.
+
+New CVAT workflow entry points:
+
+```powershell
+python scripts/export_cvat_wafer_images.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --out-dir data/cvat_exports/smoke_task `
+  --limit 10
+
+python scripts/import_cvat_annotations.py `
+  --cvat-xml data/cvat_exports/smoke_task/annotations.xml `
+  --cvat-manifest data/cvat_exports/smoke_task/manifest.json `
+  --assets-root data/pattern_assets
+```
+
+Label mapping is managed in `configs/cvat/wafer_defect_labels.json`, so CVAT labels can be added without hard-coding UI changes. See [CVAT Wafer Defect Annotation Workflow](docs/cvat_wafer_annotation_workflow.md).
+
 이 프로젝트의 목표는 Wafer Fail Bit Map(FBM)에서 defect pattern을 pixel 단위로 뽑아내고, 그 패턴을 합성 데이터와 딥러닝 학습 데이터로 연결해 실제 wafer의 불량 위치/형태/강도/유사도를 수치화하는 것입니다.
 
 단순히 “이 wafer는 ring이다”처럼 이름 하나를 맞히는 프로젝트가 아닙니다. 최종적으로는 아래 네 가지가 같이 필요합니다.

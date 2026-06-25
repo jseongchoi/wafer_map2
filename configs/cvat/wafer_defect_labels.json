@@ -1,0 +1,56 @@
+{
+  "schema_version": "wafer_cvat_label_schema/v1",
+  "labels": [
+    {
+      "name": "local",
+      "display_name": "Local blob",
+      "asset_family": "local",
+      "color": "#ffcc00",
+      "description": "Compact local blob defect."
+    },
+    {
+      "name": "scratch",
+      "display_name": "Scratch",
+      "asset_family": "scratch",
+      "color": "#af52de",
+      "description": "Line-like scratch defect."
+    },
+    {
+      "name": "ring",
+      "display_name": "Ring",
+      "asset_family": "ring",
+      "color": "#34c759",
+      "description": "Radial band or ring-like defect."
+    },
+    {
+      "name": "edge",
+      "display_name": "Edge",
+      "asset_family": "edge",
+      "color": "#ff3b30",
+      "description": "Wafer boundary defect."
+    },
+    {
+      "name": "shot_grid",
+      "display_name": "Shot grid",
+      "asset_family": "shot_grid",
+      "color": "#00c7be",
+      "description": "Shot/grid aligned process defect."
+    },
+    {
+      "name": "random",
+      "display_name": "Random",
+      "asset_family": "random",
+      "color": "#8e8e93",
+      "description": "Random sparse defect."
+    },
+    {
+      "name": "stby_blob",
+      "display_name": "STBY blob",
+      "asset_family": "local",
+      "color": "#7acff4",
+      "grade_override": 7,
+      "aliases": ["stby_fail", "missing_test_blob"],
+      "description": "Mosaic-like STBY or missing-test chip area to reuse as a local blob asset."
+    }
+  ]
+}
