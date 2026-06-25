@@ -10,8 +10,11 @@ DOCS = ROOT / "docs"
 
 USER_FACING_DOCS = [
     ROOT / "README.md",
+    ROOT / "scripts" / "README.md",
     DOCS / "index.html",
     DOCS / "README.md",
+    DOCS / "architecture.md",
+    DOCS / "operator_manual.md",
     DOCS / "cvat_wafer_annotation_workflow.md",
     DOCS / "glossary.md",
     DOCS / "fbm_data_flow_guide.md",
@@ -97,11 +100,16 @@ def test_documentation_guides_current_project_direction() -> None:
     roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
     pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
     data_flow = (DOCS / "fbm_data_flow_guide.md").read_text(encoding="utf-8")
+    architecture = (DOCS / "architecture.md").read_text(encoding="utf-8")
+    operator_manual = (DOCS / "operator_manual.md").read_text(encoding="utf-8")
     cvat_workflow = (DOCS / "cvat_wafer_annotation_workflow.md").read_text(encoding="utf-8")
+    scripts_map = (ROOT / "scripts" / "README.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
+    assert "architecture.md" in docs_index
+    assert "operator_manual.md" in docs_index
     assert "cvat_wafer_annotation_workflow.md" in docs_index
     assert "fbm_pattern_asset_pipeline.md" in docs_index
     assert "fbm_data_flow_guide.md" in docs_index
@@ -110,6 +118,17 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "glossary.md" in docs_index
     assert "real_png_operator_runbook.md" in docs_index
     assert "experiment_history.md" in docs_index
+    assert "scripts command map" in docs_index
+    assert "Product Boundary" in architecture
+    assert "Package Boundaries" in architecture
+    assert "src/wafermap" in architecture
+    assert "scripts/README.md" in architecture
+    assert "Operator Manual" in operator_manual
+    assert "Troubleshooting" in operator_manual
+    assert "Release Checklist" in operator_manual
+    assert "Primary CVAT Dataset Pipeline" in scripts_map
+    assert "Legacy Fallback" in scripts_map
+    assert "Research / Historical Evaluation" in scripts_map
     assert "CVAT-first dataset pipeline" in overview
     assert "export_cvat_wafer_images.py" in overview
     assert "import_cvat_annotations.py" in overview

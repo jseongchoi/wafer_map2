@@ -13,25 +13,31 @@ real/unlabeled wafer manifest
 
 ## 먼저 읽을 문서
 
-1. [CVAT Wafer Defect Annotation Workflow](cvat_wafer_annotation_workflow.md)
+1. [Architecture](architecture.md)
+   - repository folder, package boundary, command group, technical debt를 한 장으로 정리합니다.
+
+2. [Operator Manual](operator_manual.md)
+   - 실제 운영자가 manifest 생성, CVAT annotation, import, QC, synthetic dataset, training까지 따라 하는 절차서입니다.
+
+3. [CVAT Wafer Defect Annotation Workflow](cvat_wafer_annotation_workflow.md)
    - CVAT export/import 명령, label schema, STBY blob 처리, 검증 방법을 설명합니다.
 
-2. [Project Overview](project_overview.md)
+4. [Project Overview](project_overview.md)
    - 현재 프로젝트 목표, 남길 기능, legacy로 분리할 기능, 다음 구현 순서를 정리합니다.
 
-3. [FBM Data Flow Guide](fbm_data_flow_guide.md)
+5. [FBM Data Flow Guide](fbm_data_flow_guide.md)
    - raw wafer, manifest, CVAT package, pattern assets, synthetic samples, segmentation manifest가 어디에 생기는지 정리합니다.
 
-4. [Hybrid Synthetic Data Pipeline](fbm_pattern_asset_pipeline.md)
+6. [Hybrid Synthetic Data Pipeline](fbm_pattern_asset_pipeline.md)
    - pattern asset과 procedural fallback을 합쳐 학습용 multi-label synthetic data를 만드는 방법을 설명합니다.
 
-5. [Roadmap](roadmap.md)
+7. [Roadmap](roadmap.md)
    - CVAT annotation, synthetic composition, model training, active learning을 단계별로 정리합니다.
 
-6. [Pattern Taxonomy](pattern_taxonomy.md)
+8. [Pattern Taxonomy](pattern_taxonomy.md)
    - `local`, `scratch`, `ring`, `edge`, `shot_grid`, `random`, `stby_blob`/`stby_pattern`의 의미를 정리합니다.
 
-7. [Glossary](glossary.md)
+9. [Glossary](glossary.md)
    - `severity`, `manifest`, `pattern asset`, `retrieval_failure_mode` 같은 용어를 정리합니다.
 
 ## 운영 문서
@@ -53,5 +59,6 @@ real/unlabeled wafer manifest
 
 - 새 annotation 기능은 [CVAT workflow](cvat_wafer_annotation_workflow.md)에 먼저 연결합니다.
 - `scripts/run_pattern_asset_editor.py`는 legacy fallback/reference로만 다룹니다.
+- 새 command를 추가하면 [scripts command map](../scripts/README.md)에 등록합니다.
 - 모델 학습 문서는 데이터셋 생성 경로가 안정화된 뒤 업데이트합니다.
 - 생성된 HTML/JSON/PNG 결과는 기본적으로 `outputs/` 아래에 두고 Git에는 넣지 않습니다.

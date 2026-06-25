@@ -92,10 +92,13 @@ python scripts/run_pattern_asset_editor.py `
 
 ## Docs
 
+- [Architecture](docs/architecture.md)
+- [Operator Manual](docs/operator_manual.md)
 - [CVAT Wafer Defect Annotation Workflow](docs/cvat_wafer_annotation_workflow.md)
 - [Project Overview](docs/project_overview.md)
 - [Data Flow Guide](docs/fbm_data_flow_guide.md)
 - [Hybrid Synthetic Data Pipeline](docs/fbm_pattern_asset_pipeline.md)
+- [Scripts Command Map](scripts/README.md)
 - [Pattern Taxonomy](docs/pattern_taxonomy.md)
 - [Roadmap](docs/roadmap.md)
 - [Glossary](docs/glossary.md)
