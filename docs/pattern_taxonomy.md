@@ -1,71 +1,82 @@
-# 불량 패턴 정리
+# Pattern Taxonomy
 
-이 문서는 완전한 공정 taxonomy가 아니다. 합성 데이터 생성, feature 검증, 전문가 리뷰에서 같은 단어를 쓰기 위한 최소 defect family 정의다.
+이 문서는 WaferMap에서 쓰는 defect family와 CVAT label의 의미를 맞추기 위한 최소 taxonomy입니다. 공정 전체 taxonomy가 아니라 dataset generation과 model target 정의를 위한 실무 기준입니다.
 
-## Defect Family
+## Model Family
 
-| Family | 의미 | 현재 처리 |
-| --- | --- | --- |
-| `edge` | wafer edge 근처 fail density 상승 또는 localized edge sector | compact feature와 patch proposal에서 비교적 안정적 |
-| `shot_grid` | reticle/shot-relative 반복 위치 defect | wafer polar 좌표가 아니라 shot-relative feature로 관리 |
-| `stby_pattern` | stby fail chip의 chip-level missing-test pattern | `stby_mask`, `valid_test_mask`로 Grade 7과 분리 |
-| `stby_hidden_origin` | stby가 실제 defect origin을 가리는 경우 | 전문가 리뷰와 향후 stby-origin coupling feature 후보 |
-| `ring` | wafer 중심 기준 annulus 또는 partial ring/arc | curve proposal과 radial profile로 관리 |
-| `scratch` | 길고 좁은 선형/곡선형 defect | 현재 feature/proposal로 약함. 별도 line/segmentation track |
-| `local` | 국소 hotspot 또는 compact blob cluster | connected-component morphology와 전문가 리뷰로 보강 |
-| `random` | 구조가 약한 산발성 fail | background/noise baseline |
-| `mixed` | 여러 family가 동시에 보이는 경우 | multi-label mask와 전문가 리뷰로 관리 |
+| Family | Meaning | Current handling |
+|---|---|---|
+| `local` | compact hotspot, blob, cluster | CVAT/human asset primary |
+| `scratch` | long linear or curved scratch | CVAT/human asset primary, procedural fallback |
+| `ring` | full ring, partial ring, annulus, arc | CVAT/human asset primary |
+| `edge` | edge band, edge sector, edge-localized density rise | procedural primary, optional CVAT asset |
+| `shot_grid` | repeated shot-relative defect | procedural primary, optional CVAT asset |
+| `random` | sparse unstructured fail baseline | procedural only |
 
-## Synthetic Mode
+These families map to `pattern_masks[class, y, x]` and are trained as multi-label sigmoid targets.
 
-`scratch`:
+## CVAT Labels
 
-- `spin_arc`: 회전/스핀 공정에서 나온 arc-like scratch
-- `radial`: 중심에서 edge 방향으로 퍼지는 scratch
-- straight chord-like scratch는 기본 target이 아니다.
+CVAT labels are configured in [../configs/cvat/wafer_defect_labels.json](../configs/cvat/wafer_defect_labels.json). A CVAT label can map to an existing model family.
 
-`ring`:
+| CVAT label | Asset family | Notes |
+|---|---|---|
+| `local` | `local` | normal local/blob defect |
+| `scratch` | `scratch` | scratch defect |
+| `ring` | `ring` | ring or partial ring |
+| `edge` | `edge` | edge band/sector |
+| `shot_grid` | `shot_grid` | shot-relative repeated pattern |
+| `random` | `random` | sparse fail baseline |
+| `stby_blob` | `local` | STBY/missing-test mosaic blob, grade override 7 |
 
-- full ring
-- partial ring
-- center arc
-- radius/width mismatch가 중요한 failure mode다.
+`stby_blob` aliases include `stby_fail` and `missing_test_blob`.
 
-`shot_grid`:
+## STBY Terms
 
-- shot row/column modulo 기준 반복
-- lower-left, bottom-edge, left-edge contrast로 관찰
-- wafer polar coordinate만으로 설명하지 않는다.
+`stby_blob`:
+
+- CVAT annotation label.
+- Imported as `local` pattern asset for the current composer.
+- Uses `grade_override: 7` so missing-test areas remain visible when composed.
 
 `stby_pattern`:
 
-- random
-- scratch_like
-- ring_like
-- edge_like
-- local_cluster
+- Synthetic generator concept.
+- Describes chip-level missing-test regions through `stby_mask` and `valid_test_mask`.
+- Not currently a primary segmentation target.
+
+`stby_hidden_origin`:
+
+- Review concept for cases where STBY/missing-test area may hide the real physical defect origin.
+- Keep as metadata/review signal until there is enough evidence to model it directly.
+
+## Global Patterns
+
+`edge` and `ring` can cover large wafer regions. For these, annotation rules should prefer the visible defect band/arc rather than the full wafer area.
+
+Recommended rules:
+
+- For edge band defects, label the abnormal band/sector only.
+- For ring defects, label the annulus or arc thickness, not the full disk inside the ring.
+- If the pattern is too global to polygon accurately, start with a coarse polygon and rely on synthetic/procedural generation for variation.
+- Keep ambiguous global patterns as separate CVAT task examples for review before adding new labels.
 
 ## Overlap Rule
 
-Defect family는 서로 중첩될 수 있다.
-
-Synthetic validation mask는 multi-label이다.
+Defect families may overlap.
 
 ```text
 pattern_masks[class, y, x] = 0 or 1
 ```
 
-한 pixel/cell block에 여러 class가 동시에 1일 수 있다.
+One pixel can belong to multiple classes. The segmentation baseline therefore uses class-wise sigmoid targets, not softmax.
 
-Segmentation baseline을 학습할 때는 softmax가 아니라 class별 sigmoid output을 기본으로 한다.
+## Review Questions
 
-## Review Rule
+During review, ask:
 
-전체 유사 wafer 검색은 hard class 하나를 맞히는 문제가 아니다.
-
-전문가 리뷰에서는 다음을 따로 본다.
-
-- family가 같은가?
-- 위치/clock이 비슷한가?
-- query의 주요 defect를 놓쳤는가?
-- mismatch라면 어떤 feature/model 보강 작업으로 연결할 것인가?
+- Is the family correct?
+- Is the mask too broad or too narrow?
+- Did a global pattern get labeled as a local blob?
+- Should this example become a procedural rule instead of a human asset?
+- Does the label schema need a new CVAT label, or can it map to an existing asset family?

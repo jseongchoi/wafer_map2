@@ -18,7 +18,13 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from wafermap.assets import TARGET_FAMILIES, save_pattern_assets
+from wafermap.assets import (
+    DEFAULT_CVAT_FORMAT,
+    TARGET_FAMILIES,
+    cvat_label_lookup,
+    load_cvat_label_schema,
+    save_pattern_assets,
+)
 
 DEFAULT_LABEL_SCHEMA = ROOT / "configs" / "cvat" / "wafer_defect_labels.json"
 
@@ -43,25 +49,6 @@ def load_real_feature_module() -> Any:
         raise RuntimeError(f"Cannot load {path}")
     spec.loader.exec_module(module)
     return module
-
-
-def load_label_schema(path: Path) -> dict[str, dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    if payload.get("schema_version") != "wafer_cvat_label_schema/v1":
-        raise ValueError(f"unsupported label schema: {payload.get('schema_version')}")
-    labels: dict[str, dict[str, Any]] = {}
-    for item in payload.get("labels", []):
-        info = dict(item)
-        name = str(info.get("name", ""))
-        family = str(info.get("asset_family", ""))
-        if not name or not family:
-            raise ValueError(f"label must define name and asset_family: {item}")
-        if family not in TARGET_FAMILIES:
-            raise ValueError(f"label {name} maps to unsupported asset_family={family}")
-        labels[name] = info
-        for alias in info.get("aliases", []):
-            labels[str(alias)] = info
-    return labels
 
 
 def load_export_manifest(path: Path) -> dict[str, Any]:
@@ -99,7 +86,7 @@ def import_cvat_annotations(
     ignore_unknown_labels: bool = False,
 ) -> dict[str, Any]:
     cvat_manifest = load_export_manifest(cvat_manifest_path)
-    labels = load_label_schema(label_schema_path)
+    labels = cvat_label_lookup(load_cvat_label_schema(label_schema_path))
     samples = load_source_samples(cvat_manifest)
     image_to_sample = {Path(str(item["image_name"])).name: str(item["sample_id"]) for item in cvat_manifest["samples"]}
     image_to_sample.update({Path(str(item.get("image_path", ""))).name: str(item["sample_id"]) for item in cvat_manifest["samples"]})
@@ -209,7 +196,7 @@ def annotate_asset_metadata(asset_dir: Path, *, cvat_xml: Path, cvat_manifest: P
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["annotation_source"] = {
         "tool": "CVAT",
-        "format": "CVAT for images 1.1",
+        "format": DEFAULT_CVAT_FORMAT,
         "annotations_xml": str(cvat_xml),
         "cvat_manifest": str(cvat_manifest),
         "labels": labels,

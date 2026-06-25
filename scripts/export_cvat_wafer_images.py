@@ -15,7 +15,13 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from wafermap.assets import preview_rgb, safe_name
+from wafermap.assets import (
+    DEFAULT_CVAT_FORMAT,
+    cvat_labels_for_export,
+    load_cvat_label_schema,
+    preview_rgb,
+    safe_name,
+)
 
 DEFAULT_LABEL_SCHEMA = ROOT / "configs" / "cvat" / "wafer_defect_labels.json"
 
@@ -38,25 +44,6 @@ def load_real_feature_module() -> Any:
         raise RuntimeError(f"Cannot load {path}")
     spec.loader.exec_module(module)
     return module
-
-
-def load_label_schema(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    if payload.get("schema_version") != "wafer_cvat_label_schema/v1":
-        raise ValueError(f"unsupported label schema: {payload.get('schema_version')}")
-    labels = payload.get("labels", [])
-    if not isinstance(labels, list) or not labels:
-        raise ValueError("label schema must contain a non-empty labels list")
-    names: set[str] = set()
-    for label in labels:
-        name = str(label.get("name", ""))
-        family = str(label.get("asset_family", ""))
-        if not name or not family:
-            raise ValueError(f"label must define name and asset_family: {label}")
-        if name in names:
-            raise ValueError(f"duplicate CVAT label name: {name}")
-        names.add(name)
-    return payload
 
 
 def selected_entries(manifest: dict[str, Any], sample_ids: list[str] | None, limit: int) -> list[dict[str, Any]]:
@@ -83,7 +70,7 @@ def export_cvat_images(
     module = load_real_feature_module()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     module.validate_manifest(manifest)
-    label_schema = load_label_schema(label_schema_path)
+    label_schema = load_cvat_label_schema(label_schema_path)
     entries = selected_entries(manifest, sample_ids, limit)
     if not entries:
         raise ValueError("no samples selected for CVAT export")
@@ -113,18 +100,9 @@ def export_cvat_images(
         "schema_version": "wafer_cvat_export/v1",
         "source_manifest": str(manifest_path),
         "label_schema": str(out_dir / "labels.json"),
-        "cvat_format": "CVAT for images 1.1",
+        "cvat_format": DEFAULT_CVAT_FORMAT,
         "samples": samples,
-        "labels": [
-            {
-                "name": label["name"],
-                "display_name": label.get("display_name", label["name"]),
-                "asset_family": label["asset_family"],
-                "color": label.get("color", ""),
-                "aliases": label.get("aliases", []),
-            }
-            for label in label_schema["labels"]
-        ],
+        "labels": cvat_labels_for_export(label_schema),
     }
     (out_dir / "manifest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload

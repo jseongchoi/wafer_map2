@@ -1,4 +1,4 @@
-"""Run a local web editor for extracting FBM defect pattern assets."""
+"""Run the legacy local web editor for FBM pattern asset fallback work."""
 
 from __future__ import annotations
 

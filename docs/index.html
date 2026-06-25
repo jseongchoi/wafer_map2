@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WaferMap FBM 프로젝트 가이드</title>
+  <title>WaferMap Documentation</title>
   <style>
     :root {
       color-scheme: light;
-      --ink: #17202a;
-      --muted: #5f6f7f;
-      --line: #d8e0e7;
-      --bg: #f7f9fb;
+      --ink: #18212f;
+      --muted: #607086;
+      --line: #d8e0e8;
+      --bg: #f6f8fb;
       --panel: #ffffff;
       --accent: #0f766e;
-      --accent-2: #7c3aed;
+      --accent-2: #2563eb;
       --warn: #b45309;
     }
     * { box-sizing: border-box; }
@@ -22,7 +22,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
       background: var(--bg);
-      line-height: 1.65;
+      line-height: 1.62;
     }
     header {
       background: #102027;
@@ -30,19 +30,18 @@
       padding: 42px 28px 34px;
     }
     header .wrap, main {
-      max-width: 1180px;
+      max-width: 1120px;
       margin: 0 auto;
     }
     h1 {
       margin: 0 0 12px;
-      font-size: clamp(30px, 4vw, 52px);
-      line-height: 1.12;
+      font-size: clamp(30px, 4vw, 50px);
+      line-height: 1.1;
       letter-spacing: 0;
     }
     h2 {
       margin: 0 0 14px;
       font-size: 24px;
-      line-height: 1.25;
       letter-spacing: 0;
     }
     h3 {
@@ -80,19 +79,31 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
       gap: 14px;
     }
     .card {
+      display: block;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px;
       background: #fff;
+      text-decoration: none;
+      color: var(--ink);
     }
-    .card strong { color: var(--accent); }
+    .card strong {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .card span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+    }
     .flow {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 12px;
       counter-reset: step;
     }
@@ -102,7 +113,6 @@
       border-radius: 8px;
       padding: 14px;
       background: #fbfdff;
-      position: relative;
     }
     .step::before {
       counter-increment: step;
@@ -131,14 +141,12 @@
       vertical-align: top;
     }
     th { background: #eef4f7; }
-    code, pre {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 13px;
-    }
     code {
       background: #eef4f7;
       border-radius: 4px;
       padding: 2px 5px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
     }
     pre {
       overflow: auto;
@@ -147,6 +155,8 @@
       padding: 14px;
       border-radius: 8px;
       line-height: 1.45;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
     }
     .note {
       border-left: 5px solid var(--warn);
@@ -172,19 +182,10 @@
       background: #e0f2fe;
       color: #075985;
       white-space: nowrap;
+      text-align: center;
     }
-    .tag.now { background: #ede9fe; color: var(--accent-2); }
-    .tag.todo { background: #fef3c7; color: #92400e; }
-    .links a {
-      display: block;
-      text-decoration: none;
-      color: var(--ink);
-    }
-    .links span {
-      display: block;
-      color: var(--muted);
-      font-size: 14px;
-    }
+    .tag.now { background: #e0f2fe; color: var(--accent-2); }
+    .tag.next { background: #fef3c7; color: #92400e; }
     @media (max-width: 720px) {
       header { padding: 30px 18px; }
       main { padding: 16px; }
@@ -195,243 +196,133 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>WaferMap FBM 프로젝트 가이드</h1>
+      <h1>WaferMap Documentation</h1>
       <p class="lead">
-        이 프로젝트의 본질은 fail bit map을 보고 defect pattern을 위치와 family 단위로 인식하고,
-        수치화하고, 비슷한 wafer를 찾을 수 있는 Python 기반 AI 파이프라인을 만드는 것이다.
+        CVAT-first defect annotation, pattern asset import, hybrid synthetic data generation,
+        and segmentation readiness for wafer FBM data.
       </p>
       <nav aria-label="문서 바로가기">
-        <a href="project_overview.md">프로젝트 개요</a>
-        <a href="fbm_data_flow_guide.md">데이터 흐름</a>
-        <a href="fbm_pattern_asset_pipeline.md">누끼 asset</a>
-        <a href="real_png_operator_runbook.md">실제 PNG 실행</a>
-        <a href="modeling_strategy.md">모델 전략</a>
-        <a href="validation_protocol.md">검증 기준</a>
-        <a href="glossary.md">용어집</a>
+        <a href="cvat_wafer_annotation_workflow.md">CVAT workflow</a>
+        <a href="project_overview.md">Project overview</a>
+        <a href="fbm_data_flow_guide.md">Data flow</a>
+        <a href="fbm_pattern_asset_pipeline.md">Synthetic pipeline</a>
+        <a href="roadmap.md">Roadmap</a>
+        <a href="glossary.md">glossary.md</a>
       </nav>
     </div>
   </header>
 
   <main>
     <section>
-      <h2>한 문장 정의</h2>
+      <h2>Current Direction</h2>
       <p>
-        실제 FBM에서 defect pattern mask를 모으고, 그 mask로 라벨이 명확한 합성 wafer를 만들고,
-        U-Net 계열 multi-label segmentation 모델과 embedding retrieval을 붙여 “어디에 어떤 불량이 얼마나 있는지”를 계산한다.
+        WaferMap의 현재 목적은 모델을 먼저 키우는 것이 아니라, defect segmentation model을
+        만들 수 있는 라벨 데이터셋 제작 경로를 안정화하는 것입니다.
       </p>
       <div class="note">
-        현재 프로젝트는 단순 리포트 생성기가 아니라 defect mask asset builder, synthetic dataset generator,
-        segmentation training, 유사 wafer retrieval을 하나의 흐름으로 묶는 작업이다.
+        메인 UI는 CVAT입니다. 기존 local Pattern Asset Builder는 legacy fallback/reference로 유지합니다.
       </div>
     </section>
 
     <section>
-      <h2>전체 흐름</h2>
+      <h2>End-To-End Flow</h2>
       <div class="flow">
-        <article class="step">
-          <h3>실제 FBM 입력</h3>
-          <p>제품별 raw PNG 또는 semantic npz를 준비한다. 기본 위치는 <code>data/raw/&lt;product&gt;/*.png</code>다.</p>
-        </article>
-        <article class="step">
-          <h3>누끼 asset 생성</h3>
-          <p>editor에서 defect 영역을 따고 family별 폴더에 저장한다. 예: <code>data/masks/blob/</code>, <code>data/masks/ring/</code>.</p>
-        </article>
-        <article class="step">
-          <h3>합성 데이터 생성</h3>
-          <p>mask asset을 wafer 배경에 합성한다. 이때 위치, family, 면적, severity 변화가 metadata로 남는다.</p>
-        </article>
-        <article class="step">
-          <h3>딥러닝 학습</h3>
-          <p>multi-channel mask를 정답으로 U-Net 계열 segmentation 모델을 학습한다.</p>
-        </article>
-        <article class="step">
-          <h3>수치화와 검색</h3>
-          <p>모델 출력에서 family별 면적, 중심, radial/angle 위치, embedding vector, top-k similar wafer를 만든다.</p>
-        </article>
-        <article class="step">
-          <h3>전문가 피드백</h3>
-          <p>실제 wafer 결과를 보고 틀린 family, 누락, 위치 오류를 기록한 뒤 generator와 model을 보정한다.</p>
-        </article>
+        <div class="step"><h3>Manifest</h3><p>raw wafer 또는 real-like sample을 <code>real_unlabeled_manifest/v1</code>로 정리합니다.</p></div>
+        <div class="step"><h3>CVAT Package</h3><p><code>export_cvat_wafer_images.py</code>로 CVAT image task package를 만듭니다.</p></div>
+        <div class="step"><h3>Annotation</h3><p>CVAT에서 <code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>stby_blob</code> 등을 라벨링합니다.</p></div>
+        <div class="step"><h3>Asset Import</h3><p><code>import_cvat_annotations.py</code>로 annotation을 reusable pattern asset으로 변환합니다.</p></div>
+        <div class="step"><h3>Synthesis</h3><p>asset과 procedural fallback을 base wafer에 붙여 <code>hybrid synthetic data</code>를 만듭니다.</p></div>
+        <div class="step"><h3>Readiness</h3><p><code>asset_segmentation_manifest.csv</code>와 smoke validation report를 생성합니다.</p></div>
       </div>
     </section>
 
     <section>
-      <h2>파일을 어디에 두는가</h2>
+      <h2>Key Commands</h2>
+      <pre>python scripts/export_cvat_wafer_images.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --out-dir data/cvat_exports/smoke_task `
+  --limit 10
+
+python scripts/import_cvat_annotations.py `
+  --cvat-xml data/cvat_exports/smoke_task/annotations.xml `
+  --cvat-manifest data/cvat_exports/smoke_task/manifest.json `
+  --assets-root data/pattern_assets
+
+python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/cvat_asset_composed `
+  --work-dir outputs/cvat_pattern_asset_pipeline</pre>
+    </section>
+
+    <section>
+      <h2>Label Strategy</h2>
       <table>
         <thead>
-          <tr><th>목적</th><th>기본 위치</th><th>설명</th></tr>
+          <tr><th>CVAT label</th><th>Asset family</th><th>Use</th></tr>
         </thead>
         <tbody>
-          <tr>
-            <td>실제 FBM raw PNG</td>
-            <td><code>data/raw/&lt;product&gt;/*.png</code></td>
-            <td>Grade 0~7 grayscale 이미지. 사내 파일 경로를 직접 넣어도 된다.</td>
-          </tr>
-          <tr>
-            <td>제품 geometry</td>
-            <td><code>data/raw/product_geometry.json</code></td>
-            <td>제품별 chip block, grid, actual net die 정보를 둔다.</td>
-          </tr>
-          <tr>
-            <td>누끼 defect mask</td>
-            <td><code>data/masks/&lt;family&gt;/</code></td>
-            <td>blob, ring, scratch, edge, random 등 family별 asset 저장소.</td>
-          </tr>
-          <tr>
-            <td>합성 데이터</td>
-            <td><code>outputs/synthetic_dataset/&lt;run&gt;/</code></td>
-            <td>합성 image, multi-label mask, metadata, preview report가 생성된다.</td>
-          </tr>
-          <tr>
-            <td>manifest</td>
-            <td><code>outputs/manifests/&lt;run&gt;_manifest.json</code></td>
-            <td>입력 sample, path, parser type, geometry 정보를 연결한다.</td>
-          </tr>
-          <tr>
-            <td>분석 리포트</td>
-            <td><code>outputs/reports/&lt;run&gt;/report.html</code></td>
-            <td>sanity, feature, neighbor, preview, reviewer action을 확인한다.</td>
-          </tr>
-          <tr>
-            <td>모델 산출물</td>
-            <td><code>outputs/models/&lt;run&gt;/</code></td>
-            <td>checkpoint, metrics, prediction preview, embedding index를 둔다.</td>
-          </tr>
+          <tr><td><code>local</code></td><td><code>local</code></td><td>compact blob or local cluster</td></tr>
+          <tr><td><code>scratch</code></td><td><code>scratch</code></td><td>linear or curved scratch</td></tr>
+          <tr><td><code>ring</code></td><td><code>ring</code></td><td>ring, partial ring, arc</td></tr>
+          <tr><td><code>edge</code></td><td><code>edge</code></td><td>edge band or edge sector</td></tr>
+          <tr><td><code>shot_grid</code></td><td><code>shot_grid</code></td><td>shot-relative repeated pattern</td></tr>
+          <tr><td><code>stby_blob</code></td><td><code>local</code></td><td>missing-test mosaic blob with grade override 7</td></tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>실제 PNG batch 실행</h2>
-      <p>실제 FBM PNG를 제품별 폴더에 넣은 뒤 아래처럼 실행한다.</p>
-      <pre><code>python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch `
-  --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz</code></pre>
-      <p>주요 산출물은 아래와 같다.</p>
-      <table>
-        <thead>
-          <tr><th>파일</th><th>해석</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><code>outputs/manifests/real_png_batch_manifest.json</code></td><td>실제 PNG batch를 pipeline 입력으로 묶은 목록.</td></tr>
-          <tr><td><code>outputs/reports/real_png_batch/features.csv</code></td><td>wafer별 feature 수치.</td></tr>
-          <tr><td><code>outputs/reports/real_png_batch/sanity.json</code></td><td>입력 값, mask, shape 이상 여부.</td></tr>
-          <tr><td><code>outputs/reports/real_png_batch/neighbors.csv</code></td><td>유사 wafer top-k 후보.</td></tr>
-          <tr><td><code>outputs/reports/real_png_batch/review_template.csv</code></td><td>사용자가 맞다/틀리다 피드백을 적는 파일.</td></tr>
-          <tr><td><code>outputs/reports/real_png_batch/report.html</code></td><td>사람이 보는 요약 리포트.</td></tr>
-        </tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2>모델 정의</h2>
-      <div class="grid">
-        <article class="card">
-          <h3>왜 U-Net인가</h3>
-          <p>
-            FBM 문제는 이미지 전체 분류보다 병변 segmentation에 가깝다. “불량이 있다”보다
-            “어느 위치에 어떤 모양으로 있다”가 중요하므로 pixel-level mask를 출력하는 U-Net 계열이 baseline으로 적합하다.
-          </p>
-        </article>
-        <article class="card">
-          <h3>왜 multi-label인가</h3>
-          <p>
-            한 wafer에는 ring과 blob, edge와 scratch가 동시에 있을 수 있다. 따라서 softmax 단일 클래스보다
-            family별 sigmoid channel을 두는 multi-label segmentation이 맞다.
-          </p>
-        </article>
-        <article class="card">
-          <h3>왜 embedding도 필요한가</h3>
-          <p>
-            segmentation은 위치와 family를 주고, embedding은 유사 wafer 검색을 담당한다.
-            최종적으로는 mask feature와 encoder embedding을 함께 써서 top-k similar wafer를 찾는다.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section>
-      <h2>로드맵</h2>
+      <h2>Roadmap</h2>
       <div class="phase">
         <strong>Phase 0</strong>
-        <div>FBM grade, wafer mask, stby, defect family 용어와 schema 정리</div>
-        <span class="tag">완료</span>
+        <div>Scope lock: CVAT-first dataset creation and extensible label schema</div>
+        <span class="tag">Done</span>
       </div>
       <div class="phase">
         <strong>Phase 1</strong>
-        <div>실제 raw PNG batch, manifest, sanity report, feature extraction 정리</div>
-        <span class="tag">진행</span>
+        <div>CVAT annotation export/import workflow</div>
+        <span class="tag now">Current</span>
       </div>
       <div class="phase">
         <strong>Phase 2</strong>
-        <div>Pattern Asset Builder로 defect mask 누끼 저장과 재확인 기능 구축</div>
-        <span class="tag now">현재 핵심</span>
+        <div>Pattern asset quality accumulation and review</div>
+        <span class="tag now">Current</span>
       </div>
       <div class="phase">
         <strong>Phase 3</strong>
-        <div>합성 데이터 generator로 image, multi-channel mask, metadata 생성</div>
-        <span class="tag now">현재 핵심</span>
+        <div>Hybrid synthetic data generation and readiness reports</div>
+        <span class="tag now">Current</span>
       </div>
       <div class="phase">
         <strong>Phase 4</strong>
-        <div>Small U-Net multi-label segmentation 학습과 prediction preview 생성</div>
-        <span class="tag todo">다음</span>
+        <div>Small U-Net training and family-level IoU/recall validation</div>
+        <span class="tag next">Next</span>
       </div>
       <div class="phase">
         <strong>Phase 5</strong>
-        <div>Embedding vector 기반 유사 wafer top-k 검색과 active learning loop 연결</div>
-        <span class="tag todo">확장</span>
+        <div>Active learning loop with model prediction review</div>
+        <span class="tag next">Later</span>
       </div>
     </section>
 
     <section>
-      <h2>사용자가 봐야 할 것</h2>
-      <table>
-        <thead>
-          <tr><th>화면 또는 파일</th><th>피드백할 내용</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>누끼 editor preview</td>
-            <td>ring이 여러 조각으로 쪼개졌는지, blob/scratch가 원하는 영역만 잡혔는지 확인.</td>
-          </tr>
-          <tr>
-            <td>합성 preview</td>
-            <td>합성 defect가 실제 FBM처럼 보이는지, 위치와 크기가 말이 되는지 확인.</td>
-          </tr>
-          <tr>
-            <td>segmentation prediction</td>
-            <td>모델이 defect 위치를 덮고 있는지, family를 잘못 부르는지 확인.</td>
-          </tr>
-          <tr>
-            <td>neighbors.csv</td>
-            <td>비슷하다고 나온 wafer가 실제로 같은 계열인지 accepted/mismatch로 표시.</td>
-          </tr>
-          <tr>
-            <td>review_template.csv</td>
-            <td>놓친 큰 defect, 잘못 잡은 영역, 헷갈리는 family를 기록.</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2>문서 바로가기</h2>
-      <div class="grid links">
-        <a class="card" href="project_overview.md"><strong>프로젝트 개요</strong><span>목표, 현재 구조, 왜 이 방향인지</span></a>
-        <a class="card" href="fbm_data_flow_guide.md"><strong>데이터 흐름</strong><span>raw FBM에서 synthetic dataset과 model까지</span></a>
-        <a class="card" href="fbm_pattern_asset_pipeline.md"><strong>패턴 asset</strong><span>누끼 마스크 저장과 합성 데이터 연결</span></a>
-        <a class="card" href="real_png_operator_runbook.md"><strong>실제 PNG 실행</strong><span>FBM PNG 폴더 입력과 리포트 산출물</span></a>
-        <a class="card" href="real_wafer_review_checklist.md"><strong>리뷰 체크리스트</strong><span>사용자가 어떤 피드백을 줘야 하는지</span></a>
-        <a class="card" href="real_unlabeled_workflow.md"><strong>실제 wafer 처리 절차</strong><span>manifest, feature, retrieval, review</span></a>
-        <a class="card" href="expert_review_protocol.md"><strong>전문가 리뷰</strong><span>리뷰 CSV 컬럼과 집계 지표</span></a>
-        <a class="card" href="data_schema.md"><strong>데이터 형식</strong><span>필수 배열, PNG gray value, manifest schema</span></a>
-        <a class="card" href="modeling_strategy.md"><strong>모델링 전략</strong><span>U-Net, embedding, active learning</span></a>
-        <a class="card" href="validation_protocol.md"><strong>검증 기준</strong><span>입력, mask, synthetic, model, real review 검증</span></a>
-        <a class="card" href="experiment_history.md"><strong>실험 기록</strong><span>왜 현재 구조로 왔는지</span></a>
-        <a class="card" href="glossary.md"><strong>glossary.md</strong><span>처음 보는 용어 설명</span></a>
+      <h2>Core Docs</h2>
+      <div class="grid">
+        <a class="card" href="cvat_wafer_annotation_workflow.md"><strong>CVAT workflow</strong><span>export, annotation, import, STBY handling</span></a>
+        <a class="card" href="project_overview.md"><strong>Project overview</strong><span>current architecture and next implementation order</span></a>
+        <a class="card" href="fbm_data_flow_guide.md"><strong>Data flow</strong><span>where manifest, assets, synthetic samples, and reports live</span></a>
+        <a class="card" href="fbm_pattern_asset_pipeline.md"><strong>Synthetic pipeline</strong><span>pattern assets, procedural fallback, training manifest</span></a>
+        <a class="card" href="pattern_taxonomy.md"><strong>Pattern taxonomy</strong><span>model families, CVAT labels, STBY terms</span></a>
+        <a class="card" href="roadmap.md"><strong>Roadmap</strong><span>Phase 4 and beyond</span></a>
+        <a class="card" href="real_png_operator_runbook.md"><strong>Real PNG runbook</strong><span>raw FBM PNG folder input and report output</span></a>
+        <a class="card" href="real_unlabeled_workflow.md"><strong>Real wafer workflow</strong><span>manifest, feature, retrieval, review</span></a>
+        <a class="card" href="expert_review_protocol.md"><strong>Expert review</strong><span>review CSV and aggregation metrics</span></a>
+        <a class="card" href="data_schema.md"><strong>Data schema</strong><span>arrays, PNG values, manifest schemas</span></a>
+        <a class="card" href="modeling_strategy.md"><strong>Modeling strategy</strong><span>U-Net, embedding, active learning</span></a>
+        <a class="card" href="validation_protocol.md"><strong>Validation protocol</strong><span>input, mask, synthetic, model, review validation</span></a>
+        <a class="card" href="experiment_history.md"><strong>Experiment history</strong><span>why the current path exists</span></a>
+        <a class="card" href="legacy_pattern_asset_editor.md"><strong>Legacy editor</strong><span>what remains useful from the local browser editor</span></a>
+        <a class="card" href="glossary.md"><strong>glossary.md</strong><span>terms used across the project</span></a>
       </div>
     </section>
   </main>

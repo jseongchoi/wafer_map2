@@ -12,6 +12,7 @@ USER_FACING_DOCS = [
     ROOT / "README.md",
     DOCS / "index.html",
     DOCS / "README.md",
+    DOCS / "cvat_wafer_annotation_workflow.md",
     DOCS / "glossary.md",
     DOCS / "fbm_data_flow_guide.md",
     DOCS / "fbm_pattern_asset_pipeline.md",
@@ -27,6 +28,7 @@ USER_FACING_DOCS = [
     DOCS / "modeling_strategy.md",
     DOCS / "validation_protocol.md",
     DOCS / "pattern_taxonomy.md",
+    DOCS / "legacy_pattern_asset_editor.md",
 ]
 
 
@@ -95,10 +97,12 @@ def test_documentation_guides_current_project_direction() -> None:
     roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
     pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
     data_flow = (DOCS / "fbm_data_flow_guide.md").read_text(encoding="utf-8")
+    cvat_workflow = (DOCS / "cvat_wafer_annotation_workflow.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
+    assert "cvat_wafer_annotation_workflow.md" in docs_index
     assert "fbm_pattern_asset_pipeline.md" in docs_index
     assert "fbm_data_flow_guide.md" in docs_index
     assert "project_overview.md" in docs_index
@@ -106,14 +110,21 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "glossary.md" in docs_index
     assert "real_png_operator_runbook.md" in docs_index
     assert "experiment_history.md" in docs_index
+    assert "CVAT-first dataset pipeline" in overview
+    assert "export_cvat_wafer_images.py" in overview
+    assert "import_cvat_annotations.py" in overview
     assert "hybrid synthetic data" in overview
     assert "train_unet_segmentation.py" in overview
-    assert "Pattern Asset Builder" in roadmap
-    assert "Small U-Net" in roadmap
+    assert "CVAT Annotation Workflow" in roadmap
+    assert "Small U-Net Training" in roadmap
     assert "active learning" in roadmap
+    assert "label schema" in pipeline
     assert "procedural fallback" in pipeline
+    assert "CVAT for images 1.1" in cvat_workflow
+    assert "stby_blob" in cvat_workflow
+    assert "configs/cvat/wafer_defect_labels.json" in cvat_workflow
     assert "data/pattern_assets" in data_flow
-    assert "data/synthetic/asset_composed" in data_flow
+    assert "data/synthetic/cvat_asset_composed" in data_flow
     assert "asset_segmentation_manifest.csv" in data_flow
     assert "coordinate-aware small U-Net" in data_flow
     assert "resize-only representation" in experiment_history

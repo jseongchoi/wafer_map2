@@ -1,81 +1,89 @@
-# 프로젝트 개요
+# Project Overview
 
-## 목표
+WaferMap의 목표는 wafer Fail Bit Map(FBM)에서 defect segmentation model을 만들 수 있는 데이터셋 제작 파이프라인을 완성하는 것입니다. 현재 핵심은 모델 성능 경쟁이 아니라, 실제 wafer defect를 빠르게 라벨링하고 합성 데이터로 확장할 수 있는 안정적인 데이터 공장입니다.
 
-WaferMap 프로젝트의 목표는 FBM(Fail Bit Map) wafer map을 해석하는 딥러닝 기반 시스템을 만드는 것입니다. 단순히 wafer 하나에 defect 이름을 붙이는 분류기가 아니라, 다음 기능을 동시에 달성해야 합니다.
+## Current Product Shape
 
-```text
-1. defect family별 pixel mask 검출
-2. defect 위치, 면적, 중심, edge 거리, component 수 수치화
-3. wafer-level family score 산출
-4. encoder embedding 기반 유사 wafer top-k 검색
-5. 모델 prediction을 사람이 수정해 다시 학습 데이터로 넣는 active learning loop
-```
-
-## 현재 핵심 구조
-
-현재 프로젝트의 중심은 **라벨 있는 hybrid synthetic data 생성 파이프라인**입니다.
+현재 메인 구조는 CVAT-first dataset pipeline입니다.
 
 ```text
-Pattern Asset Builder
-  사람이 local/scratch/ring 같은 실제 defect를 pixel mask로 누끼 저장
-
-Procedural Generator
-  scratch cold-start, edge, shot_grid, random을 코드로 생성
-
-Hybrid Synthetic Composer
-  human asset과 procedural defect를 base wafer에 합성
-  합성 위치와 mask를 알고 있으므로 자동 label 생성
-
-Segmentation / Embedding Pipeline
-  readiness manifest, segmentation smoke, embedding smoke, U-Net entrypoint 생성
+raw or real-like wafer samples
+-> real_unlabeled_manifest/v1
+-> CVAT image package
+-> CVAT annotation export
+-> pattern asset library
+-> hybrid synthetic data
+-> segmentation readiness / smoke validation
+-> train_unet_segmentation.py when training data is stable
 ```
 
-## Family별 데이터 생성 책임
+## Why CVAT First
 
-| Family | 현재 데이터 생성 방식 | 판단 |
+직접 만든 browser editor는 빠른 실험에는 좋지만, 실제 라벨링 제품으로 커지면 task 관리, label 관리, reviewer flow, 대량 image annotation, audit trail을 다시 만들어야 합니다. CVAT는 이 영역을 이미 해결합니다.
+
+이 repository에서 직접 책임질 부분은 CVAT 바깥의 wafer-specific pipeline입니다.
+
+| Layer | Responsibility |
+|---|---|
+| CVAT | annotation UI, task/review workflow, polygon/brush labeling |
+| `export_cvat_wafer_images.py` | wafer manifest를 CVAT image package로 변환 |
+| `configs/cvat/wafer_defect_labels.json` | 확장 가능한 label schema |
+| `import_cvat_annotations.py` | CVAT XML을 reusable pattern asset으로 변환 |
+| `compose_synthetic_from_assets.py` | real/base wafer에 pattern asset과 procedural fallback 합성 |
+| `run_pattern_asset_pipeline.py` | readiness, smoke validation, model dependency check |
+
+## Defect Families
+
+현재 model target 후보는 다음 family입니다.
+
+| Family | Current source | Notes |
 |---|---|---|
-| `local` | human asset primary | 실제 blob texture와 군집 형태가 중요합니다. |
-| `scratch` | human asset primary + procedural fallback | 실제 scratch asset이 최종 기준이지만, cold-start 학습을 위해 radial/spin-arc scratch를 코드로 보강합니다. |
-| `ring` | human asset primary | partial ring, 끊긴 ring, 두께와 반경이 실제 공정 signature를 담습니다. |
-| `edge` | procedural primary, asset optional | wafer edge 거리와 angular sector rule로 안정적으로 합성할 수 있습니다. |
-| `shot_grid` | procedural primary, asset optional | chip/shot 반복 좌표로 합성하는 편이 자연스럽습니다. |
-| `random` | procedural only | 구조 없는 산발 fail baseline이므로 사람이 누끼 따는 대상이 아닙니다. |
+| `local` | CVAT/human asset primary | blob, cluster, STBY-derived mosaic asset 포함 |
+| `scratch` | CVAT/human asset primary + procedural fallback | 실제 scratch asset이 쌓이면 fallback 비중을 줄입니다. |
+| `ring` | CVAT/human asset primary | partial ring, broken ring 포함 |
+| `edge` | procedural primary + optional CVAT asset | edge band/sector는 코드 생성이 빠르지만 실제 예외 shape는 asset으로 보강합니다. |
+| `shot_grid` | procedural primary + optional CVAT asset | shot-relative repeated defect |
+| `random` | procedural only | 구조 없는 sparse fail baseline |
 
-## 구현된 주요 산출물
+`stby_blob`은 CVAT label로는 별도 관리하지만 현재 asset family는 `local`입니다. 기존 synthetic generator의 `stby_pattern`은 valid-test mask를 설명하는 보조 패턴이며, segmentation target으로 직접 학습할지는 별도 결정 사항입니다.
 
-| 영역 | 산출물 | 상태 |
-|---|---|---|
-| Pattern annotation | `scripts/run_pattern_asset_editor.py` | 구현됨 |
-| Asset library report | `scripts/build_pattern_asset_report.py` | 구현됨 |
-| Hybrid synthetic data | `scripts/compose_synthetic_from_assets.py` | 구현됨 |
-| End-to-end pipeline | `scripts/run_pattern_asset_pipeline.py` | 구현됨 |
-| Segmentation readiness | `scripts/build_segmentation_readiness.py` | 구현됨 |
-| Segmentation smoke | `scripts/train_segmentation_smoke.py` | 구현됨 |
-| Embedding smoke | `scripts/train_embedding_smoke.py` | 구현됨 |
-| Small U-Net entrypoint | `scripts/train_unet_segmentation.py` | 구현됨, 현재 환경은 PyTorch 미설치 |
-| 이해용 HTML report | `outputs/reports/pattern_asset_project_report.html` | 생성됨 |
+## What Stays
 
-## 현재 검증 결과
+- `src/wafermap/data`, `src/wafermap/real`, `src/wafermap/synth`, `src/wafermap/assets`, `src/wafermap/training`
+- CVAT export/import scripts
+- synthetic composition scripts
+- readiness/smoke/model entrypoint scripts
+- report generation and validation tests
 
-최근 pipeline 실행 기준:
+## What Becomes Legacy
 
-- `local`: positive sample 8개
-- `scratch`: positive sample 11개
-- `ring`: positive sample 20개
-- `edge`: positive sample 10개
-- `shot_grid`: positive sample 9개
-- `random`: positive sample 20개
-- embedding top-1 lift: 약 `1.53x`
-- 전체 테스트: `111 passed`
+`scripts/run_pattern_asset_editor.py`는 삭제하지 않고 [Legacy Pattern Asset Editor](legacy_pattern_asset_editor.md)로 격리합니다. 이미 구현한 lasso, smart fit, low-resolution interaction, proposal overlay는 reference 가치가 있습니다. 다만 새 annotation product 기능은 기본적으로 CVAT workflow에 붙입니다.
 
-## 현재 남은 병목
+## Current Validation State
 
-1. 현재 Codex 작업 환경에는 PyTorch가 없어 small U-Net 실제 학습은 실행하지 못했습니다.
-2. `scratch`는 procedural fallback으로 label을 만들 수 있지만, 최종 realism을 위해 실제 scratch human asset이 필요합니다.
-3. 실제 wafer batch에서 모델 prediction을 검토하고 수정하는 active learning loop를 더 돌려야 합니다.
-4. 실제 제품별 geometry/shot layout 정보가 들어오면 `edge`와 `shot_grid` procedural generator를 더 정확하게 보정해야 합니다.
+최근 기준:
 
-## 결론
+- CVAT export/import workflow 테스트 통과
+- pattern asset pipeline 테스트 통과
+- 전체 테스트 `111 passed`
+- PyTorch가 없는 환경에서는 `train_unet_segmentation.py --check-deps`가 dependency report를 생성합니다.
 
-프로젝트는 이제 “막연한 feature 실험” 단계가 아니라, **라벨 있는 synthetic data를 만들고, multi-label segmentation/embedding 모델로 연결하는 구조**로 정렬되어 있습니다. 다음 핵심 작업은 PyTorch 학습 환경에서 `scripts/train_unet_segmentation.py`를 실행하고, 실제 wafer 기반 human asset과 prediction 수정 루프를 반복하는 것입니다.
+## Next Implementation Order
+
+1. 실제 wafer manifest에서 CVAT task package를 생성합니다.
+2. CVAT label schema를 제품/공정별 label 증가에 견딜 수 있게 운영합니다.
+3. CVAT polygon/box import를 안정화하고, brush mask가 주 workflow가 되면 CVAT mask RLE import를 추가합니다.
+4. `local`, `scratch`, `ring`, `edge` 실제 asset을 충분히 쌓습니다.
+5. hybrid synthetic data 품질 report를 보고 procedural fallback realism을 조정합니다.
+6. PyTorch 환경에서 `train_unet_segmentation.py`를 실제 학습으로 돌립니다.
+7. model prediction을 다시 CVAT 또는 review tool로 되돌리는 active learning loop를 붙입니다.
+
+## Practical Definition Of Done
+
+이 프로젝트가 다음 단계로 넘어가려면 아래가 먼저 안정화되어야 합니다.
+
+- annotator가 CVAT에서 label을 헷갈리지 않는다.
+- `stby_blob`, edge band, ring 같은 global pattern을 일관되게 라벨링할 수 있다.
+- CVAT import 결과가 `data/pattern_assets`에서 preview/mask/metadata로 검증 가능하다.
+- 합성 sample의 `pattern_masks`가 model target으로 바로 쓰일 수 있다.
+- smoke validation에서 family coverage와 overlap 문제가 즉시 보인다.

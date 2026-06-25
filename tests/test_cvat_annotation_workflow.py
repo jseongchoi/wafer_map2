@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from wafermap.assets import cvat_label_lookup, load_cvat_label_schema
 from wafermap.data import PATTERN_CLASSES, save_npz, write_json
 from wafermap.real import manifest_payload
 from wafermap.synth import SyntheticConfig, generate_sample
@@ -62,6 +63,15 @@ def test_cvat_export_writes_images_manifest_and_label_schema(tmp_path):
     with Image.open(image_path) as image:
         assert image.size == (sample.shape[1], sample.shape[0])
     assert any(label["name"] == "stby_blob" for label in payload["labels"])
+
+
+def test_cvat_label_schema_supports_aliases_and_asset_family_mapping():
+    schema = load_cvat_label_schema(Path("configs/cvat/wafer_defect_labels.json").resolve())
+    labels = cvat_label_lookup(schema)
+
+    assert labels["stby_blob"]["asset_family"] == "local"
+    assert labels["stby_fail"]["name"] == "stby_blob"
+    assert labels["missing_test_blob"]["grade_override"] == 7
 
 
 def test_cvat_polygon_import_creates_pattern_assets_and_preserves_stby_blob_grade(tmp_path):

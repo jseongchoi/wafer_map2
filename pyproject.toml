@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wafermap"
 version = "0.1.0"
-description = "Synthetic wafer Fail Bit Map generation, validation, and feature extraction."
+description = "CVAT-first wafer FBM defect annotation, synthetic dataset generation, and segmentation readiness."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
