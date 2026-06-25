@@ -277,6 +277,8 @@ def test_pattern_asset_editor_exposes_client_side_color_schemes():
     assert "function loadModelProposals" in editor.EDITOR_HTML
     assert "<summary>Proposals</summary>" in editor.EDITOR_HTML
     assert "<summary>Output</summary>" in editor.EDITOR_HTML
+    assert "function lassoCandidateAt" in editor.EDITOR_HTML
+    assert "stbyMask[idx]" in editor.EDITOR_HTML
 
 
 def test_pattern_asset_pipeline_writes_stby_excluded_manifest_and_project_report(tmp_path):

@@ -1107,7 +1107,7 @@ function finishLasso(event) {
     lassoFit: result,
     activeFamily,
     minGrade: Number(document.getElementById("minGrade").value),
-    rule: "inside lasso, wafer/valid only, severity >= minGrade"
+    rule: "inside lasso, includes severity >= minGrade valid pixels and STBY fail chips"
   }, null, 2);
 }
 
@@ -1119,9 +1119,9 @@ function drawLasso() {
   lassoCtx.lineWidth = lineWidth;
   lassoCtx.lineJoin = "round";
   lassoCtx.lineCap = "round";
-  lassoCtx.setLineDash([lineWidth * 3, lineWidth * 2]);
-  lassoCtx.strokeStyle = sample.family_colors[activeFamily] || "#ffffff";
-  lassoCtx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  const rgb = hexToRgb(sample.family_colors[activeFamily] || "#ffffff");
+  lassoCtx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.96)`;
+  lassoCtx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`;
   lassoCtx.beginPath();
   lassoCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
   for (const p of lassoPoints.slice(1)) lassoCtx.lineTo(p.x, p.y);
@@ -1129,6 +1129,9 @@ function drawLasso() {
     lassoCtx.closePath();
     lassoCtx.fill();
   }
+  lassoCtx.stroke();
+  lassoCtx.strokeStyle = "rgba(255, 255, 255, 0.82)";
+  lassoCtx.lineWidth = Math.max(1, lineWidth - 1);
   lassoCtx.stroke();
   lassoCtx.restore();
 }
@@ -1279,22 +1282,34 @@ function applyLassoFit() {
     for (let x = minX; x <= maxX; x += 1) {
       if (!pointInPolygon(x + 0.5, y + 0.5, lassoPoints)) continue;
       const idx = y * W + x;
-      if (!waferMask[idx] || !validMask[idx] || severity[idx] < minGrade) continue;
+      if (!lassoCandidateAt(idx, minGrade)) continue;
       candidates.push(idx);
     }
   }
   if (candidates.length === 0) return { addedPixels: 0, candidatePixels: 0 };
   saveHistory();
   let added = 0;
+  let stbyPixels = 0;
+  let gradePixels = 0;
   for (const idx of candidates) {
     if (!target[idx]) added += 1;
+    if (stbyMask[idx]) stbyPixels += 1;
+    else gradePixels += 1;
     target[idx] = 1;
   }
   return {
     addedPixels: added,
     candidatePixels: candidates.length,
+    gradePixels,
+    stbyPixels,
     bbox: [minX, minY, maxX - minX + 1, maxY - minY + 1]
   };
+}
+
+function lassoCandidateAt(idx, minGrade) {
+  if (!waferMask[idx]) return false;
+  if (stbyMask[idx]) return true;
+  return validMask[idx] && severity[idx] >= minGrade;
 }
 
 function pointInPolygon(x, y, polygon) {
