@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import html
 import json
 import sys
 from dataclasses import dataclass
@@ -16,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from wafermap.reporting.project_readiness_report import html_report
 from wafermap.real import SOURCE_TYPE_PNG_GRAYSCALE_RAW, validate_manifest
 
 PRE_REAL_REQUIRED_OUTPUTS = (
@@ -510,48 +510,7 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def write_html(path: Path, audit: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(stage['stage_id'])}</td>"
-        f"<td>{html.escape(stage['title'])}</td>"
-        f"<td>{html.escape(stage['status'])}</td>"
-        f"<td>{html.escape(stage['goal'])}</td>"
-        f"<td>{html.escape('; '.join(stage['missing_required']) or '-')}</td>"
-        f"<td>{html.escape('; '.join(stage['missing_evidence']) or '-')}</td>"
-        f"<td>{html.escape('; '.join(stage['next_actions']))}</td>"
-        "</tr>"
-        for stage in audit["stages"]
-    )
-    document = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>WaferMap Project Readiness Audit</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; margin: 32px; color: #202124; }}
-    table {{ border-collapse: collapse; width: 100%; }}
-    th, td {{ border: 1px solid #dadce0; padding: 8px; vertical-align: top; font-size: 13px; }}
-    th {{ background: #f1f3f4; text-align: left; }}
-    .status {{ font-weight: 700; }}
-  </style>
-</head>
-<body>
-  <h1>WaferMap Project Readiness Audit</h1>
-  <p class="status">Overall: {html.escape(audit["overall_status"])}</p>
-  <p>Generated at {html.escape(audit["generated_at"])}</p>
-  <table>
-    <thead>
-      <tr>
-        <th>단계</th><th>제목</th><th>상태</th><th>목표</th>
-        <th>빠진 필수 항목</th><th>빠진 근거</th><th>다음 작업</th>
-      </tr>
-    </thead>
-    <tbody>{rows}</tbody>
-  </table>
-</body>
-</html>
-"""
-    path.write_text(document, encoding="utf-8")
+    path.write_text(html_report(audit), encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> None:
