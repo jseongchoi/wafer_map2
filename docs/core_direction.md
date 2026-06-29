@@ -11,6 +11,8 @@ FBM maps
 -> better synthetic data and correction loops
 ```
 
+The executable version of this workflow is [End-To-End Workflow](end_to_end_workflow.md).
+
 ## Product Boundary
 
 WaferMap is a wafer-specific segmentation dataset factory. The repository should make it faster to turn FBM maps into reusable defect masks, compose those masks into multi-defect synthetic wafers, and train or validate segmentation models against that data.

@@ -15,6 +15,7 @@
 참조 문서:
 
 - [Project Overview](project_overview.md)
+- [End-To-End Workflow](end_to_end_workflow.md)
 - [Segmentation Tool Workflow](segmentation_tool_workflow.md)
 
 ## Phase 1. Direct Segmentation Tool

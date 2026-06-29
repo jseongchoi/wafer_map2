@@ -96,6 +96,7 @@ python scripts/export_unet_predictions.py `
 ## Docs
 
 - [Core Direction](docs/core_direction.md)
+- [End-To-End Workflow](docs/end_to_end_workflow.md)
 - [Architecture](docs/architecture.md)
 - [Operator Manual](docs/operator_manual.md)
 - [Segmentation Tool Workflow](docs/segmentation_tool_workflow.md)

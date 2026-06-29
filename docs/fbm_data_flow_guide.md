@@ -1,8 +1,8 @@
 # FBM Data Flow Guide
 
-이 문서는 raw wafer 입력부터 직접 segmentation mask, pattern asset, hybrid synthetic data, segmentation manifest까지 어떤 파일이 어디에 생기는지 정리합니다.
+This document is the artifact map. Use [End-To-End Workflow](end_to_end_workflow.md) for the full command sequence.
 
-## End-To-End Flow
+## Data Path
 
 ```text
 raw wafer PNG or synthetic sample dir
@@ -11,7 +11,8 @@ raw wafer PNG or synthetic sample dir
 -> data/pattern_assets
 -> data/synthetic/asset_composed
 -> outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
--> coordinate-aware small U-Net training input
+-> coordinate-aware small U-Net
+-> outputs/predictions/fbm_prediction_masks.json
 ```
 
 ## Folder Contract
@@ -23,43 +24,21 @@ raw wafer PNG or synthetic sample dir
 | Processed local data | `data/processed/` | ignored |
 | Pattern assets | `data/pattern_assets/<family>/<asset_id>/` | ignored |
 | Synthetic samples | `data/synthetic/<run>/<sample_id>/` | ignored |
-| Manifests/reports | `outputs/` | ignored |
+| Reports, manifests, predictions, checkpoints | `outputs/` | ignored |
 | Source/config/docs/tests | `src/`, `scripts/`, `configs/`, `docs/`, `tests/` | tracked |
 
-Git에는 code, schema, config, docs, tests만 넣습니다. wafer 원본, annotation 산출물, pattern asset, 합성 sample, model checkpoint는 로컬/운영 산출물입니다.
+Git stores code, configs, schemas, docs, and tests. It should not store wafer source data, saved assets, synthetic samples, model checkpoints, reports, or prediction exports.
 
-## 1. Real/Unlabeled Manifest
+## Manifest Outputs
 
-실제 PNG batch를 manifest로 변환합니다.
-
-```powershell
-python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz
-```
-
-생성 위치:
+Real PNG analysis writes:
 
 ```text
 outputs/manifests/real_png_batch_manifest.json
 outputs/reports/real_png_batch/
 ```
 
-빠르게 manifest만 만들 때:
-
-```powershell
-python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --manifest-only `
-  --out-dir outputs/reports/local_raw_batch
-```
-
-## 2. Segmentation Tool
-
-manifest에서 샘플 하나를 열고 family별 mask를 작성합니다.
+The local segmentation tool consumes a manifest plus `sample_id`:
 
 ```powershell
 python scripts/run_segmentation_tool.py `
@@ -68,7 +47,9 @@ python scripts/run_segmentation_tool.py `
   --assets-root data/pattern_assets
 ```
 
-생성 구조:
+## Pattern Asset Contract
+
+Each saved defect asset has:
 
 ```text
 data/pattern_assets/<family>/<asset_id>/
@@ -78,42 +59,20 @@ data/pattern_assets/<family>/<asset_id>/
   metadata.json
 ```
 
-핵심 metadata:
+Metadata includes:
 
-```json
-{
-  "schema_version": "fbm_pattern_asset/v1",
-  "family": "local",
-  "source_sample_id": "wafer_001",
-  "bbox_xywh": [120, 80, 48, 32],
-  "mask_pixel_count": 220,
-  "composition_rule": "max"
-}
-```
+- `schema_version = fbm_pattern_asset/v1`;
+- `family`;
+- `source_sample_id`;
+- `bbox_xywh`;
+- `mask_pixel_count`;
+- grade range;
+- composition rule;
+- radial/angular/edge-distance location summary.
 
-## 3. Pattern Asset QC
+## Synthetic Sample Contract
 
-```powershell
-python scripts/build_pattern_asset_report.py `
-  --assets-root data/pattern_assets `
-  --out outputs/reports/pattern_asset_library_report.html
-```
-
-## 4. Hybrid Synthetic Data
-
-pattern asset과 procedural fallback을 base wafer에 합성합니다.
-
-```powershell
-python scripts/compose_synthetic_from_assets.py `
-  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
-  --assets-root data/pattern_assets `
-  --out-dir data/synthetic/asset_composed `
-  --count 200 `
-  --assets-per-wafer 3 `
-  --procedural-families scratch,edge,shot_grid,random
-```
-
-각 sample:
+Composed samples live under:
 
 ```text
 data/synthetic/asset_composed/<sample_id>/
@@ -121,77 +80,53 @@ data/synthetic/asset_composed/<sample_id>/
   metadata.json
 ```
 
-중요 배열:
+Important arrays:
 
 | Array | Meaning |
 |---|---|
 | `severity` | final grade 0-7 wafer map |
-| `wafer_mask` | wafer valid area |
-| `valid_test_mask` | testable chip/pixel area |
+| `wafer_mask` | wafer area |
+| `valid_test_mask` | testable area |
 | `stby_mask` | missing-test/STBY area |
-| `pattern_masks` | family-wise multi-label target |
+| `pattern_masks` | family-wise multi-label segmentation target |
 | `pattern_intensity` | family-wise normalized intensity |
 | `chip_index` | chip coordinate index |
 
-## 5. Segmentation Readiness
+## Training Manifest
 
-합성 sample을 학습 manifest와 validation report로 변환합니다.
-
-```powershell
-python scripts/run_pattern_asset_pipeline.py `
-  --assets-root data/pattern_assets `
-  --composed-dir data/synthetic/asset_composed `
-  --work-dir outputs/pattern_asset_pipeline `
-  --report-out outputs/reports/pattern_asset_project_report.html
-```
-
-주요 산출물:
+Readiness generation writes:
 
 ```text
-outputs/pattern_asset_pipeline/
-  asset_segmentation_manifest.csv
-  asset_segmentation_readiness.html
-  asset_segmentation_readiness_metrics.json
-  asset_segmentation_gallery.png
-  asset_segmentation_smoke.html
-  asset_embedding_smoke.html
-  asset_unet_segmentation.html
-  asset_unet_segmentation_metrics.json
-
-outputs/reports/pattern_asset_project_report.html
+outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
+outputs/pattern_asset_pipeline/asset_segmentation_readiness.html
+outputs/pattern_asset_pipeline/asset_segmentation_readiness_metrics.json
+outputs/pattern_asset_pipeline/asset_segmentation_gallery.png
 ```
 
-`asset_segmentation_manifest.csv`가 `train_unet_segmentation.py`의 직접 입력입니다.
+`asset_segmentation_manifest.csv` is the direct input to `train_unet_segmentation.py`.
 
-## 6. Model Training Entry Point
+## Model Artifacts
 
-PyTorch 설치 환경:
+Training writes:
 
-```powershell
-pip install -e .[train]
+```text
+outputs/models/asset_unet_segmentation.pt
+outputs/pattern_asset_pipeline/asset_unet_segmentation.html
+outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json
 ```
 
-학습:
+The coordinate-aware small U-Net input contains severity, mask, and position channels:
 
-```powershell
-python scripts/train_unet_segmentation.py `
-  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
-  --model-out outputs/models/asset_unet_segmentation.pt `
-  --output-size 96 `
-  --epochs 20
+```text
+severity_mean, severity_max, fail_density,
+wafer_mask, valid_test_mask, stby_mask,
+x_norm, y_norm, radial_norm, angle_sin, angle_cos, edge_distance_norm
 ```
 
-Prediction export:
+`export_unet_predictions.py` writes:
 
-```powershell
-python scripts/export_unet_predictions.py `
-  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --model outputs/models/asset_unet_segmentation.pt `
-  --out outputs/predictions/fbm_prediction_masks.json `
-  --split val `
-  --threshold 0.5
+```text
+outputs/predictions/fbm_prediction_masks.json
 ```
 
-현재 기본 목표는 coordinate-aware small U-Net입니다. 입력에는 grade map뿐 아니라 wafer mask, valid-test mask, stby mask, x/y/radial/angle/edge-distance channel이 포함됩니다.
+That file uses `fbm_prediction_masks/v1` and is loaded by `run_segmentation_tool.py --prediction-json`.

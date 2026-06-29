@@ -14,6 +14,7 @@ USER_FACING_DOCS = [
     DOCS / "index.html",
     DOCS / "README.md",
     DOCS / "core_direction.md",
+    DOCS / "end_to_end_workflow.md",
     DOCS / "architecture.md",
     DOCS / "operator_manual.md",
     DOCS / "segmentation_tool_workflow.md",
@@ -99,6 +100,7 @@ def test_core_documentation_has_no_replacement_mojibake_codepoints() -> None:
 def test_documentation_guides_current_project_direction() -> None:
     docs_index = (DOCS / "README.md").read_text(encoding="utf-8")
     core_direction = (DOCS / "core_direction.md").read_text(encoding="utf-8")
+    workflow = (DOCS / "end_to_end_workflow.md").read_text(encoding="utf-8")
     overview = (DOCS / "project_overview.md").read_text(encoding="utf-8")
     roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
     pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
@@ -112,11 +114,18 @@ def test_documentation_guides_current_project_direction() -> None:
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
     assert "core_direction.md" in docs_index
+    assert "end_to_end_workflow.md" in docs_index
     assert "FBM maps" in core_direction
     assert "defect generation" in core_direction
     assert "multi-defect synthetic maps" in core_direction
     assert "multi-defect segmentation training and validation" in core_direction
     assert "real-data pattern asset extraction" in core_direction
+    assert "End-To-End Workflow" in workflow
+    assert "run_segmentation_tool.py" in workflow
+    assert "compose_synthetic_from_assets.py" in workflow
+    assert "train_unet_segmentation.py" in workflow
+    assert "export_unet_predictions.py" in workflow
+    assert "fbm_prediction_masks/v1" in workflow
     assert "architecture.md" in docs_index
     assert "operator_manual.md" in docs_index
     assert "segmentation_tool_workflow.md" in docs_index
@@ -166,6 +175,7 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "Segmentation Smoke Test" in experiment_history
     assert "Phase 4" in roadmap_html
     assert "core_direction.md" in roadmap_html
+    assert "end_to_end_workflow.md" in roadmap_html
     assert "glossary.md" in roadmap_html
     assert "`severity`" in glossary
     assert "`retrieval_failure_mode`" in glossary
@@ -176,6 +186,7 @@ def test_core_direction_avoids_removed_workflows() -> None:
         ROOT / "README.md",
         DOCS / "README.md",
         DOCS / "core_direction.md",
+        DOCS / "end_to_end_workflow.md",
         DOCS / "project_overview.md",
         DOCS / "segmentation_tool_workflow.md",
         DOCS / "fbm_pattern_asset_pipeline.md",

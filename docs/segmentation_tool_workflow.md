@@ -1,34 +1,10 @@
 # Segmentation Tool Workflow
 
-This workflow uses the in-repo browser tool as the primary annotation surface for wafer defect masks.
+The in-repo segmentation tool is the local mask editing surface for wafer defect assets. It does not train the model; it turns wafer samples and optional model predictions into reusable `mask.png`, `grade.png`, `preview.png`, and `metadata.json` assets.
 
-```text
-real/unlabeled wafer manifest
--> local segmentation tool
--> reusable pattern assets
--> synthetic segmentation dataset composition
--> segmentation readiness / smoke validation
-```
+Use [End-To-End Workflow](end_to_end_workflow.md) for the full pipeline.
 
-The core direction is:
-
-1. Generate defect masks from FBM maps.
-2. Compose multi-defect synthetic maps from reusable assets.
-3. Train and validate multi-defect segmentation on those composed maps.
-4. Use this tool to extract example masks from real or real-like wafers so the synthetic asset library reflects real data.
-
-The browser app is only the local mask editing surface. It does not train the segmentation model; it turns a wafer sample plus optional model proposals into reusable `mask.png` / `grade.png` / `metadata.json` pattern assets.
-
-## 1. Open A Wafer In The Tool
-
-```powershell
-python scripts/run_segmentation_tool.py `
-  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
-  --sample-id real_like_synth_000000 `
-  --assets-root data/pattern_assets
-```
-
-For a real PNG batch, use the manifest written by `scripts/analyze_png_raw_folders.py`:
+## Open A Wafer
 
 ```powershell
 python scripts/run_segmentation_tool.py `
@@ -37,9 +13,16 @@ python scripts/run_segmentation_tool.py `
   --assets-root data/pattern_assets
 ```
 
-The tool edits multi-label masks for `local`, `scratch`, `ring`, `edge`, `shot_grid`, and `random`. It can load model prediction masks through `--prediction-json` and proposal masks through `--proposal-json`.
+Smoke sample:
 
-After U-Net training, export model masks before opening the correction tool:
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --sample-id real_like_synth_000000 `
+  --assets-root data/pattern_assets
+```
+
+Model-assisted correction:
 
 ```powershell
 python scripts/export_unet_predictions.py `
@@ -48,30 +31,57 @@ python scripts/export_unet_predictions.py `
   --out outputs/predictions/fbm_prediction_masks.json `
   --split val `
   --threshold 0.5
+
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --sample-id <sample_id> `
+  --prediction-json outputs/predictions/fbm_prediction_masks.json `
+  --assets-root data/pattern_assets
 ```
 
-Then pass the exported JSON to `run_segmentation_tool.py --prediction-json` for human correction and asset saving.
+`--prediction-json` must use `fbm_prediction_masks/v1` and matching `sample_id`.
 
-## 2. Edit Masks
+## Families
 
-Main controls:
+The tool edits multi-label masks for:
 
-- `Family`: selects which defect family receives new mask pixels.
-- `Paint` / `Erase`: manually add or remove pixels.
-- `Pan`, `Zoom -`, `Zoom +`, `Fit View`: inspect large maps without changing masks.
-- `Map Colors`: switch the base wafer color scheme while preserving the same mask data.
-- `Grow Seed`: expands painted seed pixels through connected valid wafer pixels above `Min Grade`.
-- `Grade Area`: adds every valid wafer pixel above `Min Grade` to the active family.
-- `Lasso Fit`: draws a rough loop and fills matching valid high-grade pixels inside it.
-- `Trace Line`: extends a scratch-like line from at least two painted seed pixels.
-- `Analyze` / `Load Model`: loads geometry or model proposals that can be previewed and applied.
-- `Geometry Fit`: creates edge or ring proposals from radius, width, and angle controls.
+```text
+local, scratch, ring, edge, shot_grid, random
+```
 
-Before saving, check `Output` for per-family pixel counts. The app keeps masks multi-label, so a wafer pixel can belong to more than one family when the real defect is ambiguous.
+A pixel can belong to more than one family when the real defect is ambiguous or overlapping.
 
-## 3. Save Pattern Assets
+## Controls
 
-Saved assets use the same reusable contract everywhere in the pipeline:
+| Control | Use |
+|---|---|
+| `Family` | Select target defect family. |
+| `Paint` / `Erase` | Add or remove mask pixels. |
+| `Pan`, `Zoom -`, `Zoom +`, `Fit View` | Inspect large wafers. |
+| `Map Colors` | Change grade display colors without changing masks. |
+| `Grow Seed` | Expand seed pixels through connected valid pixels above `Min Grade`. |
+| `Grade Area` | Add all valid pixels above `Min Grade`. |
+| `Lasso Fit` | Fill matching high-grade pixels inside a rough loop. |
+| `Trace Line` | Extend scratch-like masks from painted seed pixels. |
+| `Analyze` / `Load Model` | Preview geometry or model proposals. |
+| `Geometry Fit` | Build edge/ring proposals from radius, width, and angle controls. |
+
+## Annotation Rules
+
+| Family | Rule |
+|---|---|
+| `local` | Compact blob or local cluster only. |
+| `scratch` | Visible line, arc, or scratch-like path. |
+| `ring` | Ring, annulus, or arc band; do not fill the whole disk. |
+| `edge` | Abnormal edge band or sector; do not label the normal wafer boundary. |
+| `shot_grid` | Repeated shot-relative pattern. |
+| `random` | Sparse fail pattern without stable shape or process geometry. |
+
+Large wafer-wide patterns should be segmented by geometry, not ignored. Use `edge`, `ring`, `shot_grid`, or `random` depending on the pattern.
+
+## Save Pattern Assets
+
+Saved assets use:
 
 ```text
 data/pattern_assets/<family>/<asset_id>/
@@ -81,14 +91,16 @@ data/pattern_assets/<family>/<asset_id>/
   metadata.json
 ```
 
-`metadata.json` records the source wafer, family, crop box, mask pixel count, grade range, composition rule, and location summary. The location summary stores radial range, angular span, edge distance, and wafer-area ratio so later composition can place real-data assets near comparable wafer zones instead of treating every cutout as location-free.
+`metadata.json` records the source wafer, family, bbox, pixel count, grade range, composition rule, and location summary. The location summary stores radial range, angular span, edge distance, and wafer-area ratio.
 
-Use `Save Mode` as follows:
+Save modes:
 
-- `One Family Asset`: saves all pixels in a family as one asset. Use this for rings or continuous patterns that may have small gaps.
-- `Split Components`: saves disconnected blobs separately. Use this when separate local defects should become separate reusable assets.
+| Mode | Use |
+|---|---|
+| `One Family Asset` | Save all pixels in the active family as one asset. Best for rings or continuous patterns. |
+| `Split Components` | Save disconnected components separately. Best for separate local blobs. |
 
-## 4. Review Saved Assets
+## Review
 
 ```powershell
 python scripts/build_pattern_asset_report.py `
@@ -96,84 +108,12 @@ python scripts/build_pattern_asset_report.py `
   --out outputs/reports/pattern_asset_library_report.html
 ```
 
-Review for tight masks, correct family assignment, ring continuity, and edge masks that describe only abnormal regions.
+Check mask tightness, family correctness, ring continuity, edge quality, and whether STBY/missing-test regions were incorrectly treated as defects.
 
-## 5. Compose Synthetic Data
-
-```powershell
-python scripts/compose_synthetic_from_assets.py `
-  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
-  --assets-root data/pattern_assets `
-  --out-dir data/synthetic/asset_composed `
-  --count 20 `
-  --assets-per-wafer 3 `
-  --placement-mode polar_jitter `
-  --procedural-families scratch,edge,shot_grid,random
-```
-
-Placement modes:
-
-- `source_jitter`: place near the original source bbox with pixel jitter;
-- `polar_jitter`: place in a similar radial/angular wafer zone using the asset location summary;
-- `random_valid`: place anywhere valid when stress-testing shape transfer rather than process location.
-
-## 6. Validate Segmentation Readiness
+## App Quality Checks
 
 ```powershell
-python scripts/run_pattern_asset_pipeline.py `
-  --assets-root data/pattern_assets `
-  --composed-dir data/synthetic/asset_composed `
-  --work-dir outputs/pattern_asset_pipeline `
-  --report-out outputs/reports/pattern_asset_project_report.html
+python -m pytest tests/test_pattern_asset_pipeline.py -q --basetemp .pytest_tmp_tool
 ```
 
-Key outputs:
-
-```text
-outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
-outputs/pattern_asset_pipeline/asset_segmentation_readiness.html
-outputs/pattern_asset_pipeline/asset_segmentation_readiness_metrics.json
-outputs/reports/pattern_asset_project_report.html
-```
-
-## 7. Training Resize Policy
-
-For U-Net training, use synthetic `pattern_masks` as the multi-label target. The resizing policy should preserve tiny defects without exaggerating every input pixel:
-
-- target masks: clip to `wafer_mask & valid_test_mask`, then bin/max pool to keep thin scratches and small local defects visible;
-- binary support masks (`wafer_mask`, `valid_test_mask`, `stby_mask`): bin/max pooling;
-- severity input: `severity_mean`, `severity_max`, and `fail_density`;
-- position input: bin/mean pooling for `x`, `y`, radial, angle, and edge-distance channels;
-- production training candidate: `--output-size 256`;
-- fast smoke tests: keep smaller sizes such as 96 or 128.
-
-Avoid a blind resize-only path for labels. A 4x4 stride/max approach is fine when the source is exactly 1024x1024, but direct bin pooling to 256x256 is safer for 2000x1900 or other non-square wafer maps.
-
-## 8. App Quality Checks
-
-Run the fast app and asset tests after changing the editor:
-
-```powershell
-python -m pytest tests/test_pattern_asset_pipeline.py -q
-```
-
-These tests cover pattern asset saving, editor sample payloads, editor save payloads, prediction mask prefill, model proposal loading, canvas downsampling, automatic geometry proposals, and the end-to-end pattern asset pipeline. The default pytest command skips slow end-to-end tests; add `--run-slow` only when you need the full composition and training smoke path.
-
-Manual browser smoke check:
-
-```powershell
-python scripts/run_segmentation_tool.py `
-  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
-  --sample-id real_like_synth_000000 `
-  --assets-root .pytest_tmp_tool_review_assets `
-  --port 8777 `
-  --no-browser
-```
-
-Then open `http://127.0.0.1:8777/` and verify:
-
-- the canvas renders a wafer map;
-- family buttons appear for all six target families;
-- `Analyze` returns proposals on high-grade samples;
-- `Save Assets` writes assets under the selected root;
-- `Open Report` shows the saved asset cards.
+This covers asset saving, sample payloads, prediction mask prefill, model proposal loading, canvas downsampling, geometry proposals, and the end-to-end pattern asset pipeline. Default pytest skips slow end-to-end tests; use `--run-slow` only for full pipeline validation.

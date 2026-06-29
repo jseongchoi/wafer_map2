@@ -164,7 +164,7 @@ Library owners:
 | New training tensor behavior | `src/wafermap/training/segmentation.py` |
 | New report | `src/wafermap/reporting/` plus a thin script if needed |
 | New command | `scripts/` with an entry in [scripts command map](../scripts/README.md) |
-| New operator-facing process | `docs/operator_manual.md` |
+| New operator-facing process | `docs/end_to_end_workflow.md` first, then `docs/operator_manual.md` if it is a runbook step |
 
 ## Known Technical Debt
 
