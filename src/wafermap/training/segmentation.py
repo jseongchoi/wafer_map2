@@ -14,7 +14,9 @@ from wafermap.data import PATTERN_CLASSES, load_sample
 from wafermap.data.schema import SyntheticSample
 
 INPUT_CHANNELS: tuple[str, ...] = (
-    "severity",
+    "severity_mean",
+    "severity_max",
+    "fail_density",
     "wafer_mask",
     "valid_test_mask",
     "stby_mask",
@@ -70,10 +72,13 @@ def sample_to_input_tensor(
     """Convert one in-memory sample to fixed-size inference input channels."""
 
     severity = sample.severity.astype(np.float32) / 7.0
+    fail = sample.severity > 0
     coords = coordinate_channels(sample.shape, sample.wafer_mask > 0)
     inputs = np.stack(
         [
             _resize_mean(severity, output_size),
+            _resize_max(severity, output_size),
+            _resize_mean(fail.astype(np.float32), output_size),
             _resize_max(sample.wafer_mask > 0, output_size),
             _resize_max(sample.valid_test_mask > 0, output_size),
             _resize_max(sample.stby_mask > 0, output_size),
@@ -124,8 +129,9 @@ def sample_to_target_tensor(
 ) -> NDArray[np.float32]:
     """Convert synthetic oracle masks to fixed-size multi-label targets."""
 
+    valid = (sample.wafer_mask > 0) & (sample.valid_test_mask > 0)
     targets = np.stack(
-        [_resize_max(sample.pattern_masks[PATTERN_TO_INDEX[name]] > 0, output_size) for name in TARGET_CHANNELS],
+        [_resize_max((sample.pattern_masks[PATTERN_TO_INDEX[name]] > 0) & valid, output_size) for name in TARGET_CHANNELS],
         axis=0,
     ).astype(np.float32)
     return targets
@@ -167,7 +173,7 @@ def _resize_mean(array: NDArray[np.float32], output_size: int) -> NDArray[np.flo
     return _resize_bins(array.astype(np.float32, copy=False), output_size, reduce="mean")
 
 
-def _resize_max(array: NDArray[np.bool_] | NDArray[np.uint8], output_size: int) -> NDArray[np.float32]:
+def _resize_max(array: NDArray[np.bool_] | NDArray[np.uint8] | NDArray[np.float32], output_size: int) -> NDArray[np.float32]:
     return _resize_bins(array.astype(np.float32, copy=False), output_size, reduce="max")
 
 

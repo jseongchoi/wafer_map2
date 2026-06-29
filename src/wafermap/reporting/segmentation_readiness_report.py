@@ -11,6 +11,8 @@ from wafermap.reporting.files import relative_path
 
 def html_report(metrics: dict[str, Any], gallery: Path, manifest: Path, metrics_path: Path, out: Path) -> str:
     scratch = metrics["scratch_risk"]
+    quality = metrics.get("quality_checks", {"status": "UNKNOWN", "issues": []})
+    quality_issues = quality.get("issues", [])
     conclusion = (
         "scratch는 ring/local/stby와 자주 겹치므로 wafer-level retrieval feature만으로 분리하기 어렵다. "
         "다음 단계는 synthetic mask 기반 multi-label segmentation 또는 scratch-specific representation으로 가는 것이 맞다."
@@ -41,8 +43,15 @@ def html_report(metrics: dict[str, Any], gallery: Path, manifest: Path, metrics_
     <li>데이터셋: {metrics['sample_count']} samples, train {metrics['split_counts']['train']} / val {metrics['split_counts']['val']}</li>
     <li>입력 semantic channels: {html.escape(', '.join(metrics['input_channels']))}</li>
     <li>target channels: {html.escape(', '.join(metrics['target_channels']))}</li>
+    <li>dataset quality gate: {html.escape(str(quality.get('status', 'UNKNOWN')))}</li>
     <li>{html.escape(conclusion)}</li>
   </ul>
+
+  <h2>Dataset Quality Gate</h2>
+  <table>
+    <tr><th>Status</th><th>Issues</th></tr>
+    <tr><td>{html.escape(str(quality.get('status', 'UNKNOWN')))}</td><td>{html.escape('; '.join(str(item) for item in quality_issues) or 'none')}</td></tr>
+  </table>
 
   <h2>Scratch Risk Check</h2>
   <table>

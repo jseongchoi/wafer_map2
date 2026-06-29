@@ -38,6 +38,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-val-samples", type=int, default=16)
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=20260625)
+    parser.add_argument("--min-positive-samples-per-class", type=int, default=1)
+    parser.add_argument(
+        "--allow-incomplete-target-coverage",
+        action="store_true",
+        help="Allow training even when the train split lacks positive samples for one or more target classes.",
+    )
     parser.add_argument("--check-deps", action="store_true", help="Write dependency status and exit without training.")
     return parser.parse_args(argv)
 
@@ -120,12 +126,97 @@ def load_tensors(args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray, np.n
     return train.inputs, train.targets, val.inputs, val.targets, train.sample_ids, val.sample_ids
 
 
+def manifest_target_coverage(
+    manifest: Path,
+    min_positive_samples_per_class: int,
+) -> dict[str, Any]:
+    if not manifest.exists():
+        issue = f"manifest not found: {repo_path(manifest)}"
+        return {
+            "status": "MISSING",
+            "train_status": "CHECK",
+            "validation_status": "CHECK",
+            "manifest": repo_path(manifest),
+            "min_positive_samples_per_class": int(min_positive_samples_per_class),
+            "train_samples": 0,
+            "val_samples": 0,
+            "positive_train_samples": {},
+            "positive_val_samples": {},
+            "missing_train_classes": list(TARGET_CHANNELS),
+            "missing_val_classes": list(TARGET_CHANNELS),
+            "missing_classes": list(TARGET_CHANNELS),
+            "blocking_issues": [issue],
+            "issues": [issue],
+        }
+    rows = load_manifest_rows(manifest)
+    train_rows = [row for row in rows if row.get("split") == "train"]
+    val_rows = [row for row in rows if row.get("split") == "val"]
+    minimum = max(0, int(min_positive_samples_per_class))
+    train_counts = {name: sum(row_has_target(row, name) for row in train_rows) for name in TARGET_CHANNELS}
+    val_counts = {name: sum(row_has_target(row, name) for row in val_rows) for name in TARGET_CHANNELS}
+    missing_train = [name for name, count in train_counts.items() if count < minimum]
+    missing_val = [name for name, count in val_counts.items() if count < minimum]
+    issues: list[str] = []
+    blocking_issues: list[str] = []
+    if not train_rows:
+        blocking_issues.append("manifest has no train split rows")
+    if not val_rows:
+        issues.append("manifest has no validation split rows")
+    for name in missing_train:
+        blocking_issues.append(f"{name} has {train_counts[name]} train positives, needs >= {minimum}")
+    for name in missing_val:
+        issues.append(f"{name} has {val_counts[name]} validation positives, metrics will be uninformative")
+    issues = [*blocking_issues, *issues]
+    return {
+        "status": "PASS" if not issues else "CHECK",
+        "train_status": "PASS" if not blocking_issues else "CHECK",
+        "validation_status": "PASS" if not missing_val and val_rows else "CHECK",
+        "manifest": repo_path(manifest),
+        "min_positive_samples_per_class": minimum,
+        "train_samples": len(train_rows),
+        "val_samples": len(val_rows),
+        "positive_train_samples": train_counts,
+        "positive_val_samples": val_counts,
+        "missing_train_classes": missing_train,
+        "missing_val_classes": missing_val,
+        "missing_classes": missing_train,
+        "blocking_issues": blocking_issues,
+        "issues": issues,
+    }
+
+
+def row_has_target(row: dict[str, str], class_name: str) -> bool:
+    flag = row.get(f"has_{class_name}")
+    if flag not in {None, ""}:
+        try:
+            return float(flag) > 0.0
+        except ValueError:
+            return False
+    ratio = row.get(f"{class_name}_mask_ratio", "")
+    try:
+        return float(ratio) > 0.0
+    except ValueError:
+        return False
+
+
+def require_manifest_target_coverage(args: argparse.Namespace) -> dict[str, Any]:
+    coverage = manifest_target_coverage(Path(args.manifest), args.min_positive_samples_per_class)
+    if coverage["blocking_issues"] and not args.allow_incomplete_target_coverage:
+        issue_text = "; ".join(str(item) for item in coverage["blocking_issues"])
+        raise ValueError(
+            "U-Net training requires positive train samples for every target class. "
+            f"{issue_text}. Use --allow-incomplete-target-coverage only for wiring/debug runs."
+        )
+    return coverage
+
+
 def pos_weight_from_targets(targets: np.ndarray) -> np.ndarray:
     prevalence = np.clip(targets.mean(axis=(0, 2, 3)), 1e-6, 1.0)
     return np.minimum((1.0 - prevalence) / prevalence, 50.0).astype(np.float32)
 
 
 def train(args: argparse.Namespace) -> dict[str, Any]:
+    coverage = require_manifest_target_coverage(args)
     torch, nn, F, DataLoader, TensorDataset = require_torch()
     torch.manual_seed(args.seed)
     x_train, y_train, x_val, y_val, train_ids, val_ids = load_tensors(args)
@@ -175,6 +266,7 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
         "output_size": args.output_size,
         "train_samples": len(train_ids),
         "val_samples": len(val_ids),
+        "manifest_target_coverage": coverage,
         "epochs": args.epochs,
         "loss": {"history": history, "initial": history[0], "final": history[-1]},
         "validation": val_metrics,
@@ -212,12 +304,15 @@ def evaluate(model: Any, x_val: Any, y_val: Any, device: Any, threshold: float) 
 
 def dependency_metrics(args: argparse.Namespace) -> dict[str, Any]:
     available, detail = torch_status()
+    coverage = manifest_target_coverage(Path(args.manifest), args.min_positive_samples_per_class)
     return {
         "status": "dependency_check",
         "torch_available": available,
         "torch_status": detail,
         "next_action": "install_torch_and_train_unet" if not available else "run_training",
+        "input_channels": list(INPUT_CHANNELS),
         "target_channels": list(TARGET_CHANNELS),
+        "manifest_target_coverage": coverage,
     }
 
 
@@ -250,15 +345,19 @@ def metric_rows(metrics: dict[str, Any]) -> str:
 
 def html_report(metrics: dict[str, Any], metrics_path: Path, out: Path) -> str:
     if not metrics.get("torch_available"):
+        coverage = metrics.get("manifest_target_coverage", {})
         body = (
             "<p>PyTorch is not installed in this environment, so U-Net training was not run.</p>"
             f"<p>Status: <code>{html.escape(str(metrics.get('torch_status')))}</code></p>"
+            f"<p>Manifest target coverage: <code>{html.escape(str(coverage.get('status', 'UNKNOWN')))}</code></p>"
             "<p>Install PyTorch in the training environment and rerun this script with the same manifest.</p>"
         )
     else:
         loss = metrics.get("loss", {})
+        coverage = metrics.get("manifest_target_coverage", {})
         body = f"""
         <p>Device: <code>{html.escape(str(metrics.get('device')))}</code></p>
+        <p>Manifest target coverage: <code>{html.escape(str(coverage.get('status', 'UNKNOWN')))}</code></p>
         <p>Loss: {float(loss.get('initial', 0.0)):.4f} -> {float(loss.get('final', 0.0)):.4f}</p>
         <table>
           <tr><th>Class</th><th>Target pixels</th><th>Predicted pixels</th><th>Precision</th><th>Recall</th><th>IoU</th></tr>

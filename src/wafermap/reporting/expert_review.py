@@ -92,7 +92,7 @@ TEMPLATE_COLUMNS = (
     "missed_major_defect",
     "retrieval_failure_mode",
     "next_action",
-    "safe_comment",
+    "review_comment",
 )
 
 
@@ -145,7 +145,7 @@ def build_template_rows(neighbor_rows: list[dict[str, str]]) -> tuple[list[dict[
                 "missed_major_defect": "",
                 "retrieval_failure_mode": "",
                 "next_action": "",
-                "safe_comment": "",
+                "review_comment": "",
             }
         )
     return rows, warnings

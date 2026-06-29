@@ -1,8 +1,11 @@
+import base64
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from wafermap.data import PATTERN_CLASSES
@@ -18,8 +21,38 @@ def _load_script(name: str):
     return module
 
 
+def _tiny_editor_sample():
+    severity = np.array(
+        [
+            [0, 1, 2, 0, 0],
+            [0, 6, 7, 1, 0],
+            [0, 0, 3, 4, 0],
+            [0, 0, 0, 0, 0],
+        ],
+        dtype=np.uint8,
+    )
+    wafer_mask = np.ones_like(severity, dtype=np.uint8)
+    valid_test_mask = np.ones_like(severity, dtype=np.uint8)
+    stby_mask = np.zeros_like(severity, dtype=np.uint8)
+    stby_mask[0, 0] = 1
+    valid_test_mask[0, 0] = 0
+    return SimpleNamespace(
+        sample_id="tiny_editor_sample",
+        shape=severity.shape,
+        severity=severity,
+        wafer_mask=wafer_mask,
+        valid_test_mask=valid_test_mask,
+        stby_mask=stby_mask,
+        pattern_masks=np.zeros((len(PATTERN_CLASSES), *severity.shape), dtype=np.uint8),
+        pattern_intensity=np.zeros((len(PATTERN_CLASSES), *severity.shape), dtype=np.float32),
+        chip_index=np.arange(severity.size, dtype=np.int32).reshape(severity.shape),
+        metadata={"chip_blocks": {"width": 1, "height": 1}, "grid": {"rows": 4, "cols": 5}},
+    )
+
+
+@pytest.mark.slow
 def test_pattern_asset_extraction_and_max_composition(tmp_path):
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     composer = _load_script("compose_synthetic_from_assets.py")
     report = _load_script("build_pattern_asset_report.py")
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=23), 0)
@@ -72,6 +105,7 @@ def test_pattern_asset_extraction_and_max_composition(tmp_path):
     assert composed.metadata["placed_assets"][0]["placement_mode"] == "source_jitter"
 
 
+@pytest.mark.slow
 def test_procedural_families_generate_labeled_masks_without_assets():
     composer = _load_script("compose_synthetic_from_assets.py")
     base = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=30), 0)
@@ -125,8 +159,9 @@ def test_procedural_families_generate_labeled_masks_without_assets():
     assert edge_only.metadata["procedural_patterns"][0]["source"] == "procedural"
 
 
+@pytest.mark.slow
 def test_pattern_asset_save_mode_keeps_disconnected_family_together_by_default(tmp_path):
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=31), 0)
     sample.severity[:] = 0
     coords = np.argwhere(sample.valid_test_mask > 0)
@@ -159,7 +194,7 @@ def test_pattern_asset_save_mode_keeps_disconnected_family_together_by_default(t
 
 
 def test_prediction_mask_json_can_prefill_editor_masks(tmp_path):
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     prediction_path = tmp_path / "prediction.json"
     prediction_path.write_text(
         json.dumps(
@@ -190,7 +225,7 @@ def test_prediction_mask_json_can_prefill_editor_masks(tmp_path):
 
 
 def test_model_proposal_json_loads_as_editor_proposals(tmp_path):
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     proposal_path = tmp_path / "proposals.json"
     proposal_path.write_text(
         json.dumps(
@@ -230,7 +265,7 @@ def test_model_proposal_json_loads_as_editor_proposals(tmp_path):
 
 
 def test_pattern_asset_editor_downsamples_for_editing_and_upsamples_masks():
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
 
     assert editor.editor_shape((2000, 1000), 768) == (768, 384)
     assert editor.editor_shape((100, 80), 768) == (100, 80)
@@ -246,8 +281,226 @@ def test_pattern_asset_editor_downsamples_for_editing_and_upsamples_masks():
     assert not source_mask[2:, :2].any()
 
 
+def test_pattern_asset_editor_sample_payload_contract_is_testable(tmp_path):
+    editor = _load_script("run_segmentation_tool.py")
+    sample = _tiny_editor_sample()
+
+    payload = editor.build_editor_sample_payload(
+        sample=sample,
+        assets_root=tmp_path / "assets",
+        margin_ratio=0.25,
+        edit_shape=(2, 3),
+    )
+
+    assert payload["sample_id"] == sample.sample_id
+    assert payload["width"] == 3
+    assert payload["height"] == 2
+    assert payload["source_width"] == 5
+    assert payload["source_height"] == 4
+    assert payload["editor_downsampled"] is True
+    assert payload["families"] == list(editor.TARGET_FAMILIES)
+    assert payload["composition_rule"] == "max"
+    assert payload["stby_target_excluded"] is True
+    assert base64.b64decode(payload["severity_b64"])
+    assert len(base64.b64decode(payload["valid_mask_b64"])) == payload["width"] * payload["height"]
+
+
+def test_pattern_asset_editor_save_payload_writes_assets(tmp_path):
+    editor = _load_script("run_segmentation_tool.py")
+    sample = _tiny_editor_sample()
+    mask = np.zeros(sample.shape, dtype=bool)
+    mask[1, 1:3] = True
+
+    result = editor.save_assets_from_editor_payload(
+        payload={"save_mode": "unsupported", "masks": {"local": editor.mask_to_rle(mask)}},
+        sample=sample,
+        manifest_path=tmp_path / "source_manifest.json",
+        assets_root=tmp_path / "assets",
+        margin_ratio=0.20,
+        edit_shape=sample.shape,
+    )
+
+    assert result["save_mode"] == "family"
+    assert result["saved_count"] == 1
+    asset_dir = Path(result["saved"][0]["path"])
+    metadata = json.loads((asset_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["family"] == "local"
+    assert metadata["source_sample_id"] == sample.sample_id
+    assert metadata["source_manifest_name"] == "source_manifest.json"
+    assert metadata["mask_pixel_count"] == 2
+    location = metadata["location_summary"]
+    assert 0.0 <= location["radial_mean"] <= 1.0
+    assert 0.0 <= location["radial_min"] <= location["radial_max"] <= 1.0
+    assert 0.0 <= location["theta_mean_deg"] < 360.0
+    assert 0.0 <= location["theta_span_deg"] <= 360.0
+    assert location["mask_area_ratio"] > 0.0
+    assert editor.scan_pattern_assets(tmp_path / "assets")[0]["valid"] is True
+
+
+def test_pattern_asset_save_excludes_invalid_test_pixels(tmp_path):
+    editor = _load_script("run_segmentation_tool.py")
+    sample = _tiny_editor_sample()
+    mask = np.zeros(sample.shape, dtype=bool)
+    mask[0, 0] = True
+    mask[1, 1] = True
+
+    result = editor.save_pattern_assets(
+        sample=sample,
+        masks_by_family={"local": mask},
+        assets_root=tmp_path / "assets",
+        margin_ratio=0.20,
+    )
+
+    assert result[0]["family"] == "local"
+    metadata = json.loads((Path(result[0]["path"]) / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["mask_pixel_count"] == 1
+
+
+def test_pattern_asset_composer_records_source_and_placed_location_metadata(tmp_path):
+    editor = _load_script("run_segmentation_tool.py")
+    composer = _load_script("compose_synthetic_from_assets.py")
+    sample = _tiny_editor_sample()
+    mask = np.zeros(sample.shape, dtype=bool)
+    mask[1, 1:3] = True
+    assets_root = tmp_path / "assets"
+    editor.save_pattern_assets(
+        sample=sample,
+        masks_by_family={"local": mask},
+        assets_root=assets_root,
+        margin_ratio=0.20,
+    )
+
+    assets = composer.load_assets(assets_root)
+    composed = composer.compose_sample(
+        sample,
+        assets,
+        composer.random.Random(1),
+        1,
+        "location_metadata_unit",
+        procedural_families=(),
+    )
+
+    placed = composed.metadata["placed_assets"][0]
+    assert placed["source_location_summary"]["mask_area_ratio"] > 0.0
+    assert placed["placed_location_summary"]["mask_area_ratio"] > 0.0
+    assert 0.0 <= placed["placed_location_summary"]["radial_mean"] <= 1.0
+
+
+def test_pattern_asset_composer_supports_polar_jitter_placement(tmp_path):
+    editor = _load_script("run_segmentation_tool.py")
+    composer = _load_script("compose_synthetic_from_assets.py")
+    sample = _tiny_editor_sample()
+    mask = np.zeros(sample.shape, dtype=bool)
+    mask[1, 1:3] = True
+    assets_root = tmp_path / "assets"
+    editor.save_pattern_assets(
+        sample=sample,
+        masks_by_family={"local": mask},
+        assets_root=assets_root,
+        margin_ratio=0.20,
+    )
+
+    assets = composer.load_assets(assets_root)
+    composed = composer.compose_sample(
+        sample,
+        assets,
+        composer.random.Random(3),
+        1,
+        "polar_jitter_unit",
+        placement_mode="polar_jitter",
+        procedural_families=(),
+    )
+
+    placed = composed.metadata["placed_assets"][0]
+    source = placed["source_location_summary"]
+    target = placed["placed_location_summary"]
+    assert placed["placement_mode"] == "polar_jitter"
+    assert abs(source["radial_mean"] - target["radial_mean"]) <= 0.50
+    assert 0.0 <= target["theta_mean_deg"] < 360.0
+
+
+def test_pattern_asset_composer_keeps_max_intensity_for_overlapping_same_family_assets():
+    composer = _load_script("compose_synthetic_from_assets.py")
+    base = _tiny_editor_sample()
+    base.severity[:] = 0
+    mask = np.ones((1, 1), dtype=bool)
+    assets = [
+        {
+            "family": "local",
+            "dir": Path("low_asset"),
+            "grade": np.array([[3]], dtype=np.uint8),
+            "mask": mask,
+            "metadata": {"bbox_xywh": [1, 1, 1, 1], "location_summary": {}},
+        },
+        {
+            "family": "local",
+            "dir": Path("high_asset"),
+            "grade": np.array([[7]], dtype=np.uint8),
+            "mask": mask,
+            "metadata": {"bbox_xywh": [1, 1, 1, 1], "location_summary": {}},
+        },
+    ]
+
+    composed = composer.compose_sample(
+        base,
+        assets,
+        composer.random.Random(9),
+        2,
+        "overlap_intensity_unit",
+        jitter_pixels=0,
+        procedural_families=(),
+    )
+
+    local_idx = PATTERN_CLASSES.index("local")
+    assert composed.severity[1, 1] == 7
+    assert composed.pattern_intensity[local_idx, 1, 1] == pytest.approx(1.0)
+
+
+def test_pattern_asset_composer_records_random_fallback_when_requested_location_is_invalid():
+    composer = _load_script("compose_synthetic_from_assets.py")
+    base = _tiny_editor_sample()
+    asset = {
+        "family": "local",
+        "dir": Path("invalid_source_asset"),
+        "grade": np.array([[7]], dtype=np.uint8),
+        "mask": np.ones((1, 1), dtype=bool),
+        "metadata": {"bbox_xywh": [0, 0, 1, 1], "location_summary": {}},
+    }
+
+    placement = composer.choose_placement(
+        base,
+        asset,
+        composer.random.Random(2),
+        placement_mode="source_jitter",
+        jitter_pixels=0,
+    )
+
+    assert placement is not None
+    assert placement[2] == "random_valid"
+
+
+def test_pattern_asset_pipeline_cli_accepts_polar_jitter_placement_mode():
+    pipeline = _load_script("run_pattern_asset_pipeline.py")
+
+    args = pipeline.parse_args(["--placement-mode", "polar_jitter"])
+
+    assert args.placement_mode == "polar_jitter"
+
+
+def test_pattern_asset_editor_rejects_malformed_save_rle():
+    editor = _load_script("run_segmentation_tool.py")
+
+    with pytest.raises(ValueError, match="invalid RLE mask for local"):
+        editor.editor_payload_masks(
+            {"local": [0, 2]},
+            source_shape=(2, 2),
+            edit_shape=(2, 2),
+        )
+
+
+@pytest.mark.slow
 def test_pattern_asset_editor_auto_proposes_global_geometry():
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=80, chip_width=6, chip_height=6, seed=51), 0)
     sample.severity[:] = 0
     sample.pattern_masks[:] = 0
@@ -267,9 +520,10 @@ def test_pattern_asset_editor_auto_proposes_global_geometry():
 
 
 def test_pattern_asset_editor_exposes_client_side_color_schemes():
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
 
     assert 'id="colorScheme"' in editor.EDITOR_HTML
+    assert "FBM Segmentation Tool" in editor.EDITOR_HTML
     assert "const COLOR_SCHEMES" in editor.EDITOR_HTML
     assert "function renderBase" in editor.EDITOR_HTML
     assert "sample.stby_mask_b64" in editor.EDITOR_HTML
@@ -281,8 +535,9 @@ def test_pattern_asset_editor_exposes_client_side_color_schemes():
     assert "stbyMask[idx]" in editor.EDITOR_HTML
 
 
+@pytest.mark.slow
 def test_pattern_asset_pipeline_writes_stby_excluded_manifest_and_project_report(tmp_path):
-    editor = _load_script("run_pattern_asset_editor.py")
+    editor = _load_script("run_segmentation_tool.py")
     pipeline = _load_script("run_pattern_asset_pipeline.py")
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=41), 0)
     sample.severity[:] = 0

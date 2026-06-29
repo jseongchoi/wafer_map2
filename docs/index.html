@@ -198,13 +198,14 @@
     <div class="wrap">
       <h1>WaferMap Documentation</h1>
       <p class="lead">
-        CVAT-first defect annotation, pattern asset import, hybrid synthetic data generation,
+        Direct wafer defect segmentation, pattern asset generation, hybrid synthetic data,
         and segmentation readiness for wafer FBM data.
       </p>
       <nav aria-label="문서 바로가기">
         <a href="architecture.md">Architecture</a>
+        <a href="core_direction.md">Core direction</a>
         <a href="operator_manual.md">Operator manual</a>
-        <a href="cvat_wafer_annotation_workflow.md">CVAT workflow</a>
+        <a href="segmentation_tool_workflow.md">Segmentation tool</a>
         <a href="project_overview.md">Project overview</a>
         <a href="fbm_data_flow_guide.md">Data flow</a>
         <a href="fbm_pattern_asset_pipeline.md">Synthetic pipeline</a>
@@ -217,12 +218,17 @@
   <main>
     <section>
       <h2>Current Direction</h2>
+      <pre>FBM maps
+-> defect generation
+-> multi-defect synthetic maps
+-> multi-defect segmentation training and validation
+-> local segmentation tool for real-data pattern asset extraction</pre>
       <p>
         WaferMap의 현재 목적은 모델을 먼저 키우는 것이 아니라, defect segmentation model을
         만들 수 있는 라벨 데이터셋 제작 경로를 안정화하는 것입니다.
       </p>
       <div class="note">
-        메인 UI는 CVAT입니다. 기존 local Pattern Asset Builder는 legacy fallback/reference로 유지합니다.
+        메인 UI는 repo 안의 local segmentation tool입니다. Pattern asset 저장 결과가 곧 synthetic dataset의 입력입니다.
       </div>
     </section>
 
@@ -230,9 +236,9 @@
       <h2>End-To-End Flow</h2>
       <div class="flow">
         <div class="step"><h3>Manifest</h3><p>raw wafer 또는 real-like sample을 <code>real_unlabeled_manifest/v1</code>로 정리합니다.</p></div>
-        <div class="step"><h3>CVAT Package</h3><p><code>export_cvat_wafer_images.py</code>로 CVAT image task package를 만듭니다.</p></div>
-        <div class="step"><h3>Annotation</h3><p>CVAT에서 <code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>stby_blob</code> 등을 라벨링합니다.</p></div>
-        <div class="step"><h3>Asset Import</h3><p><code>import_cvat_annotations.py</code>로 annotation을 reusable pattern asset으로 변환합니다.</p></div>
+        <div class="step"><h3>Tool</h3><p><code>run_segmentation_tool.py</code>로 wafer sample을 열고 family별 mask를 직접 작성합니다.</p></div>
+        <div class="step"><h3>Assets</h3><p>저장된 <code>grade.png</code>, <code>mask.png</code>, <code>preview.png</code>, <code>metadata.json</code>을 검수합니다.</p></div>
+        <div class="step"><h3>QC</h3><p><code>build_pattern_asset_report.py</code>로 mask tightness와 family assignment를 확인합니다.</p></div>
         <div class="step"><h3>Synthesis</h3><p>asset과 procedural fallback을 base wafer에 붙여 <code>hybrid synthetic data</code>를 만듭니다.</p></div>
         <div class="step"><h3>Readiness</h3><p><code>asset_segmentation_manifest.csv</code>와 smoke validation report를 생성합니다.</p></div>
       </div>
@@ -240,27 +246,22 @@
 
     <section>
       <h2>Key Commands</h2>
-      <pre>python scripts/export_cvat_wafer_images.py `
+      <pre>python scripts/run_segmentation_tool.py `
   --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
-  --out-dir data/cvat_exports/smoke_task `
-  --limit 10
-
-python scripts/import_cvat_annotations.py `
-  --cvat-xml data/cvat_exports/smoke_task/annotations.xml `
-  --cvat-manifest data/cvat_exports/smoke_task/manifest.json `
+  --sample-id real_like_synth_000000 `
   --assets-root data/pattern_assets
 
 python scripts/run_pattern_asset_pipeline.py `
   --assets-root data/pattern_assets `
-  --composed-dir data/synthetic/cvat_asset_composed `
-  --work-dir outputs/cvat_pattern_asset_pipeline</pre>
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline</pre>
     </section>
 
     <section>
-      <h2>Label Strategy</h2>
+      <h2>Family Strategy</h2>
       <table>
         <thead>
-          <tr><th>CVAT label</th><th>Asset family</th><th>Use</th></tr>
+          <tr><th>Tool family</th><th>Asset family</th><th>Use</th></tr>
         </thead>
         <tbody>
           <tr><td><code>local</code></td><td><code>local</code></td><td>compact blob or local cluster</td></tr>
@@ -268,7 +269,7 @@ python scripts/run_pattern_asset_pipeline.py `
           <tr><td><code>ring</code></td><td><code>ring</code></td><td>ring, partial ring, arc</td></tr>
           <tr><td><code>edge</code></td><td><code>edge</code></td><td>edge band or edge sector</td></tr>
           <tr><td><code>shot_grid</code></td><td><code>shot_grid</code></td><td>shot-relative repeated pattern</td></tr>
-          <tr><td><code>stby_blob</code></td><td><code>local</code></td><td>missing-test mosaic blob with grade override 7</td></tr>
+          <tr><td><code>random</code></td><td><code>random</code></td><td>sparse baseline fail pattern</td></tr>
         </tbody>
       </table>
     </section>
@@ -277,12 +278,12 @@ python scripts/run_pattern_asset_pipeline.py `
       <h2>Roadmap</h2>
       <div class="phase">
         <strong>Phase 0</strong>
-        <div>Scope lock: CVAT-first dataset creation and extensible label schema</div>
+        <div>Scope lock: direct segmentation dataset creation and stable family taxonomy</div>
         <span class="tag">Done</span>
       </div>
       <div class="phase">
         <strong>Phase 1</strong>
-        <div>CVAT annotation export/import workflow</div>
+        <div>Direct segmentation tool and pattern asset save workflow</div>
         <span class="tag now">Current</span>
       </div>
       <div class="phase">
@@ -310,14 +311,15 @@ python scripts/run_pattern_asset_pipeline.py `
     <section>
       <h2>Core Docs</h2>
       <div class="grid">
+        <a class="card" href="core_direction.md"><strong>Core direction</strong><span>the pipeline this project must not drift away from</span></a>
         <a class="card" href="architecture.md"><strong>Architecture</strong><span>folder ownership, package boundaries, command groups</span></a>
         <a class="card" href="operator_manual.md"><strong>Operator manual</strong><span>end-to-end operating procedure and troubleshooting</span></a>
-        <a class="card" href="cvat_wafer_annotation_workflow.md"><strong>CVAT workflow</strong><span>export, annotation, import, STBY handling</span></a>
+        <a class="card" href="segmentation_tool_workflow.md"><strong>Segmentation tool</strong><span>mask editing, asset save, prediction prefill</span></a>
         <a class="card" href="project_overview.md"><strong>Project overview</strong><span>current architecture and next implementation order</span></a>
         <a class="card" href="fbm_data_flow_guide.md"><strong>Data flow</strong><span>where manifest, assets, synthetic samples, and reports live</span></a>
         <a class="card" href="fbm_pattern_asset_pipeline.md"><strong>Synthetic pipeline</strong><span>pattern assets, procedural fallback, training manifest</span></a>
         <a class="card" href="../scripts/README.md"><strong>Scripts command map</strong><span>primary, legacy, and research command groups</span></a>
-        <a class="card" href="pattern_taxonomy.md"><strong>Pattern taxonomy</strong><span>model families, CVAT labels, STBY terms</span></a>
+        <a class="card" href="pattern_taxonomy.md"><strong>Pattern taxonomy</strong><span>model families and STBY terms</span></a>
         <a class="card" href="roadmap.md"><strong>Roadmap</strong><span>Phase 4 and beyond</span></a>
         <a class="card" href="real_png_operator_runbook.md"><strong>Real PNG runbook</strong><span>raw FBM PNG folder input and report output</span></a>
         <a class="card" href="real_unlabeled_workflow.md"><strong>Real wafer workflow</strong><span>manifest, feature, retrieval, review</span></a>
@@ -326,7 +328,7 @@ python scripts/run_pattern_asset_pipeline.py `
         <a class="card" href="modeling_strategy.md"><strong>Modeling strategy</strong><span>U-Net, embedding, active learning</span></a>
         <a class="card" href="validation_protocol.md"><strong>Validation protocol</strong><span>input, mask, synthetic, model, review validation</span></a>
         <a class="card" href="experiment_history.md"><strong>Experiment history</strong><span>why the current path exists</span></a>
-        <a class="card" href="legacy_pattern_asset_editor.md"><strong>Legacy editor</strong><span>what remains useful from the local browser editor</span></a>
+        <a class="card" href="legacy_pattern_asset_editor.md"><strong>Compatibility editor</strong><span>why the old command filename remains</span></a>
         <a class="card" href="glossary.md"><strong>glossary.md</strong><span>terms used across the project</span></a>
       </div>
     </section>

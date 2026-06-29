@@ -23,6 +23,7 @@ def _load_script(name: str):
     return module
 
 
+@pytest.mark.slow
 def test_cpu_encoder_train_and_score_pipeline(tmp_path):
     readiness = _load_script("build_segmentation_readiness.py")
     train_cpu = _load_script("train_cpu_encoder_model.py")

@@ -13,6 +13,7 @@ from wafermap.assets.library import (
     bbox_with_margin,
     connected_components,
     load_prediction_masks,
+    mask_location_summary,
     mask_to_rle,
     next_asset_id,
     preview_rgb,
@@ -22,16 +23,7 @@ from wafermap.assets.library import (
     scan_pattern_assets,
     write_asset,
 )
-from wafermap.assets.cvat import (
-    DEFAULT_CVAT_FORMAT,
-    SCHEMA_VERSION,
-    cvat_label_lookup,
-    cvat_labels_for_export,
-    load_cvat_label_schema,
-)
-
 __all__ = [
-    "DEFAULT_CVAT_FORMAT",
     "DEFAULT_PROCEDURAL_FAMILIES",
     "FAMILY_COLORS",
     "FAMILY_DATA_SOURCES",
@@ -40,14 +32,11 @@ __all__ = [
     "OPTIONAL_ASSET_FAMILIES",
     "PRIMARY_ASSET_FAMILIES",
     "PROCEDURAL_FAMILIES",
-    "SCHEMA_VERSION",
     "TARGET_FAMILIES",
     "bbox_with_margin",
     "connected_components",
-    "cvat_label_lookup",
-    "cvat_labels_for_export",
     "load_prediction_masks",
-    "load_cvat_label_schema",
+    "mask_location_summary",
     "mask_to_rle",
     "next_asset_id",
     "preview_rgb",

@@ -125,7 +125,7 @@ def save_pattern_assets(
         mask = masks_by_family.get(family)
         if mask is None:
             continue
-        mask = mask & (sample.wafer_mask > 0)
+        mask = mask & (sample.wafer_mask > 0) & (sample.valid_test_mask > 0)
         components = connected_components(mask) if split_components else ([mask] if mask.any() else [])
         for component in components:
             bbox = bbox_with_margin(component, sample.shape, margin_ratio)
@@ -237,7 +237,73 @@ def write_asset(
     }
     if source_manifest is not None:
         metadata["source_manifest_name"] = source_manifest.name
+    metadata["location_summary"] = mask_location_summary(component, sample.wafer_mask > 0)
     (asset_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def mask_location_summary(mask: np.ndarray, wafer_mask: np.ndarray) -> dict[str, Any]:
+    mask = np.asarray(mask, dtype=bool)
+    wafer = np.asarray(wafer_mask, dtype=bool)
+    yy, xx = np.indices(mask.shape, dtype=np.float32)
+    cx = (mask.shape[1] - 1) / 2.0
+    cy = (mask.shape[0] - 1) / 2.0
+    dx = xx - cx
+    dy = yy - cy
+    distance = np.sqrt(dx * dx + dy * dy)
+    wafer_radius = float(distance[wafer].max()) if wafer.any() else float(distance.max())
+    wafer_radius = max(wafer_radius, 1.0)
+    radius = np.clip(distance / wafer_radius, 0.0, 1.0)
+    theta = (np.degrees(np.arctan2(dx, -dy)) + 360.0) % 360.0
+    if not mask.any():
+        return {
+            "radial_mean": 0.0,
+            "radial_min": 0.0,
+            "radial_max": 0.0,
+            "theta_mean_deg": 0.0,
+            "theta_start_deg": 0.0,
+            "theta_end_deg": 0.0,
+            "theta_span_deg": 0.0,
+            "edge_distance_mean": 0.0,
+            "mask_area_ratio": 0.0,
+        }
+    selected_radius = radius[mask]
+    selected_theta = theta[mask]
+    return {
+        "radial_mean": round(float(selected_radius.mean()), 4),
+        "radial_min": round(float(selected_radius.min()), 4),
+        "radial_max": round(float(selected_radius.max()), 4),
+        "theta_mean_deg": round(circular_mean_deg(selected_theta), 1),
+        **theta_span_summary(selected_theta),
+        "edge_distance_mean": round(float((1.0 - selected_radius).mean()), 4),
+        "mask_area_ratio": round(float(mask.sum() / max(int(wafer.sum()), 1)), 6),
+    }
+
+
+def circular_mean_deg(theta_values: np.ndarray) -> float:
+    theta_rad = np.radians(np.asarray(theta_values, dtype=np.float32))
+    mean_sin = float(np.sin(theta_rad).mean())
+    mean_cos = float(np.cos(theta_rad).mean())
+    return float((np.degrees(np.arctan2(mean_sin, mean_cos)) + 360.0) % 360.0)
+
+
+def theta_span_summary(theta_values: np.ndarray) -> dict[str, float]:
+    values = np.sort(np.asarray(theta_values, dtype=np.float32) % 360.0)
+    if values.size == 0:
+        return {"theta_start_deg": 0.0, "theta_end_deg": 0.0, "theta_span_deg": 0.0}
+    if values.size == 1:
+        angle = round(float(values[0]), 1)
+        return {"theta_start_deg": angle, "theta_end_deg": angle, "theta_span_deg": 0.0}
+    wrapped = np.concatenate([values, values[:1] + 360.0])
+    gaps = np.diff(wrapped)
+    gap_idx = int(np.argmax(gaps))
+    span = 360.0 - float(gaps[gap_idx])
+    start = float(values[(gap_idx + 1) % values.size] % 360.0)
+    end = float(values[gap_idx] % 360.0)
+    return {
+        "theta_start_deg": round(start, 1),
+        "theta_end_deg": round(end, 1),
+        "theta_span_deg": round(span, 1),
+    }
 
 
 def scan_pattern_assets(assets_root: str | Path) -> list[dict[str, Any]]:

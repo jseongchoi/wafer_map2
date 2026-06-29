@@ -34,7 +34,7 @@ REQUIRED_COLUMNS = (
     "dominant_defect",
     "clock_position_match",
     "missed_major_defect",
-    "safe_comment",
+    "review_comment",
 )
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)

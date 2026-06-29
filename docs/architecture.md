@@ -4,16 +4,12 @@
 
 ## Product Boundary
 
-WaferMap은 CVAT를 대체하는 annotation UI가 아닙니다. 이 repository의 책임은 wafer-specific data pipeline입니다.
+WaferMap은 wafer-specific segmentation dataset factory입니다. repository의 책임은 raw wafer를 manifest로 만들고, 직접 mask를 작성하고, reusable pattern asset과 synthetic segmentation dataset으로 연결하는 것입니다.
 
 ```text
-CVAT:
-  task management, annotator UI, polygon/brush labeling, review workflow
-
 WaferMap:
   wafer manifest
-  CVAT image package export
-  CVAT annotation import
+  local segmentation tool
   reusable pattern asset library
   hybrid synthetic data generation
   segmentation readiness / smoke validation
@@ -24,7 +20,7 @@ WaferMap:
 
 | Path | Responsibility |
 |---|---|
-| `configs/` | Reproducible configuration and schemas. Label definitions live in `configs/cvat/`. |
+| `configs/` | Reproducible configuration and evaluation templates. |
 | `data/` | Local/private wafer data, pattern assets, synthetic samples. Ignored by Git except `.gitkeep`. |
 | `docs/` | User guides, architecture notes, roadmap, operator manuals. |
 | `outputs/` | Local generated reports, manifests, predictions, model artifacts. Ignored by Git except `.gitkeep`. |
@@ -36,13 +32,13 @@ WaferMap:
 
 | Package | Owns | Should not own |
 |---|---|---|
-| `wafermap.assets` | Pattern asset format, CVAT label schema helpers, asset scan/save/load helpers | Full pipeline orchestration |
+| `wafermap.assets` | Pattern asset format, asset scan/save/load helpers | Full pipeline orchestration |
 | `wafermap.real` | Real/raw wafer manifest and PNG ingestion contracts | Model training |
-| `wafermap.synth` | Synthetic wafer generation and procedural defect geometry | CVAT XML parsing |
+| `wafermap.synth` | Synthetic wafer generation and procedural defect geometry | UI behavior |
 | `wafermap.data` | Core sample schema and disk IO | UI behavior |
 | `wafermap.training` | Segmentation, embedding, CPU encoder training code | Raw wafer parsing |
 | `wafermap.reporting` | HTML/PNG/CSV report generation | Data mutation |
-| `wafermap.features` | Feature extraction and vector utilities | Annotation import/export |
+| `wafermap.features` | Feature extraction and vector utilities | Annotation UI |
 | `wafermap.evaluation` | Synthetic checks and nearest-neighbor diagnostics | Production data ingestion |
 
 Rule of thumb: scripts orchestrate, `src/wafermap` implements reusable behavior.
@@ -68,26 +64,21 @@ outputs/manifests/<run>_manifest.json
 outputs/reports/<run>/
 ```
 
-### 2. CVAT Annotation Bridge
+### 2. Direct Segmentation Tool
 
 Entry scripts:
 
-- `scripts/export_cvat_wafer_images.py`
-- `scripts/import_cvat_annotations.py`
+- `scripts/run_segmentation_tool.py`
+- `scripts/run_pattern_asset_editor.py` as a backward-compatible engine filename
 
 Library owners:
 
-- `src/wafermap/assets/cvat.py`
 - `src/wafermap/assets/library.py`
-
-Config:
-
-- `configs/cvat/wafer_defect_labels.json`
+- `scripts/run_pattern_asset_editor.py` until the browser handler is split into `src/`
 
 Output:
 
 ```text
-data/cvat_exports/<task>/
 data/pattern_assets/<family>/<asset_id>/
 ```
 
@@ -96,7 +87,6 @@ data/pattern_assets/<family>/<asset_id>/
 Entry scripts:
 
 - `scripts/build_pattern_asset_report.py`
-- `scripts/run_pattern_asset_editor.py` for legacy fallback only
 
 Library owner:
 
@@ -145,9 +135,9 @@ Library owners:
 - `src/wafermap/training/`
 - `src/wafermap/reporting/`
 
-### 6. Review, Retrieval, And Legacy Diagnostics
+### 6. Review, Retrieval, And Historical Diagnostics
 
-These are useful but secondary to the CVAT dataset pipeline.
+These are useful but secondary to the segmentation dataset pipeline.
 
 Entry scripts:
 
@@ -166,8 +156,8 @@ Library owners:
 
 | New need | Preferred location |
 |---|---|
-| New CVAT label | `configs/cvat/wafer_defect_labels.json` |
-| New label parsing rule | `src/wafermap/assets/cvat.py` |
+| New mask family | `src/wafermap/assets/library.py`, `src/wafermap/data/schema.py`, and related tests |
+| New tool interaction | `scripts/run_pattern_asset_editor.py` first, then move shared pieces into `src/wafermap/assets/` |
 | New pattern asset metadata field | `src/wafermap/assets/library.py` and related tests |
 | New procedural defect | `src/wafermap/synth/procedural_patterns.py` |
 | New training tensor behavior | `src/wafermap/training/segmentation.py` |
@@ -178,7 +168,7 @@ Library owners:
 ## Known Technical Debt
 
 - `scripts/` is intentionally flat for now because existing tests and user commands reference those filenames directly.
-- `scripts/run_pattern_asset_editor.py` is large and legacy. Do not expand it as the main annotation product.
+- `scripts/run_pattern_asset_editor.py` is still a large browser tool engine. New reusable logic should move into `src/wafermap/` instead of making the script larger.
 - Several historical `evaluate_*` scripts are retained as research diagnostics. They are not the primary workflow.
 - Some orchestration scripts still dynamically load other scripts. New shared logic should move to `src/wafermap/` instead of deepening that pattern.
 

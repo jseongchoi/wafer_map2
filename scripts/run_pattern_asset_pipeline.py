@@ -32,7 +32,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--count", type=int, default=20)
     parser.add_argument("--assets-per-wafer", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20260624)
-    parser.add_argument("--placement-mode", choices=("source_jitter", "random_valid"), default="source_jitter")
+    parser.add_argument(
+        "--placement-mode",
+        choices=("source_jitter", "polar_jitter", "random_valid"),
+        default="source_jitter",
+        help=(
+            "source_jitter preserves absolute source location; "
+            "polar_jitter matches radial/angular wafer zone; random_valid stress-tests shape only."
+        ),
+    )
     parser.add_argument("--jitter-pixels", type=int, default=48)
     parser.add_argument(
         "--procedural-families",

@@ -1,14 +1,14 @@
 # Operator Manual
 
-이 문서는 WaferMap을 실제로 운영하는 사람이 따라 하는 절차서입니다. 목표는 “CVAT에서 라벨링한 defect를 model 학습 가능한 synthetic segmentation dataset으로 변환”하는 것입니다.
+이 문서는 WaferMap을 실제로 운영하는 사람이 따라 하는 절차서입니다. 목표는 “직접 작성한 defect mask를 model 학습 가능한 synthetic segmentation dataset으로 변환”하는 것입니다.
 
 ## Roles
 
 | Role | Responsibility |
 |---|---|
-| Data operator | raw wafer 위치, manifest 생성, CVAT package export |
-| Annotator | CVAT에서 defect label 작성 |
-| Dataset owner | CVAT export import, pattern asset QC, synthetic dataset 생성 |
+| Data operator | raw wafer 위치, manifest 생성 |
+| Annotator | `run_segmentation_tool.py`에서 defect mask 작성 |
+| Dataset owner | pattern asset QC, synthetic dataset 생성 |
 | ML owner | readiness report 확인, U-Net 학습, prediction feedback loop 운영 |
 
 한 사람이 모두 할 수 있지만, 산출물 기준은 위 역할로 나누어 생각합니다.
@@ -30,7 +30,7 @@ pip install -e .[dev,train]
 확인:
 
 ```powershell
-python -m pytest tests/test_cvat_annotation_workflow.py -q
+python -m pytest tests/test_pattern_asset_pipeline.py -q
 ```
 
 ## 1. Prepare Real Wafer Manifest
@@ -59,47 +59,44 @@ outputs/reports/real_png_batch/report.html
 configs/eval/real_unlabeled_synthetic_smoke.json
 ```
 
-## 2. Export CVAT Task Package
+## 2. Open The Segmentation Tool
 
 ```powershell
-python scripts/export_cvat_wafer_images.py `
+python scripts/run_segmentation_tool.py `
   --manifest outputs/manifests/real_png_batch_manifest.json `
-  --out-dir data/cvat_exports/real_png_task `
-  --limit 100
+  --sample-id <sample_id> `
+  --assets-root data/pattern_assets
 ```
 
-산출물:
+빠른 smoke sample:
 
-```text
-data/cvat_exports/real_png_task/
-  images/
-  labels.json
-  manifest.json
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --sample-id real_like_synth_000000 `
+  --assets-root data/pattern_assets
 ```
 
-CVAT에는 `images/` 안의 PNG를 업로드합니다. `labels.json`은 label 생성 기준으로 사용합니다.
+모델 예측 mask를 correction seed로 쓸 때:
 
-## 3. Configure CVAT Labels
-
-원본 label schema:
-
-```text
-configs/cvat/wafer_defect_labels.json
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --sample-id <sample_id> `
+  --prediction-json outputs/predictions/fbm_prediction_masks.json `
+  --assets-root data/pattern_assets
 ```
 
-기본 label:
+## 3. Segmentation Families
 
-| Label | Meaning |
+| Family | Meaning |
 |---|---|
 | `local` | compact blob or local cluster |
 | `scratch` | line, arc, or scratch-like defect |
 | `ring` | full/partial ring or annulus |
-| `edge` | edge band or edge sector |
+| `edge` | abnormal edge band or edge sector |
 | `shot_grid` | repeated shot-relative defect |
 | `random` | sparse unstructured fail pattern |
-| `stby_blob` | STBY/missing-test mosaic blob |
-
-새 label이 필요하면 CVAT에서 임의로만 추가하지 말고 `configs/cvat/wafer_defect_labels.json`에 먼저 추가합니다.
 
 ## 4. Annotation Rules
 
@@ -107,19 +104,19 @@ configs/cvat/wafer_defect_labels.json
 
 - defect blob 또는 compact cluster만 감쌉니다.
 - 주변 정상 background까지 크게 포함하지 않습니다.
-- 여러 blob이 하나의 공정 defect로 보이면 하나의 polygon으로 묶어도 됩니다.
+- 여러 blob이 하나의 공정 defect로 보이면 하나의 mask로 묶어도 됩니다.
 
 ### Scratch
 
 - visible scratch thickness를 따라갑니다.
-- 너무 얇아서 polygon이 어려우면 중심선을 기준으로 약간 넓게 잡습니다.
+- 너무 얇으면 중심선을 기준으로 약간 넓게 잡습니다.
 - scratch 주변의 unrelated blob은 별도 `local`로 분리합니다.
 
 ### Ring
 
 - ring 내부 전체 disk를 칠하지 않습니다.
 - annulus 또는 arc 두께만 라벨링합니다.
-- 끊긴 ring도 같은 physical ring이면 하나의 `ring` object로 유지합니다.
+- 끊긴 ring도 같은 physical ring이면 하나의 `ring` mask로 유지합니다.
 
 ### Edge
 
@@ -132,37 +129,9 @@ configs/cvat/wafer_defect_labels.json
 - 반복 위치가 shot-relative로 보이면 `shot_grid`로 라벨링합니다.
 - 단일 blob이면 `local`이 우선입니다.
 
-### STBY Blob
+## 5. Save Pattern Assets
 
-- missing-test mosaic block은 `stby_blob`으로 라벨링합니다.
-- importer가 grade 7 override를 적용하고 현재 asset family는 `local`로 저장합니다.
-- 실제 물리 defect origin을 숨긴 것 같으면 review note에 남깁니다.
-
-## 5. Export From CVAT
-
-권장 형식:
-
-```text
-CVAT for images 1.1
-```
-
-현재 importer 지원 shape:
-
-- polygon
-- box
-
-Brush/mask annotation을 주 workflow로 쓰려면 CVAT native mask RLE import를 추가해야 합니다.
-
-## 6. Import CVAT Annotations
-
-```powershell
-python scripts/import_cvat_annotations.py `
-  --cvat-xml data/cvat_exports/real_png_task/annotations.xml `
-  --cvat-manifest data/cvat_exports/real_png_task/manifest.json `
-  --assets-root data/pattern_assets
-```
-
-산출물:
+툴에서 `Save Assets`를 누르면 family별 asset이 저장됩니다.
 
 ```text
 data/pattern_assets/<family>/<asset_id>/
@@ -170,11 +139,9 @@ data/pattern_assets/<family>/<asset_id>/
   mask.png
   preview.png
   metadata.json
-
-data/pattern_assets/cvat_import_report.json
 ```
 
-## 7. Pattern Asset QC
+## 6. Pattern Asset QC
 
 ```powershell
 python scripts/build_pattern_asset_report.py `
@@ -189,18 +156,18 @@ python scripts/build_pattern_asset_report.py `
 | mask tightness | background까지 크게 먹음 |
 | family correctness | ring을 local로 저장함 |
 | ring continuity | 하나의 ring이 여러 asset으로 쪼개짐 |
-| STBY handling | missing-test blob인데 grade가 7로 유지되지 않음 |
+| STBY handling | missing-test 영역을 물리 defect와 섞음 |
 | edge quality | 전체 wafer boundary를 무의미하게 칠함 |
 
-QC에서 심각한 문제가 있으면 CVAT annotation을 고치고 다시 export/import합니다.
+QC에서 심각한 문제가 있으면 segmentation tool에서 mask를 다시 저장합니다.
 
-## 8. Build Synthetic Dataset
+## 7. Build Synthetic Dataset
 
 ```powershell
 python scripts/compose_synthetic_from_assets.py `
   --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
   --assets-root data/pattern_assets `
-  --out-dir data/synthetic/cvat_asset_composed `
+  --out-dir data/synthetic/asset_composed `
   --count 200 `
   --assets-per-wafer 3 `
   --procedural-families scratch,edge,shot_grid,random
@@ -212,23 +179,23 @@ python scripts/compose_synthetic_from_assets.py `
 - `edge`, `shot_grid`은 procedural primary입니다.
 - `scratch`는 human asset이 부족할 때 procedural fallback을 같이 씁니다.
 
-## 9. Readiness Validation
+## 8. Readiness Validation
 
 ```powershell
 python scripts/run_pattern_asset_pipeline.py `
   --assets-root data/pattern_assets `
-  --composed-dir data/synthetic/cvat_asset_composed `
-  --work-dir outputs/cvat_pattern_asset_pipeline `
-  --report-out outputs/reports/cvat_pattern_asset_project_report.html
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html
 ```
 
 반드시 확인할 파일:
 
 ```text
-outputs/cvat_pattern_asset_pipeline/asset_segmentation_manifest.csv
-outputs/cvat_pattern_asset_pipeline/asset_segmentation_readiness.html
-outputs/cvat_pattern_asset_pipeline/asset_segmentation_readiness_metrics.json
-outputs/reports/cvat_pattern_asset_project_report.html
+outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
+outputs/pattern_asset_pipeline/asset_segmentation_readiness.html
+outputs/pattern_asset_pipeline/asset_segmentation_readiness_metrics.json
+outputs/reports/pattern_asset_project_report.html
 ```
 
 합격 기준:
@@ -236,21 +203,23 @@ outputs/reports/cvat_pattern_asset_project_report.html
 - target family별 positive sample이 충분합니다.
 - mask overlap이 의도한 multi-label 범위를 벗어나지 않습니다.
 - gallery에서 defect가 wafer 안에 자연스럽게 보입니다.
-- `stby_blob`이 local asset으로 들어가도 의도한 grade/mask가 유지됩니다.
+- `stby_pattern`이 target channel에 섞이지 않습니다.
 
-## 10. Train Model
+## 9. Train Model
 
 PyTorch 환경에서:
 
 ```powershell
 python scripts/train_unet_segmentation.py `
-  --manifest outputs/cvat_pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
+  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
   --model-out outputs/models/asset_unet_segmentation.pt `
   --output-size 96 `
   --epochs 20
 ```
+
+Training checks train-split positive coverage before running. If a target family has no positive train sample, rebuild the synthetic dataset or use `--allow-incomplete-target-coverage` only for a wiring/debug run. If validation positives are missing, training may run but the report marks that family metric as uninformative.
 
 모델 평가에서 먼저 볼 것:
 
@@ -258,20 +227,19 @@ python scripts/train_unet_segmentation.py `
 - `scratch` continuity
 - `ring` arc/ring continuity
 - `edge` false positives near normal boundary
-- `stby_blob`을 local로 처리했을 때의 side effect
+- prediction mask를 tool에 다시 불러왔을 때 correction이 쉬운지
 
-## 11. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| `unknown CVAT label` | schema에 없는 label을 CVAT에서 사용 | `configs/cvat/wafer_defect_labels.json`에 추가하거나 CVAT label 수정 |
-| imported asset count is 0 | CVAT XML image names do not match manifest | `data/cvat_exports/<task>/manifest.json`과 XML image name 확인 |
-| STBY asset grade is 0 | label이 `stby_blob`이 아니거나 grade override 누락 | label schema와 annotation label 확인 |
-| synthetic sample has no assets | `data/pattern_assets`가 비어 있음 | CVAT import 또는 asset report 먼저 실행 |
-| edge/ring labels look too broad | polygon rule too loose | CVAT annotation guideline 재적용 |
+| saved asset count is 0 | tool에서 저장할 mask가 비어 있음 | active family와 mask pixel count 확인 |
+| synthetic sample has no assets | `data/pattern_assets`가 비어 있음 | segmentation tool 저장 또는 asset report 먼저 실행 |
+| edge/ring labels look too broad | mask rule too loose | tool에서 visible defect band/arc만 다시 지정 |
+| prediction masks do not load | schema or sample id mismatch | `fbm_prediction_masks/v1`와 `sample_id` 확인 |
 | full tests fail after docs edit | documentation quality test catches stale direction | `tests/test_documentation_quality.py`와 docs links 확인 |
 
-## 12. Release Checklist
+## 11. Release Checklist
 
 작업 완료 전:
 
@@ -285,4 +253,4 @@ push 전 확인:
 - README main commands가 동작 가능한 경로를 가리킨다.
 - `docs/architecture.md`와 `docs/operator_manual.md`가 현재 코드 구조와 맞다.
 - 새 script를 만들었다면 `scripts/README.md`에 등록했다.
-- 새 label을 만들었다면 `configs/cvat/wafer_defect_labels.json`에 등록했다.
+- 새 mask family를 만들었다면 schema, asset, training target 테스트를 같이 업데이트했다.

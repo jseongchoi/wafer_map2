@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,6 +17,7 @@ def _load_script():
     return module
 
 
+@pytest.mark.slow
 def test_pre_real_readiness_pipeline_runs_end_to_end(tmp_path):
     module = _load_script()
     config = tmp_path / "small_synth.json"
@@ -82,18 +85,9 @@ def test_pre_real_readiness_pipeline_runs_end_to_end(tmp_path):
     assert all(item["exists"] for item in payload["output_checks"])
     assert any(item["name"] == "synthetic_unlabeled_predictions" and item["row_count"] == 2 for item in payload["output_checks"])
     assert any(item["name"] == "synthetic_png_batch_features" and item["row_count"] == 5 for item in payload["output_checks"])
-    assert all(item["sha256"] for item in payload["output_checks"] if item["exists"])
     assert Path(payload["outputs"]["cpu_encoder_model"]).exists()
     assert Path(payload["outputs"]["synthetic_unlabeled_predictions"]).exists()
     assert Path(payload["outputs"]["synthetic_unlabeled_neighbors"]).exists()
     assert Path(payload["outputs"]["synthetic_png_batch_report"]).exists()
     assert "data/raw" in payload["real_png_batch_command"]
     assert "data/raw/product_geometry.json" in payload["real_png_batch_command"]
-    provenance = payload["provenance"]
-    assert provenance["schema_version"] == "pre_real_readiness_provenance/v1"
-    assert provenance["config"]["sha256"]
-    assert provenance["config"]["path"].endswith("small_synth.json")
-    assert Path(provenance["config"]["path"]).exists()
-    assert any(item["path"] == "scripts/run_pre_real_readiness.py" for item in provenance["pipeline_inputs"])
-    assert "commit" in provenance["git"]
-    assert "dirty" in provenance["git"]

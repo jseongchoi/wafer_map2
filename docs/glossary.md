@@ -86,7 +86,7 @@
 | `missed_major_defect` | neighbor가 query의 중요한 defect를 놓쳤는지 표시한다. | 놓쳤으면 `yes`. |
 | `retrieval_failure_mode` | 검색이 틀렸다면 왜 틀렸는지 적는 값이다. | 예: `wrong_family`, `right_family_wrong_location`, `parser_or_mask_issue`. |
 | `next_action` | 다음에 무엇을 보강할지 적는 값이다. | 예: `feature_weight_tuning`, `segmentation_candidate`, `parser_validation`. |
-| `safe_comment` | 리뷰어 메모다. | 판단 근거를 자유롭게 적는다. |
+| `review_comment` | 리뷰어 메모다. | 판단 근거를 자유롭게 적는다. |
 
 ## 7. Defect Family
 

@@ -1,4 +1,4 @@
-"""Run the legacy local web editor for FBM pattern asset fallback work."""
+"""Run the local web segmentation tool for FBM pattern asset work."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def load_manifest_sample(manifest_path: Path, sample_id: str | None) -> Any:
 
 def _load_real_feature_module() -> Any:
     path = ROOT / "scripts" / "extract_real_unlabeled_features.py"
-    spec = importlib.util.spec_from_file_location("extract_real_unlabeled_features_for_pattern_editor", path)
+    spec = importlib.util.spec_from_file_location("extract_real_unlabeled_features_for_segmentation_tool", path)
     module = importlib.util.module_from_spec(spec)
     if spec.loader is None:
         raise RuntimeError(f"Could not load real feature extraction module: {path}")
@@ -139,6 +139,80 @@ def prediction_masks_for_editor(
         source_mask = rle_to_mask(masks.get(family, []), source_shape)
         out[family] = mask_to_rle(resize_mask_nearest(source_mask, target_shape))
     return out
+
+
+def build_editor_sample_payload(
+    *,
+    sample: Any,
+    assets_root: Path,
+    margin_ratio: float,
+    edit_shape: tuple[int, int],
+) -> dict[str, Any]:
+    edit_height, edit_width = edit_shape
+    return {
+        "sample_id": sample.sample_id,
+        "width": int(edit_width),
+        "height": int(edit_height),
+        "source_width": int(sample.shape[1]),
+        "source_height": int(sample.shape[0]),
+        "editor_downsampled": edit_shape != sample.shape,
+        "families": list(TARGET_FAMILIES),
+        "family_labels": FAMILY_LABELS,
+        "family_colors": FAMILY_COLORS,
+        "assets_root": str(assets_root),
+        "margin_ratio": float(margin_ratio),
+        "stby_target_excluded": True,
+        "composition_rule": "max",
+        "severity_b64": bytes_b64(resize_array_nearest(sample.severity, edit_shape)),
+        "wafer_mask_b64": bytes_b64(resize_array_nearest(sample.wafer_mask, edit_shape)),
+        "valid_mask_b64": bytes_b64(resize_array_nearest(sample.valid_test_mask, edit_shape)),
+        "stby_mask_b64": bytes_b64(resize_array_nearest(sample.stby_mask, edit_shape)),
+    }
+
+
+def save_assets_from_editor_payload(
+    *,
+    payload: dict[str, Any],
+    sample: Any,
+    manifest_path: Path,
+    assets_root: Path,
+    margin_ratio: float,
+    edit_shape: tuple[int, int],
+) -> dict[str, Any]:
+    save_mode = str(payload.get("save_mode", "family"))
+    if save_mode not in {"family", "components"}:
+        save_mode = "family"
+    masks_by_family = editor_payload_masks(
+        payload.get("masks", {}),
+        source_shape=sample.shape,
+        edit_shape=edit_shape,
+    )
+    saved = save_pattern_assets(
+        sample=sample,
+        masks_by_family=masks_by_family,
+        assets_root=assets_root,
+        margin_ratio=margin_ratio,
+        source_manifest=manifest_path,
+        split_components=save_mode == "components",
+    )
+    return {"saved_count": len(saved), "save_mode": save_mode, "saved": saved}
+
+
+def editor_payload_masks(
+    masks_payload: Any,
+    *,
+    source_shape: tuple[int, int],
+    edit_shape: tuple[int, int],
+) -> dict[str, np.ndarray]:
+    masks_payload = masks_payload if isinstance(masks_payload, dict) else {}
+    masks_by_family: dict[str, np.ndarray] = {}
+    for family in TARGET_FAMILIES:
+        try:
+            edit_mask = rle_to_mask(masks_payload.get(family, []), edit_shape)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid RLE mask for {family}: {exc}") from exc
+        masks_by_family[family] = resize_mask_nearest(edit_mask, source_shape)
+    return masks_by_family
 
 
 def load_model_proposals(
@@ -414,27 +488,14 @@ class PatternAssetEditorHandler(BaseHTTPRequestHandler):
                 content_type="text/html; charset=utf-8",
             )
         elif path == "/api/sample":
-            edit_height, edit_width = self.editor_shape
-            payload = {
-                "sample_id": self.sample.sample_id,
-                "width": int(edit_width),
-                "height": int(edit_height),
-                "source_width": int(self.sample.shape[1]),
-                "source_height": int(self.sample.shape[0]),
-                "editor_downsampled": self.editor_shape != self.sample.shape,
-                "families": list(TARGET_FAMILIES),
-                "family_labels": FAMILY_LABELS,
-                "family_colors": FAMILY_COLORS,
-                "assets_root": str(self.assets_root),
-                "margin_ratio": float(self.margin_ratio),
-                "stby_target_excluded": True,
-                "composition_rule": "max",
-                "severity_b64": bytes_b64(resize_array_nearest(self.sample.severity, self.editor_shape)),
-                "wafer_mask_b64": bytes_b64(resize_array_nearest(self.sample.wafer_mask, self.editor_shape)),
-                "valid_mask_b64": bytes_b64(resize_array_nearest(self.sample.valid_test_mask, self.editor_shape)),
-                "stby_mask_b64": bytes_b64(resize_array_nearest(self.sample.stby_mask, self.editor_shape)),
-            }
-            self.send_json(payload)
+            self.send_json(
+                build_editor_sample_payload(
+                    sample=self.sample,
+                    assets_root=self.assets_root,
+                    margin_ratio=self.margin_ratio,
+                    edit_shape=self.editor_shape,
+                )
+            )
         elif path == "/api/assets":
             self.send_json({"assets": scan_pattern_assets(self.assets_root)})
         elif path == "/api/predictions":
@@ -479,30 +540,30 @@ class PatternAssetEditorHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         length = int(self.headers.get("content-length", "0"))
-        payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        masks_payload = payload.get("masks", {})
-        save_mode = str(payload.get("save_mode", "family"))
-        if save_mode not in {"family", "components"}:
-            save_mode = "family"
-        masks_by_family = {
-            family: resize_mask_nearest(rle_to_mask(masks_payload.get(family, []), self.editor_shape), self.sample.shape)
-            for family in TARGET_FAMILIES
-        }
-        saved = save_pattern_assets(
-            sample=self.sample,
-            masks_by_family=masks_by_family,
-            assets_root=self.assets_root,
-            margin_ratio=self.margin_ratio,
-            source_manifest=self.manifest_path,
-            split_components=save_mode == "components",
-        )
-        self.send_json({"saved_count": len(saved), "save_mode": save_mode, "saved": saved})
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            response = save_assets_from_editor_payload(
+                payload=payload,
+                sample=self.sample,
+                manifest_path=self.manifest_path,
+                assets_root=self.assets_root,
+                margin_ratio=self.margin_ratio,
+                edit_shape=self.editor_shape,
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_json({"error": str(exc)}, status=400)
+            return
+        self.send_json(response)
 
     def log_message(self, format: str, *args: Any) -> None:
         return
 
-    def send_json(self, payload: dict[str, Any]) -> None:
-        self.send_bytes(json.dumps(payload, ensure_ascii=False).encode("utf-8"), content_type="application/json")
+    def send_json(self, payload: dict[str, Any], *, status: int = 200) -> None:
+        self.send_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            content_type="application/json",
+            status=status,
+        )
 
     def send_asset_file(self, relative_url_path: str) -> None:
         relative_path = Path(unquote(relative_url_path))
@@ -516,8 +577,8 @@ class PatternAssetEditorHandler(BaseHTTPRequestHandler):
         content_type = "image/png" if candidate.suffix.lower() == ".png" else "application/json"
         self.send_bytes(candidate.read_bytes(), content_type=content_type)
 
-    def send_bytes(self, payload: bytes, *, content_type: str) -> None:
-        self.send_response(200)
+    def send_bytes(self, payload: bytes, *, content_type: str, status: int = 200) -> None:
+        self.send_response(status)
         self.send_header("content-type", content_type)
         self.send_header("content-length", str(len(payload)))
         self.end_headers()
@@ -617,7 +678,7 @@ EDITOR_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FBM Pattern Asset Builder</title>
+  <title>FBM Segmentation Tool</title>
   <style>
     body { margin: 0; overflow: hidden; background: #eef2f1; color: #17211f; font-family: "Segoe UI", "Noto Sans KR", Arial, sans-serif; }
     .app { height: 100vh; min-height: 0; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(280px, 320px); grid-template-rows: 52px minmax(0, 1fr); }
@@ -675,7 +736,7 @@ EDITOR_HTML = """<!doctype html>
 </head>
 <body>
 <div class="app">
-  <header><h1>FBM Pattern Asset Builder</h1><div class="meta" id="meta"></div></header>
+  <header><h1>FBM Segmentation Tool</h1><div class="meta" id="meta"></div></header>
   <main><div class="canvas-wrap" id="canvasWrap"><div class="canvas-stage" id="canvasStage"><canvas id="base"></canvas><canvas id="mask"></canvas><canvas id="proposalPreview" class="proposal-canvas"></canvas><canvas id="lasso" class="lasso-canvas"></canvas></div></div></main>
   <aside>
     <section class="panel"><h2>Family</h2><div class="families" id="families"></div></section>
@@ -1770,7 +1831,7 @@ def main(argv: list[str] | None = None) -> None:
     handler.model_proposals = load_model_proposals(proposal_path, sample.sample_id, sample.shape, handler.editor_shape)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     url = f"http://{args.host}:{args.port}/"
-    print(f"Pattern Asset Builder: {url}")
+    print(f"FBM Segmentation Tool: {url}")
     print(f"Saving assets under: {handler.assets_root}")
     if handler.editor_shape != sample.shape:
         print(
@@ -1784,7 +1845,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("Stopping Pattern Asset Builder")
+        print("Stopping FBM Segmentation Tool")
     finally:
         server.server_close()
 

@@ -102,7 +102,7 @@ def html_report(
     <tr><td><code>missed_major_defect</code></td><td>{', '.join(MISSED_MAJOR_DEFECT_VALUES)}</td><td>검색 결과가 query의 중요한 불량을 놓쳤는지 표시한다.</td></tr>
     <tr><td><code>retrieval_failure_mode</code></td><td>{', '.join(RETRIEVAL_FAILURE_MODES)}</td><td>mismatch 또는 partial match의 원인을 다음 보강 track으로 분류한다.</td></tr>
     <tr><td><code>next_action</code></td><td>{', '.join(NEXT_ACTIONS)}</td><td>리뷰 결과를 feature tuning, location-aware retrieval, segmentation 후보 같은 후속 작업으로 연결한다.</td></tr>
-    <tr><td><code>safe_comment</code></td><td>free text</td><td>리뷰어가 판단 근거를 자유롭게 적는다.</td></tr>
+    <tr><td><code>review_comment</code></td><td>free text</td><td>리뷰어가 판단 근거를 자유롭게 적는다.</td></tr>
   </table>
   <h2>Preview</h2>
   <table>

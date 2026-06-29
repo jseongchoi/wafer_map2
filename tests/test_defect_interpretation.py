@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from wafermap.reporting import score_feature_row
@@ -132,6 +133,7 @@ def test_interpret_fbm_existing_feature_csv_writes_compact_user_outputs(tmp_path
     assert "Focus Wafer Score Table" in report_text
 
 
+@pytest.mark.slow
 def test_render_wafer_previews_from_manifest(tmp_path):
     module = _load_interpret_script()
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=3), 0)
@@ -163,6 +165,7 @@ def test_render_wafer_previews_from_manifest(tmp_path):
         assert image.height > 0
 
 
+@pytest.mark.slow
 def test_render_annotated_preview_marks_local_candidate(tmp_path):
     module = _load_interpret_script()
     sample = generate_sample(SyntheticConfig(count=1, target_net_die=40, chip_width=6, chip_height=6, seed=3), 0)

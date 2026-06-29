@@ -1,4 +1,4 @@
-"""Build a leader-facing status and refactor audit report."""
+"""Build a leader-facing status and refactor report."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "outputs" / "reports" / "leader_status_and_refactor_audit.html"
+OUT = ROOT / "outputs" / "reports" / "leader_status_and_refactor_report.html"
 
 
 def read_json(path: str) -> dict[str, Any]:
@@ -259,7 +259,7 @@ def build_html() -> str:
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <title>WaferMap Leader Status and Refactor Audit</title>
+  <title>WaferMap Leader Status and Refactor Report</title>
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1f2933; margin: 32px; line-height: 1.55; }}
     h1, h2, h3 {{ color: #111827; }}
@@ -278,7 +278,7 @@ def build_html() -> str:
   </style>
 </head>
 <body>
-  <h1>WaferMap Leader Status and Refactor Audit</h1>
+  <h1>WaferMap Leader Status and Refactor Report</h1>
   <p>이 보고서는 현재 FBM 프로젝트가 원래 목표인 <strong>유사 wafer 검색, defect score, 전문가 리뷰 절차</strong>로 제대로 가고 있는지 리더 관점에서 점검한 것이다.</p>
   <div class="note ok">판정: synthetic scale pilot은 유망하다. 다만 real wafer 성능은 아직 검증 전이며, scratch/local 계열은 wafer-level feature만으로는 약해서 morphology 또는 segmentation 보강 후보로 유지한다.</div>
   <div class="summary">{cards}</div>

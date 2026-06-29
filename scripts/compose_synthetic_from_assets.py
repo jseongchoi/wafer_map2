@@ -16,7 +16,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from wafermap.assets import DEFAULT_PROCEDURAL_FAMILIES, TARGET_FAMILIES
+from wafermap.assets import DEFAULT_PROCEDURAL_FAMILIES, TARGET_FAMILIES, mask_location_summary
 from wafermap.data import PATTERN_CLASSES, SyntheticSample, load_sample, save_npz, write_json
 from wafermap.synth.procedural_patterns import PROCEDURAL_PROBABILITIES, add_procedural_patterns
 
@@ -31,9 +31,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=20260624)
     parser.add_argument(
         "--placement-mode",
-        choices=("source_jitter", "random_valid"),
+        choices=("source_jitter", "polar_jitter", "random_valid"),
         default="source_jitter",
-        help="source_jitter preserves absolute process location; random_valid stress-tests shape only.",
+        help=(
+            "source_jitter preserves absolute process location; "
+            "polar_jitter matches radial/angular wafer zone; random_valid stress-tests shape only."
+        ),
     )
     parser.add_argument("--jitter-pixels", type=int, default=48, help="Max absolute x/y jitter for source_jitter placement.")
     parser.add_argument(
@@ -98,7 +101,7 @@ def compose_sample(
         placement = choose_placement(base, asset, rng, placement_mode=placement_mode, jitter_pixels=jitter_pixels)
         if placement is None:
             continue
-        y, x = placement
+        y, x, actual_placement_mode = placement
         grade = asset["grade"]
         mask = asset["mask"]
         h, w = grade.shape
@@ -113,7 +116,7 @@ def compose_sample(
         mask_patch = pattern_masks[class_idx][target]
         intensity_patch = pattern_intensity[class_idx][target]
         mask_patch[valid] = 1
-        intensity_patch[valid] = grade[valid].astype(np.float32) / 7.0
+        intensity_patch[valid] = np.maximum(intensity_patch[valid], grade[valid].astype(np.float32) / 7.0)
         pattern_masks[class_idx][target] = mask_patch
         pattern_intensity[class_idx][target] = intensity_patch
         placed.append(
@@ -123,8 +126,11 @@ def compose_sample(
                 "placed_xy": [int(x), int(y)],
                 "shape_hw": [int(h), int(w)],
                 "composition_rule": "max",
-                "placement_mode": placement_mode,
+                "placement_mode": actual_placement_mode,
+                "requested_placement_mode": placement_mode,
                 "source_bbox_xywh": normalized_bbox(asset["metadata"].get("bbox_xywh")),
+                "source_location_summary": asset["metadata"].get("location_summary", {}),
+                "placed_location_summary": placed_location_summary(base, valid, y, x),
             }
         )
     np_rng = np.random.default_rng(rng.randrange(0, 2**32))
@@ -174,7 +180,7 @@ def choose_placement(
     *,
     placement_mode: str,
     jitter_pixels: int,
-) -> tuple[int, int] | None:
+) -> tuple[int, int, str] | None:
     grade = asset["grade"]
     mask = asset["mask"]
     h, w = grade.shape
@@ -186,14 +192,21 @@ def choose_placement(
             target = np.s_[y : y + h, x : x + w]
             valid = mask & (base.wafer_mask[target] > 0) & (base.valid_test_mask[target] > 0)
             if valid.sum() >= max(1, int(mask.sum() * 0.50)):
-                return y, x
+                return y, x, "source_jitter"
+    if placement_mode == "polar_jitter":
+        source = polar_jitter_candidates(base, asset, rng, h, w)
+        for y, x in source:
+            target = np.s_[y : y + h, x : x + w]
+            valid = mask & (base.wafer_mask[target] > 0) & (base.valid_test_mask[target] > 0)
+            if valid.sum() >= max(1, int(mask.sum() * 0.50)):
+                return y, x, "polar_jitter"
     for _ in range(200):
         y = rng.randint(0, base.shape[0] - h)
         x = rng.randint(0, base.shape[1] - w)
         target = np.s_[y : y + h, x : x + w]
         valid = mask & (base.wafer_mask[target] > 0) & (base.valid_test_mask[target] > 0)
         if valid.sum() >= max(1, int(mask.sum() * 0.70)):
-            return y, x
+            return y, x, "random_valid"
     return None
 
 
@@ -221,6 +234,46 @@ def source_jitter_candidates(
     return candidates
 
 
+def polar_jitter_candidates(
+    base: SyntheticSample,
+    asset: dict[str, Any],
+    rng: random.Random,
+    height: int,
+    width: int,
+) -> list[tuple[int, int]]:
+    source = asset["metadata"].get("location_summary", {})
+    target_radial = safe_float(source.get("radial_mean"))
+    target_theta = safe_float(source.get("theta_mean_deg"))
+    if target_radial is None or target_theta is None:
+        return []
+    max_y = max(0, base.shape[0] - height)
+    max_x = max(0, base.shape[1] - width)
+    local_ys, local_xs = np.nonzero(asset["mask"])
+    if local_ys.size == 0:
+        return []
+    min_valid_pixels = max(1, int(local_ys.size * 0.50))
+    wafer_radius = wafer_radius_for_shape(base.shape, base.wafer_mask > 0)
+    scored: list[tuple[float, int, int]] = []
+    for _ in range(240):
+        y = rng.randint(0, max_y)
+        x = rng.randint(0, max_x)
+        abs_ys = local_ys + y
+        abs_xs = local_xs + x
+        valid_points = (base.wafer_mask[abs_ys, abs_xs] > 0) & (base.valid_test_mask[abs_ys, abs_xs] > 0)
+        if int(valid_points.sum()) < min_valid_pixels:
+            continue
+        radial_mean, theta_mean = point_location_mean(
+            base.shape,
+            wafer_radius,
+            abs_ys[valid_points],
+            abs_xs[valid_points],
+        )
+        score = abs(radial_mean - target_radial) + circular_delta_deg(theta_mean, target_theta) / 180.0
+        scored.append((float(score), int(y), int(x)))
+    scored.sort(key=lambda item: item[0])
+    return [(y, x) for _score, y, x in scored[:40]]
+
+
 def normalized_bbox(value: Any) -> list[int] | None:
     if isinstance(value, list) and len(value) == 4:
         return [int(v) for v in value]
@@ -229,6 +282,52 @@ def normalized_bbox(value: Any) -> list[int] | None:
         if len(parts) == 4:
             return [int(float(part)) for part in parts]
     return None
+
+
+def safe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def circular_delta_deg(left: float, right: float) -> float:
+    return abs(((float(left) - float(right) + 180.0) % 360.0) - 180.0)
+
+
+def wafer_radius_for_shape(shape: tuple[int, int], wafer_mask: np.ndarray) -> float:
+    cx = (shape[1] - 1) / 2.0
+    cy = (shape[0] - 1) / 2.0
+    wy, wx = np.nonzero(wafer_mask)
+    if len(wy) == 0:
+        return 1.0
+    distance = np.sqrt((wx.astype(np.float32) - cx) ** 2 + (wy.astype(np.float32) - cy) ** 2)
+    return max(float(distance.max()), 1.0)
+
+
+def point_location_mean(
+    shape: tuple[int, int],
+    wafer_radius: float,
+    ys: np.ndarray,
+    xs: np.ndarray,
+) -> tuple[float, float]:
+    cx = (shape[1] - 1) / 2.0
+    cy = (shape[0] - 1) / 2.0
+    yy = ys.astype(np.float32)
+    xx = xs.astype(np.float32)
+    distance = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    radius = np.clip(distance / max(wafer_radius, 1.0), 0.0, 1.0)
+    theta = (np.degrees(np.arctan2(xx - cx, -(yy - cy))) + 360.0) % 360.0
+    theta_rad = np.radians(theta)
+    theta_mean = (np.degrees(np.arctan2(float(np.sin(theta_rad).mean()), float(np.cos(theta_rad).mean()))) + 360.0) % 360.0
+    return float(radius.mean()), float(theta_mean)
+
+
+def placed_location_summary(base: SyntheticSample, local_mask: np.ndarray, y: int, x: int) -> dict[str, Any]:
+    full_mask = np.zeros(base.shape, dtype=bool)
+    height, width = local_mask.shape
+    full_mask[y : y + height, x : x + width] = local_mask
+    return mask_location_summary(full_mask, base.wafer_mask > 0)
 
 
 def write_sample(sample: SyntheticSample, out_dir: Path) -> None:

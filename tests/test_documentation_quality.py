@@ -13,12 +13,14 @@ USER_FACING_DOCS = [
     ROOT / "scripts" / "README.md",
     DOCS / "index.html",
     DOCS / "README.md",
+    DOCS / "core_direction.md",
     DOCS / "architecture.md",
     DOCS / "operator_manual.md",
-    DOCS / "cvat_wafer_annotation_workflow.md",
+    DOCS / "segmentation_tool_workflow.md",
     DOCS / "glossary.md",
     DOCS / "fbm_data_flow_guide.md",
     DOCS / "fbm_pattern_asset_pipeline.md",
+    DOCS / "semiconductor_ai_review.md",
     DOCS / "project_overview.md",
     DOCS / "experiment_history.md",
     DOCS / "roadmap.md",
@@ -96,22 +98,30 @@ def test_core_documentation_has_no_replacement_mojibake_codepoints() -> None:
 
 def test_documentation_guides_current_project_direction() -> None:
     docs_index = (DOCS / "README.md").read_text(encoding="utf-8")
+    core_direction = (DOCS / "core_direction.md").read_text(encoding="utf-8")
     overview = (DOCS / "project_overview.md").read_text(encoding="utf-8")
     roadmap = (DOCS / "roadmap.md").read_text(encoding="utf-8")
     pipeline = (DOCS / "fbm_pattern_asset_pipeline.md").read_text(encoding="utf-8")
     data_flow = (DOCS / "fbm_data_flow_guide.md").read_text(encoding="utf-8")
     architecture = (DOCS / "architecture.md").read_text(encoding="utf-8")
     operator_manual = (DOCS / "operator_manual.md").read_text(encoding="utf-8")
-    cvat_workflow = (DOCS / "cvat_wafer_annotation_workflow.md").read_text(encoding="utf-8")
+    segmentation_workflow = (DOCS / "segmentation_tool_workflow.md").read_text(encoding="utf-8")
     scripts_map = (ROOT / "scripts" / "README.md").read_text(encoding="utf-8")
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
 
+    assert "core_direction.md" in docs_index
+    assert "FBM maps" in core_direction
+    assert "defect generation" in core_direction
+    assert "multi-defect synthetic maps" in core_direction
+    assert "multi-defect segmentation training and validation" in core_direction
+    assert "real-data pattern asset extraction" in core_direction
     assert "architecture.md" in docs_index
     assert "operator_manual.md" in docs_index
-    assert "cvat_wafer_annotation_workflow.md" in docs_index
+    assert "segmentation_tool_workflow.md" in docs_index
     assert "fbm_pattern_asset_pipeline.md" in docs_index
+    assert "semiconductor_ai_review.md" in docs_index
     assert "fbm_data_flow_guide.md" in docs_index
     assert "project_overview.md" in docs_index
     assert "roadmap.md" in docs_index
@@ -126,33 +136,57 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "Operator Manual" in operator_manual
     assert "Troubleshooting" in operator_manual
     assert "Release Checklist" in operator_manual
-    assert "Primary CVAT Dataset Pipeline" in scripts_map
-    assert "Legacy Fallback" in scripts_map
+    assert "Primary In-Repo Segmentation Pipeline" in scripts_map
+    assert "Compatibility" in scripts_map
     assert "Research / Historical Evaluation" in scripts_map
-    assert "CVAT-first dataset pipeline" in overview
-    assert "export_cvat_wafer_images.py" in overview
-    assert "import_cvat_annotations.py" in overview
+    assert "in-repo segmentation tool" in overview
+    assert "run_segmentation_tool.py" in overview
+    assert "run_pattern_asset_editor.py" in overview
     assert "hybrid synthetic data" in overview
     assert "train_unet_segmentation.py" in overview
-    assert "CVAT Annotation Workflow" in roadmap
+    assert "Direct Segmentation Tool" in roadmap
     assert "Small U-Net Training" in roadmap
-    assert "active learning" in roadmap
-    assert "label schema" in pipeline
+    assert "Active Learning" in roadmap
+    assert "human asset primary" in pipeline
     assert "procedural fallback" in pipeline
-    assert "CVAT for images 1.1" in cvat_workflow
-    assert "stby_blob" in cvat_workflow
-    assert "configs/cvat/wafer_defect_labels.json" in cvat_workflow
+    assert "run_segmentation_tool.py" in segmentation_workflow
+    assert "--prediction-json" in segmentation_workflow
+    assert "data/pattern_assets" in segmentation_workflow
     assert "data/pattern_assets" in data_flow
-    assert "data/synthetic/cvat_asset_composed" in data_flow
+    assert "data/synthetic/asset_composed" in data_flow
     assert "asset_segmentation_manifest.csv" in data_flow
     assert "coordinate-aware small U-Net" in data_flow
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
     assert "Segmentation Smoke Test" in experiment_history
     assert "Phase 4" in roadmap_html
+    assert "core_direction.md" in roadmap_html
     assert "glossary.md" in roadmap_html
     assert "`severity`" in glossary
     assert "`retrieval_failure_mode`" in glossary
+
+
+def test_core_direction_avoids_removed_workflows() -> None:
+    active_docs = [
+        ROOT / "README.md",
+        DOCS / "README.md",
+        DOCS / "core_direction.md",
+        DOCS / "project_overview.md",
+        DOCS / "segmentation_tool_workflow.md",
+        DOCS / "fbm_pattern_asset_pipeline.md",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8").lower() for path in active_docs)
+
+    forbidden = [
+        "cv" + "at",
+        "nap" + "ari",
+        "sec" + "urity",
+        "access-control",
+        "prove" + "nance",
+        "sha" + "256",
+    ]
+    offenders = [term for term in forbidden if term in combined]
+    assert offenders == []
 
 
 def test_real_png_operator_guide_has_required_execution_and_share_items() -> None:

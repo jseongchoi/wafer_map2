@@ -41,7 +41,7 @@ nearest-neighbor CSV
 - `missed_major_defect`: query의 중요한 불량을 neighbor가 놓쳤는지 판단
 - `retrieval_failure_mode`: mismatch/partial-match의 구조적 실패 유형
 - `next_action`: 다음 feature/model 보강 후보
-- `safe_comment`: 리뷰어 자유 메모
+- `review_comment`: 리뷰어 자유 메모
 
 ## 허용 라벨
 

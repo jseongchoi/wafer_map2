@@ -71,7 +71,7 @@ def test_review_summary_computes_query_topk_acceptance():
             "missed_major_defect": "yes",
             "retrieval_failure_mode": "missed_local",
             "next_action": "tune_observable_feature",
-            "safe_comment": "",
+            "review_comment": "",
         },
         {
             "query_sample_id": "q1",
@@ -85,7 +85,7 @@ def test_review_summary_computes_query_topk_acceptance():
             "missed_major_defect": "no",
             "retrieval_failure_mode": "none",
             "next_action": "keep_baseline",
-            "safe_comment": "",
+            "review_comment": "",
         },
         {
             "query_sample_id": "q2",
@@ -99,7 +99,7 @@ def test_review_summary_computes_query_topk_acceptance():
             "missed_major_defect": "no",
             "retrieval_failure_mode": "wrong_clock_position",
             "next_action": "add_location_aware_feature",
-            "safe_comment": "",
+            "review_comment": "",
         },
     ]
 
@@ -136,11 +136,10 @@ def test_review_summary_allows_freeform_comments():
             "missed_major_defect": "no",
             "retrieval_failure_mode": "none",
             "next_action": "keep_baseline",
-            "safe_comment": "looks like lot ABC123 from C:/raw/raw.npy",
+            "review_comment": "looks like lot ABC123 from C:/raw/raw.npy",
         }
     ]
 
     metrics = module.summarize_rows(rows, top_k=1)
 
-    assert "sensitive_comment_flags" not in metrics
     assert metrics["valid_review_rows"] == 1

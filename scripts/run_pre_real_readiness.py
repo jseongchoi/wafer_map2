@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import html
 import json
 import os
@@ -20,19 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from wafermap.real import manifest_payload
-
-PIPELINE_INPUTS = (
-    "scripts/run_pre_real_readiness.py",
-    "scripts/generate_synthetic.py",
-    "scripts/validate_synthetic.py",
-    "scripts/extract_features.py",
-    "scripts/build_segmentation_readiness.py",
-    "scripts/train_embedding_smoke.py",
-    "scripts/train_cpu_encoder_model.py",
-    "scripts/score_unlabeled_cpu_encoder.py",
-    "scripts/analyze_png_raw_folders.py",
-    "scripts/extract_real_unlabeled_features.py",
-)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -70,53 +56,6 @@ def display_path(target: str | Path) -> str:
         return path.resolve().relative_to(ROOT.resolve()).as_posix()
     except (OSError, ValueError):
         return str(path.resolve())
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def git_value(args: list[str]) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    except OSError:
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
-
-
-def collect_provenance(args: argparse.Namespace) -> dict[str, Any]:
-    config_path = Path(args.config).resolve()
-    pipeline_inputs = []
-    for raw_path in PIPELINE_INPUTS:
-        path = ROOT / raw_path
-        if path.exists():
-            pipeline_inputs.append({"path": raw_path, "sha256": sha256_file(path)})
-    git_status = git_value(["status", "--short"])
-    return {
-        "schema_version": "pre_real_readiness_provenance/v1",
-        "config": {
-            "path": display_path(config_path),
-            "sha256": sha256_file(config_path),
-        },
-        "pipeline_inputs": pipeline_inputs,
-        "git": {
-            "commit": git_value(["rev-parse", "HEAD"]),
-            "dirty": bool(git_status),
-        },
-    }
 
 
 def display_command(command: list[str]) -> list[str]:
@@ -234,8 +173,6 @@ def build_output_checks(outputs: dict[str, str]) -> list[dict[str, Any]]:
             "exists": resolved.exists(),
             "size_bytes": int(resolved.stat().st_size) if resolved.exists() else 0,
         }
-        if resolved.exists() and resolved.is_file():
-            record["sha256"] = sha256_file(resolved)
         if resolved.exists() and resolved.suffix.lower() == ".csv":
             record["row_count"] = count_csv_rows(resolved)
         checks.append(record)
@@ -582,7 +519,6 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "output_checks": output_checks,
         "readiness_issues": gate_issues,
         "real_png_batch_command": real_png_command,
-        "provenance": collect_provenance(args),
     }
     summary_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["outputs"]["summary_json"] = repo_path(summary_json)

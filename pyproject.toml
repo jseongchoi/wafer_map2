@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wafermap"
 version = "0.1.0"
-description = "CVAT-first wafer FBM defect annotation, synthetic dataset generation, and segmentation readiness."
+description = "In-repo wafer FBM segmentation tooling, synthetic dataset generation, and segmentation readiness."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -28,3 +28,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "slow: end-to-end, training, image/report, or large synthetic tests skipped unless --run-slow is passed",
+]

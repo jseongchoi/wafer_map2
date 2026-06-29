@@ -1,10 +1,12 @@
 import numpy as np
+import pytest
 
 from wafermap.data import PATTERN_CLASSES, SyntheticSample
 from wafermap.features import extract_feature_vector, extract_validation_feature_vector
 from wafermap.synth import SyntheticConfig, generate_sample
 
 
+@pytest.mark.slow
 def test_extract_feature_vector_contains_observable_analysis_columns():
     sample = generate_sample(
         SyntheticConfig(count=1, target_net_die=80, chip_width=20, chip_height=10, seed=5),
@@ -42,6 +44,7 @@ def test_extract_feature_vector_contains_observable_analysis_columns():
     assert 0.0 <= features["edge_sector_concentration"] <= 1.0
 
 
+@pytest.mark.slow
 def test_validation_feature_vector_contains_synthetic_oracle_fields():
     sample = generate_sample(
         SyntheticConfig(count=1, target_net_die=80, chip_width=20, chip_height=10, seed=5),

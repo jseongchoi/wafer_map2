@@ -1,6 +1,6 @@
 # Roadmap
 
-현재 로드맵은 CVAT-first dataset pipeline을 기준으로 합니다. 모델은 중요하지만, 지금 병목은 학습 코드가 아니라 믿을 수 있는 defect mask 데이터셋입니다.
+현재 로드맵은 direct segmentation dataset pipeline을 기준으로 합니다. 모델은 중요하지만, 지금 병목은 학습 코드가 아니라 믿을 수 있는 defect mask 데이터셋입니다.
 
 ## Phase 0. Scope Lock
 
@@ -8,33 +8,33 @@
 
 - 입력은 wafer grade 0-7 map입니다.
 - 1차 목표는 defect segmentation dataset 제작입니다.
-- label은 CVAT schema에서 확장합니다.
+- label은 in-repo segmentation family로 관리합니다.
 - model training/evaluation은 dataset path 안정화 뒤 진행합니다.
-- legacy local editor는 fallback/reference로만 유지합니다.
+- `run_segmentation_tool.py`를 primary annotation surface로 사용합니다.
 
 참조 문서:
 
 - [Project Overview](project_overview.md)
-- [CVAT Wafer Defect Annotation Workflow](cvat_wafer_annotation_workflow.md)
+- [Segmentation Tool Workflow](segmentation_tool_workflow.md)
 
-## Phase 1. CVAT Annotation Workflow
+## Phase 1. Direct Segmentation Tool
 
 상태: 구현됨, 실제 wafer 운영 검증 필요
 
 구현됨:
 
-- `scripts/export_cvat_wafer_images.py`
-- `configs/cvat/wafer_defect_labels.json`
-- `scripts/import_cvat_annotations.py`
-- CVAT polygon/box import
-- `stby_blob` label과 grade override
-- label alias mapping
+- `scripts/run_segmentation_tool.py`
+- browser canvas 기반 brush/lasso mask editing
+- family별 multi-label mask 저장
+- prediction mask prefill
+- model proposal preview/apply
+- large wafer downsample editing and source-resolution save
 
 다음 보강:
 
-- 실제 wafer batch에서 annotator가 label을 헷갈리지 않는지 확인합니다.
-- CVAT brush/mask가 주 workflow가 되면 native mask RLE import를 추가합니다.
-- 제품/공정별 label set이 커질 때 schema 운영 규칙을 추가합니다.
+- 실제 wafer batch에서 annotator가 family를 헷갈리지 않는지 확인합니다.
+- save/reopen review loop를 더 짧게 만듭니다.
+- correction history를 asset metadata와 연결합니다.
 
 ## Phase 2. Pattern Asset Library
 
@@ -43,9 +43,9 @@
 구현됨:
 
 - `grade.png`, `mask.png`, `preview.png`, `metadata.json` asset format
-- CVAT annotation source metadata
+- direct tool source metadata
 - asset scan/report
-- legacy Pattern Asset Builder fallback
+- compatibility Pattern Asset Builder filename
 
 다음 보강:
 
@@ -60,7 +60,7 @@
 구현됨:
 
 - `compose_synthetic_from_assets.py`
-- `source_jitter` placement
+- `source_jitter`, `polar_jitter`, and `random_valid` placement
 - procedural fallback for `scratch`, `edge`, `shot_grid`, `random`
 - multi-label `pattern_masks`
 
@@ -80,13 +80,12 @@
 - segmentation readiness report
 - Segmentation Smoke Test
 - embedding smoke diagnostic
-- full test suite baseline: `111 passed`
 
 다음 보강:
 
 - synthetic dataset versioning을 추가합니다.
 - family별 최소 positive sample 기준을 운영 config로 뺍니다.
-- CVAT import report와 readiness report를 더 직접 연결합니다.
+- asset report와 readiness report를 더 직접 연결합니다.
 
 ## Phase 5. Small U-Net Training
 
@@ -102,9 +101,9 @@ scripts/train_unet_segmentation.py
 
 ```powershell
 python scripts/train_unet_segmentation.py `
-  --manifest outputs/cvat_pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
+  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
   --model-out outputs/models/asset_unet_segmentation.pt `
   --output-size 96 `
   --epochs 20
@@ -123,11 +122,9 @@ python scripts/train_unet_segmentation.py `
 
 목표:
 
-이 단계는 model-assisted active learning loop를 만드는 단계입니다.
-
 ```text
 model prediction
--> CVAT pre-annotation or review package
+-> run_segmentation_tool.py --prediction-json
 -> human correction
 -> updated pattern assets / training labels
 -> retraining
@@ -136,9 +133,9 @@ model prediction
 필요 작업:
 
 - prediction mask export schema 정리
-- CVAT pre-annotation import 방식 조사
 - correction history를 asset metadata와 연결
 - repeated wafer review loop 운영
+- model proposals를 family별 confidence와 함께 표시
 
 ## Phase 7. Retrieval And Similarity Search
 
@@ -148,8 +145,8 @@ embedding retrieval은 최종 제품에는 유용하지만 지금 1순위는 아
 
 ## Current Priority
 
-1. 실제 wafer manifest를 CVAT package로 뽑아 annotation workflow를 검증합니다.
-2. label schema를 운영 가능한 형태로 다듬습니다.
-3. CVAT import 결과 asset 품질을 review합니다.
+1. 실제 wafer manifest를 segmentation tool로 열어 mask asset 저장 workflow를 검증합니다.
+2. family별 annotation rule을 운영 가능한 형태로 다듬습니다.
+3. 저장된 asset 품질을 review합니다.
 4. 합성 dataset report를 보고 edge/ring/global pattern realism을 보정합니다.
 5. PyTorch 환경에서 small U-Net 학습을 시작합니다.

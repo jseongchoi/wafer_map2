@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 import sys
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -47,8 +47,7 @@ def sample_dirs(data_root: Path) -> list[Path]:
 
 
 def stable_split(sample_id: str, val_fraction: float, seed: int) -> str:
-    digest = hashlib.sha256(f"{seed}:{sample_id}".encode("utf-8")).hexdigest()
-    score = int(digest[:12], 16) / float(16**12)
+    score = zlib.crc32(f"{seed}:{sample_id}".encode("utf-8")) / float(2**32)
     return "val" if score < val_fraction else "train"
 
 
@@ -58,20 +57,23 @@ def mask_ratio(mask: np.ndarray, denominator: int) -> float:
 
 def sample_manifest_row(sample_dir: Path, sample: SyntheticSample, split: str, root: Path) -> dict[str, Any]:
     wafer = sample.wafer_mask > 0
-    denominator = int(wafer.sum())
+    valid = wafer & (sample.valid_test_mask > 0)
+    denominator = int(valid.sum())
     row: dict[str, Any] = {
         "sample_id": sample.sample_id,
         "split": split,
         "arrays_path": relpath(sample_dir / "arrays.npz", root),
         "metadata_path": relpath(sample_dir / "metadata.json", root),
         "actual_net_die": sample.metadata.get("actual_net_die", ""),
+        "wafer_pixel_count": int(wafer.sum()),
+        "valid_test_pixel_count": denominator,
         "input_channels": "|".join(INPUT_CHANNELS),
         "target_channels": "|".join(TARGET_CHANNELS),
     }
     active_count = 0
     for class_name in TARGET_CHANNELS:
         class_mask = sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0
-        ratio = mask_ratio(class_mask & wafer, denominator)
+        ratio = mask_ratio(class_mask & valid, denominator)
         row[f"has_{class_name}"] = int(ratio > 0.0)
         row[f"{class_name}_mask_ratio"] = ratio
         active_count += int(ratio > 0.0)
@@ -190,6 +192,25 @@ def summarize_overlap_accumulators(
     return sorted(rows, key=lambda row: row["mean_overlap_pixel_ratio"], reverse=True)
 
 
+def dataset_quality_checks(
+    class_summary: list[dict[str, Any]],
+    split_counts: dict[str, int],
+    manifest_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    issues: list[str] = []
+    if split_counts.get("train", 0) <= 0:
+        issues.append("missing train split")
+    if split_counts.get("val", 0) <= 0:
+        issues.append("missing validation split")
+    empty_targets = sum(1 for row in manifest_rows if int(row.get("active_target_count", 0)) == 0)
+    if empty_targets:
+        issues.append(f"{empty_targets} samples have no valid target pixels")
+    for row in class_summary:
+        if int(row["positive_samples"]) == 0:
+            issues.append(f"{row['class']} has no positive target samples")
+    return {"status": "PASS" if not issues else "CHECK", "issues": issues}
+
+
 def write_manifest(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -235,20 +256,24 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
     for path in dirs:
         sample = load_sample(path)
         wafer = sample.wafer_mask > 0
-        denominator = int(wafer.sum())
+        valid = wafer & (sample.valid_test_mask > 0)
+        denominator = int(valid.sum())
         split = stable_split(sample.sample_id, args.val_fraction, args.split_seed)
         manifest_rows.append(sample_manifest_row(path, sample, split, root))
         update_gallery_candidates(gallery_candidates, path, sample)
 
         class_masks: dict[str, np.ndarray] = {}
+        raw_class_masks: dict[str, np.ndarray] = {}
         for class_name in TARGET_CHANNELS:
-            class_mask = (sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0) & wafer
+            raw_class_mask = (sample.pattern_masks[PATTERN_TO_INDEX[class_name]] > 0) & wafer
+            class_mask = raw_class_mask & valid
+            raw_class_masks[class_name] = raw_class_mask
             class_masks[class_name] = class_mask
             class_ratios[class_name].append(mask_ratio(class_mask, denominator))
         stby_mask = (sample.stby_mask > 0) & wafer
 
-        overlap_wafer = wafer[:: args.overlap_stride, :: args.overlap_stride]
-        overlap_denominator = int(overlap_wafer.sum())
+        overlap_valid = valid[:: args.overlap_stride, :: args.overlap_stride]
+        overlap_denominator = int(overlap_valid.sum())
         for left_idx, left_name in enumerate(TARGET_CHANNELS):
             left = class_masks[left_name]
             for right_name in TARGET_CHANNELS[left_idx + 1 :]:
@@ -258,15 +283,15 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
                 pair_sums[pair] += mask_ratio(
                     left[:: args.overlap_stride, :: args.overlap_stride]
                     & right[:: args.overlap_stride, :: args.overlap_stride]
-                    & overlap_wafer,
+                    & overlap_valid,
                     overlap_denominator,
                 )
 
-        scratch = class_masks["scratch"]
+        scratch = raw_class_masks["scratch"]
         if scratch.any():
             scratch_count += 1
-            ring_cooccur += int(class_masks["ring"].any())
-            local_cooccur += int(class_masks["local"].any())
+            ring_cooccur += int(raw_class_masks["ring"].any())
+            local_cooccur += int(raw_class_masks["local"].any())
             stby_cooccur += int(stby_mask.any())
             stby_overlap_ratios.append(float((scratch & stby_mask).sum() / max(int(scratch.sum()), 1)))
 
@@ -274,6 +299,7 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
         "train": sum(1 for row in manifest_rows if row["split"] == "train"),
         "val": sum(1 for row in manifest_rows if row["split"] == "val"),
     }
+    class_summary = summarize_class_accumulators(class_ratios)
     metrics = {
         "sample_count": len(dirs),
         "data_root": repo_path(data_root),
@@ -281,8 +307,9 @@ def build_outputs(args: argparse.Namespace) -> dict[str, Any]:
         "target_channels": list(TARGET_CHANNELS),
         "split_counts": split_counts,
         "overlap_stride": int(args.overlap_stride),
-        "class_summary": summarize_class_accumulators(class_ratios),
+        "class_summary": class_summary,
         "overlap_summary": summarize_overlap_accumulators(pair_sums, pair_cooccurrences, len(dirs)),
+        "quality_checks": dataset_quality_checks(class_summary, split_counts, manifest_rows),
         "scratch_risk": {
             "scratch_positive_samples": scratch_count,
             "scratch_ring_cooccurrence_rate": float(ring_cooccur / max(scratch_count, 1)),

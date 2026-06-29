@@ -1,16 +1,15 @@
 # FBM Data Flow Guide
 
-이 문서는 raw wafer 입력부터 CVAT annotation, pattern asset, hybrid synthetic data, segmentation manifest까지 어떤 파일이 어디에 생기는지 정리합니다.
+이 문서는 raw wafer 입력부터 직접 segmentation mask, pattern asset, hybrid synthetic data, segmentation manifest까지 어떤 파일이 어디에 생기는지 정리합니다.
 
 ## End-To-End Flow
 
 ```text
 raw wafer PNG or synthetic sample dir
 -> real_unlabeled_manifest/v1
--> CVAT image package
--> CVAT annotation export
+-> local segmentation tool
 -> data/pattern_assets
--> data/synthetic/asset_composed or data/synthetic/cvat_asset_composed
+-> data/synthetic/asset_composed
 -> outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
 -> coordinate-aware small U-Net training input
 ```
@@ -22,7 +21,6 @@ raw wafer PNG or synthetic sample dir
 | Raw wafer input | `data/raw/<product>/*.png` | ignored |
 | Intermediate arrays | `data/interim/` | ignored |
 | Processed local data | `data/processed/` | ignored |
-| CVAT export package | `data/cvat_exports/<task>/` | ignored by `data/**` |
 | Pattern assets | `data/pattern_assets/<family>/<asset_id>/` | ignored |
 | Synthetic samples | `data/synthetic/<run>/<sample_id>/` | ignored |
 | Manifests/reports | `outputs/` | ignored |
@@ -59,49 +57,14 @@ python scripts/analyze_png_raw_folders.py `
   --out-dir outputs/reports/local_raw_batch
 ```
 
-## 2. CVAT Image Package
+## 2. Segmentation Tool
 
-manifest를 CVAT에 올릴 PNG package로 변환합니다.
+manifest에서 샘플 하나를 열고 family별 mask를 작성합니다.
 
 ```powershell
-python scripts/export_cvat_wafer_images.py `
+python scripts/run_segmentation_tool.py `
   --manifest outputs/manifests/real_png_batch_manifest.json `
-  --out-dir data/cvat_exports/real_png_task `
-  --limit 100
-```
-
-생성 위치:
-
-```text
-data/cvat_exports/real_png_task/
-  images/
-    <sample_id>.png
-  labels.json
-  manifest.json
-```
-
-`labels.json`은 [configs/cvat/wafer_defect_labels.json](../configs/cvat/wafer_defect_labels.json)에서 복사됩니다. 새 label은 이 schema에 추가합니다.
-
-## 3. CVAT Annotation Export
-
-CVAT에서 image task를 만들고 `images/` 안의 PNG를 업로드합니다. label은 `labels.json`의 `name`, `display_name`, `color`를 기준으로 만듭니다.
-
-권장 export format:
-
-```text
-CVAT for images 1.1
-```
-
-현재 importer는 CVAT XML의 `polygon`과 `box` shape를 지원합니다. brush/mask annotation이 주 workflow가 되면 CVAT native mask RLE import를 추가합니다.
-
-## 4. Pattern Asset Import
-
-CVAT export를 reusable pattern asset으로 변환합니다.
-
-```powershell
-python scripts/import_cvat_annotations.py `
-  --cvat-xml data/cvat_exports/real_png_task/annotations.xml `
-  --cvat-manifest data/cvat_exports/real_png_task/manifest.json `
+  --sample-id <sample_id> `
   --assets-root data/pattern_assets
 ```
 
@@ -113,8 +76,6 @@ data/pattern_assets/<family>/<asset_id>/
   mask.png
   preview.png
   metadata.json
-
-data/pattern_assets/cvat_import_report.json
 ```
 
 핵심 metadata:
@@ -125,15 +86,20 @@ data/pattern_assets/cvat_import_report.json
   "family": "local",
   "source_sample_id": "wafer_001",
   "bbox_xywh": [120, 80, 48, 32],
-  "annotation_source": {
-    "tool": "CVAT",
-    "format": "CVAT for images 1.1",
-    "labels": ["stby_blob"]
-  }
+  "mask_pixel_count": 220,
+  "composition_rule": "max"
 }
 ```
 
-## 5. Hybrid Synthetic Data
+## 3. Pattern Asset QC
+
+```powershell
+python scripts/build_pattern_asset_report.py `
+  --assets-root data/pattern_assets `
+  --out outputs/reports/pattern_asset_library_report.html
+```
+
+## 4. Hybrid Synthetic Data
 
 pattern asset과 procedural fallback을 base wafer에 합성합니다.
 
@@ -141,7 +107,7 @@ pattern asset과 procedural fallback을 base wafer에 합성합니다.
 python scripts/compose_synthetic_from_assets.py `
   --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
   --assets-root data/pattern_assets `
-  --out-dir data/synthetic/cvat_asset_composed `
+  --out-dir data/synthetic/asset_composed `
   --count 200 `
   --assets-per-wafer 3 `
   --procedural-families scratch,edge,shot_grid,random
@@ -150,7 +116,7 @@ python scripts/compose_synthetic_from_assets.py `
 각 sample:
 
 ```text
-data/synthetic/cvat_asset_composed/<sample_id>/
+data/synthetic/asset_composed/<sample_id>/
   arrays.npz
   metadata.json
 ```
@@ -167,22 +133,22 @@ data/synthetic/cvat_asset_composed/<sample_id>/
 | `pattern_intensity` | family-wise normalized intensity |
 | `chip_index` | chip coordinate index |
 
-## 6. Segmentation Readiness
+## 5. Segmentation Readiness
 
 합성 sample을 학습 manifest와 validation report로 변환합니다.
 
 ```powershell
 python scripts/run_pattern_asset_pipeline.py `
   --assets-root data/pattern_assets `
-  --composed-dir data/synthetic/cvat_asset_composed `
-  --work-dir outputs/cvat_pattern_asset_pipeline `
-  --report-out outputs/reports/cvat_pattern_asset_project_report.html
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html
 ```
 
 주요 산출물:
 
 ```text
-outputs/cvat_pattern_asset_pipeline/
+outputs/pattern_asset_pipeline/
   asset_segmentation_manifest.csv
   asset_segmentation_readiness.html
   asset_segmentation_readiness_metrics.json
@@ -192,12 +158,12 @@ outputs/cvat_pattern_asset_pipeline/
   asset_unet_segmentation.html
   asset_unet_segmentation_metrics.json
 
-outputs/reports/cvat_pattern_asset_project_report.html
+outputs/reports/pattern_asset_project_report.html
 ```
 
 `asset_segmentation_manifest.csv`가 `train_unet_segmentation.py`의 직접 입력입니다.
 
-## 7. Model Training Entry Point
+## 6. Model Training Entry Point
 
 PyTorch 설치 환경:
 
@@ -209,23 +175,12 @@ pip install -e .[train]
 
 ```powershell
 python scripts/train_unet_segmentation.py `
-  --manifest outputs/cvat_pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/cvat_pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
+  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
   --model-out outputs/models/asset_unet_segmentation.pt `
   --output-size 96 `
   --epochs 20
 ```
 
 현재 기본 목표는 coordinate-aware small U-Net입니다. 입력에는 grade map뿐 아니라 wafer mask, valid-test mask, stby mask, x/y/radial/angle/edge-distance channel이 포함됩니다.
-
-## Legacy Path
-
-`scripts/run_pattern_asset_editor.py`는 legacy fallback입니다. CVAT가 처리하기 어려운 custom interaction을 시험하거나 emergency single-wafer correction이 필요할 때만 사용합니다.
-
-```powershell
-python scripts/run_pattern_asset_editor.py `
-  --manifest outputs/manifests/real_png_batch_manifest.json `
-  --sample-id <sample_id> `
-  --assets-root data/pattern_assets
-```

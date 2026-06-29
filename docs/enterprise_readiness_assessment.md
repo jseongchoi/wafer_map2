@@ -4,11 +4,7 @@
 
 ## 현재 판정
 
-```powershell
-python scripts\audit_project_readiness.py
-```
-
-현재 평가는 코드, 문서, synthetic smoke test, raw PNG batch 준비 상태를 함께 본다. 실제 성능 판정은 real FBM batch와 전문가 리뷰 CSV가 들어온 뒤 가능하다.
+현재 평가는 문서, synthetic smoke test, raw PNG batch 준비 상태를 함께 본다. 실제 성능 판정은 real FBM batch와 전문가 리뷰 CSV가 들어온 뒤 가능하다.
 
 ## 단계별 기준
 
@@ -28,7 +24,7 @@ python scripts\audit_project_readiness.py
 
 - raw PNG 폴더를 읽어 manifest, feature, sanity report, neighbor 후보를 만들 수 있다.
 - editor 기반으로 defect mask asset을 저장하고 확인하는 흐름이 있다.
-- synthetic dataset generator, feature retrieval, CPU encoder baseline, readiness audit가 연결되어 있다.
+- synthetic dataset generator, feature retrieval, CPU encoder baseline이 연결되어 있다.
 - 문서상 입력/출력 위치가 정리되어 작업자가 어디에 파일을 둬야 하는지 알 수 있다.
 
 ## 아직 중요한 공백

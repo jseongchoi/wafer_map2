@@ -4,15 +4,14 @@ This folder contains stable command-line entrypoints. It is intentionally flat f
 
 If you add a new script, register it here and keep reusable logic in `src/wafermap/`.
 
-## Primary CVAT Dataset Pipeline
+## Primary In-Repo Segmentation Pipeline
 
 Run these first for the current product direction.
 
 | Script | Purpose |
 |---|---|
 | `analyze_png_raw_folders.py` | Build a real/unlabeled manifest and reports from raw PNG folders. |
-| `export_cvat_wafer_images.py` | Export wafer preview PNGs and label metadata for CVAT tasks. |
-| `import_cvat_annotations.py` | Import CVAT XML annotations as reusable pattern assets. |
+| `run_segmentation_tool.py` | Open the local browser segmentation tool and save reusable pattern assets. |
 | `build_pattern_asset_report.py` | Generate a review report for saved pattern assets. |
 | `compose_synthetic_from_assets.py` | Compose pattern assets and procedural defects onto base wafers. |
 | `run_pattern_asset_pipeline.py` | Run composition, readiness, smoke validation, and report generation end to end. |
@@ -41,7 +40,7 @@ Run these first for the current product direction.
 
 ## Modeling And Retrieval Diagnostics
 
-These are secondary to the CVAT dataset pipeline.
+These are secondary to the segmentation dataset pipeline.
 
 | Script | Purpose |
 |---|---|
@@ -66,21 +65,20 @@ Keep these for experiment traceability, but do not treat them as the main workfl
 | `evaluate_patch_proposals.py` | Evaluate patch proposal behavior. |
 | `sweep_grouping_parameters.py` | Sweep grouping parameters. |
 
+## Compatibility
+
+| Script | Purpose |
+|---|---|
+| `run_pattern_asset_editor.py` | Backward-compatible filename for the local segmentation tool engine. |
+
 ## Reports And Project Status
 
 | Script | Purpose |
 |---|---|
-| `audit_project_readiness.py` | Check project readiness conditions. |
 | `make_report.py` | Generate synthetic experiment reports. |
 | `make_progress_briefing.py` | Generate progress briefing artifacts. |
 | `make_leader_status_report.py` | Generate leader/status reports. |
 | `run_pre_real_readiness.py` | Run pre-real readiness pipeline. |
-
-## Legacy Fallback
-
-| Script | Purpose |
-|---|---|
-| `run_pattern_asset_editor.py` | Legacy local browser editor. Keep for fallback/reference, not primary annotation. |
 
 ## Rules For New Scripts
 

@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from wafermap.synth import SyntheticConfig, generate_sample, save_sample
 
 
@@ -17,6 +19,7 @@ def _load_script():
     return module
 
 
+@pytest.mark.slow
 def test_build_segmentation_readiness_outputs_manifest_and_metrics(tmp_path):
     module = _load_script()
     data_root = tmp_path / "synthetic"
@@ -51,6 +54,7 @@ def test_build_segmentation_readiness_outputs_manifest_and_metrics(tmp_path):
     payload = json.loads(metrics.read_text(encoding="utf-8"))
     assert payload["sample_count"] == 3
     assert "scratch" in payload["target_channels"]
+    assert payload["quality_checks"]["status"] in {"PASS", "CHECK"}
     assert any(row["class"] == "scratch" for row in payload["class_summary"])
     assert report.exists()
     assert manifest.exists()
