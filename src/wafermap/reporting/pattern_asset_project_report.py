@@ -150,7 +150,7 @@ def project_report_html(payload: dict[str, Any]) -> str:
     <li>hybrid synthetic manifest를 train/val/test로 고정하고, family별 최소 positive sample 수를 보장합니다.</li>
     <li>small U-Net 또는 SegFormer 계열 모델을 붙여 family별 mask prediction을 학습합니다.</li>
     <li>현재 학습 환경에 PyTorch가 없으면 <code>scripts/train_unet_segmentation.py</code>의 dependency check report를 보고, torch 설치 후 같은 manifest로 학습을 실행합니다.</li>
-    <li>모델 prediction을 <code>fbm_prediction_masks/v1</code>로 export해 에디터에서 사람이 수정하는 active learning loop로 연결합니다.</li>
+    <li><code>scripts/export_unet_predictions.py</code>로 모델 prediction을 <code>fbm_prediction_masks/v1</code>로 export해 에디터에서 사람이 수정하는 active learning loop로 연결합니다.</li>
     <li>encoder embedding을 저장하고 cosine/FAISS 기반 유사 wafer top-k 검색을 붙입니다.</li>
   </ol>
 

@@ -10,6 +10,8 @@ local segmentation mask
 -> data/synthetic/asset_composed
 -> asset_segmentation_manifest.csv
 -> train_unet_segmentation.py
+-> export_unet_predictions.py
+-> segmentation tool correction loop
 ```
 
 ## 1. Pattern Asset Library
@@ -136,11 +138,23 @@ local, scratch, ring, edge, shot_grid, random
 
 ```text
 trained model
--> prediction masks
+-> export_unet_predictions.py
+-> fbm_prediction_masks/v1
 -> run_segmentation_tool.py --prediction-json
 -> human correction
 -> updated pattern assets
 -> retraining
+```
+
+Export command:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
 ```
 
 기존 local tool의 `Load Prediction`, lasso, smart fit, proposal overlay는 이 단계의 핵심 UX입니다.

@@ -183,4 +183,15 @@ python scripts/train_unet_segmentation.py `
   --epochs 20
 ```
 
+Prediction export:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
 현재 기본 목표는 coordinate-aware small U-Net입니다. 입력에는 grade map뿐 아니라 wafer mask, valid-test mask, stby mask, x/y/radial/angle/edge-distance channel이 포함됩니다.

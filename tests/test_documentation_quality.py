@@ -137,6 +137,7 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "Troubleshooting" in operator_manual
     assert "Release Checklist" in operator_manual
     assert "Primary In-Repo Segmentation Pipeline" in scripts_map
+    assert "export_unet_predictions.py" in scripts_map
     assert "Compatibility" in scripts_map
     assert "Research / Historical Evaluation" in scripts_map
     assert "in-repo segmentation tool" in overview
@@ -144,18 +145,22 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "run_pattern_asset_editor.py" in overview
     assert "hybrid synthetic data" in overview
     assert "train_unet_segmentation.py" in overview
+    assert "export_unet_predictions.py" in overview
     assert "Direct Segmentation Tool" in roadmap
     assert "Small U-Net Training" in roadmap
     assert "Active Learning" in roadmap
     assert "human asset primary" in pipeline
     assert "procedural fallback" in pipeline
+    assert "export_unet_predictions.py" in pipeline
     assert "run_segmentation_tool.py" in segmentation_workflow
     assert "--prediction-json" in segmentation_workflow
+    assert "export_unet_predictions.py" in segmentation_workflow
     assert "data/pattern_assets" in segmentation_workflow
     assert "data/pattern_assets" in data_flow
     assert "data/synthetic/asset_composed" in data_flow
     assert "asset_segmentation_manifest.csv" in data_flow
     assert "coordinate-aware small U-Net" in data_flow
+    assert "export_unet_predictions.py" in data_flow
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
     assert "Segmentation Smoke Test" in experiment_history
@@ -181,7 +186,7 @@ def test_core_direction_avoids_removed_workflows() -> None:
         "cv" + "at",
         "nap" + "ari",
         "sec" + "urity",
-        "access-control",
+        "access" + "-control",
         "prove" + "nance",
         "sha" + "256",
     ]

@@ -219,6 +219,17 @@ python scripts/train_unet_segmentation.py `
   --epochs 20
 ```
 
+Export trained masks for model-assisted correction:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
 Training checks train-split positive coverage before running. If a target family has no positive train sample, rebuild the synthetic dataset or use `--allow-incomplete-target-coverage` only for a wiring/debug run. If validation positives are missing, training may run but the report marks that family metric as uninformative.
 
 모델 평가에서 먼저 볼 것:

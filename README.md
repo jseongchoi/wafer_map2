@@ -67,6 +67,17 @@ python scripts/run_pattern_asset_pipeline.py `
   --report-out outputs/reports/pattern_asset_project_report.html
 ```
 
+학습된 U-Net 결과를 segmentation tool correction seed로 내보냅니다.
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
 ## Segmentation Families
 
 현재 핵심 mask family:

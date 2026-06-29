@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from wafermap.assets import load_prediction_masks, mask_to_rle
 from wafermap.data import PATTERN_CLASSES
 from wafermap.training.segmentation import INPUT_CHANNELS, TARGET_CHANNELS, sample_to_input_tensor, sample_to_target_tensor
 from wafermap.synth import SyntheticConfig, generate_sample, save_sample
@@ -225,6 +226,56 @@ def test_unet_training_dependency_check_writes_report(tmp_path):
     assert "torch_available" in payload
     assert payload["manifest_target_coverage"]["status"] in {"MISSING", "PASS", "CHECK"}
     assert report.exists()
+
+
+def test_unet_prediction_export_resize_nearest_expands_source_cells():
+    export = _load_script("export_unet_predictions.py")
+    mask = np.array([[1, 0], [0, 1]], dtype=bool)
+
+    resized = export.resize_mask_nearest(mask, (4, 4))
+
+    expected = np.array(
+        [
+            [1, 1, 0, 0],
+            [1, 1, 0, 0],
+            [0, 0, 1, 1],
+            [0, 0, 1, 1],
+        ],
+        dtype=bool,
+    )
+    assert np.array_equal(resized, expected)
+
+
+def test_unet_prediction_export_schema_round_trips_to_tool_loader(tmp_path):
+    export = _load_script("export_unet_predictions.py")
+    local = np.array([[1, 0, 0], [0, 1, 0]], dtype=bool)
+
+    record = export.prediction_record("wafer_a", {"local": local})
+    payload = export.prediction_payload(
+        [record],
+        model_path=Path("outputs/models/asset_unet_segmentation.pt"),
+        threshold=0.35,
+    )
+    prediction_path = tmp_path / "fbm_prediction_masks.json"
+    prediction_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    loaded = load_prediction_masks(prediction_path, "wafer_a", local.shape)
+
+    assert loaded["local"] == mask_to_rle(local)
+    for family in TARGET_CHANNELS:
+        assert family in loaded
+
+
+def test_unet_prediction_export_dependency_check_writes_status(tmp_path):
+    export = _load_script("export_unet_predictions.py")
+    out = tmp_path / "dependency_status.json"
+
+    export.main(["--out", str(out), "--check-deps"])
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["status"] == "dependency_check"
+    assert payload["prediction_schema"] == "fbm_prediction_masks/v1"
+    assert payload["target_channels"] == list(TARGET_CHANNELS)
 
 
 def test_unet_manifest_target_coverage_flags_missing_train_classes(tmp_path):

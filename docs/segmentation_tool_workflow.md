@@ -39,6 +39,19 @@ python scripts/run_segmentation_tool.py `
 
 The tool edits multi-label masks for `local`, `scratch`, `ring`, `edge`, `shot_grid`, and `random`. It can load model prediction masks through `--prediction-json` and proposal masks through `--proposal-json`.
 
+After U-Net training, export model masks before opening the correction tool:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
+Then pass the exported JSON to `run_segmentation_tool.py --prediction-json` for human correction and asset saving.
+
 ## 2. Edit Masks
 
 Main controls:

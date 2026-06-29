@@ -16,6 +16,7 @@ Run these first for the current product direction.
 | `compose_synthetic_from_assets.py` | Compose pattern assets and procedural defects onto base wafers. |
 | `run_pattern_asset_pipeline.py` | Run composition, readiness, smoke validation, and report generation end to end. |
 | `train_unet_segmentation.py` | Train or dependency-check the coordinate-aware small U-Net entrypoint. |
+| `export_unet_predictions.py` | Export trained U-Net masks to `fbm_prediction_masks/v1` for the segmentation tool. |
 
 ## Data And Synthetic Generation
 

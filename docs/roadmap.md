@@ -95,6 +95,7 @@
 
 ```text
 scripts/train_unet_segmentation.py
+scripts/export_unet_predictions.py
 ```
 
 학습 명령:
@@ -109,12 +110,23 @@ python scripts/train_unet_segmentation.py `
   --epochs 20
 ```
 
+Prediction export command:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
 완료 기준:
 
 - family별 validation IoU/recall 계산
 - scratch recall, local small-blob recall, ring continuity 확인
 - edge/ring 같은 global pattern에서 failure case 수집
-- model output을 `fbm_prediction_masks/v1`로 export
+- model output을 `fbm_prediction_masks/v1`로 export하고 tool에서 correction seed로 로드
 
 ## Phase 6. Active Learning
 
@@ -124,6 +136,8 @@ python scripts/train_unet_segmentation.py `
 
 ```text
 model prediction
+-> export_unet_predictions.py
+-> fbm_prediction_masks/v1
 -> run_segmentation_tool.py --prediction-json
 -> human correction
 -> updated pattern assets / training labels
@@ -132,7 +146,7 @@ model prediction
 
 필요 작업:
 
-- prediction mask export schema 정리
+- threshold, split, and sample selection policy for repeated prediction export
 - correction history를 asset metadata와 연결
 - repeated wafer review loop 운영
 - model proposals를 family별 confidence와 함께 표시

@@ -129,6 +129,7 @@ Entry scripts:
 - `scripts/train_segmentation_smoke.py`
 - `scripts/train_embedding_smoke.py`
 - `scripts/train_unet_segmentation.py`
+- `scripts/export_unet_predictions.py`
 
 Library owners:
 
