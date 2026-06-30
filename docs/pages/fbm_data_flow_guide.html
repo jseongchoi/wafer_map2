@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FBM 데이터 흐름 가이드 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>FBM 데이터 흐름 가이드</h1>
+      <p>docs/fbm_data_flow_guide.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#fbm-데이터-흐름-가이드">FBM 데이터 흐름 가이드</a>
+<a class="toc-level-2" href="#1-전체-데이터-경로">1. 전체 데이터 경로</a>
+<a class="toc-level-2" href="#2-raw-wafer-입력">2. raw wafer 입력</a>
+<a class="toc-level-2" href="#3-label-package">3. label package</a>
+<a class="toc-level-2" href="#4-pattern-asset">4. pattern asset</a>
+<a class="toc-level-2" href="#5-synthetic-sample">5. synthetic sample</a>
+<a class="toc-level-2" href="#6-training-manifest">6. training manifest</a>
+<a class="toc-level-2" href="#7-model-artifact">7. model artifact</a>
+<a class="toc-level-2" href="#8-prediction-output">8. prediction output</a>
+<a class="toc-level-2" href="#9-좌표-기준">9. 좌표 기준</a>
+<a class="toc-level-2" href="#10-코드-위치">10. 코드 위치</a>
+    </aside>
+    <article class="content">
+      <h1 id="fbm-데이터-흐름-가이드">FBM 데이터 흐름 가이드</h1>
+<p>이 문서는 raw wafer, label, asset, synthetic sample, model artifact가 어디에 저장되고 어떻게 이어지는지 설명합니다.</p>
+<h2 id="1-전체-데이터-경로">1. 전체 데이터 경로</h2>
+<pre><code class="language-text">data/raw/
+-&gt; outputs/manifests/
+-&gt; data/pattern_assets/
+-&gt; data/synthetic/asset_composed/
+-&gt; outputs/pattern_asset_pipeline/
+-&gt; outputs/models/
+-&gt; outputs/predictions/</code></pre>
+<p>각 단계의 의미:</p>
+<div class="table-wrap"><table><thead><tr><th>단계</th><th>입력</th><th>출력</th></tr></thead><tbody><tr><td>raw 분석</td><td>PNG 폴더</td><td>manifest JSON</td></tr><tr><td>수동/규칙 라벨</td><td>wafer image</td><td>pattern asset</td></tr><tr><td>합성</td><td>base wafer + asset</td><td><code>arrays.npz</code>, <code>metadata.json</code></td></tr><tr><td>readiness</td><td>synthetic samples</td><td>manifest CSV, report</td></tr><tr><td>학습</td><td>manifest CSV</td><td>model checkpoint</td></tr><tr><td>예측 export</td><td>model + manifest</td><td>prediction JSON</td></tr></tbody></table></div>
+<h2 id="2-raw-wafer-입력">2. raw wafer 입력</h2>
+<p>예시 폴더:</p>
+<pre><code class="language-text">data/raw/product_A/
+  lot_001/
+    WAFER_0001.png
+    WAFER_0002.png</code></pre>
+<p>manifest 생성:</p>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json</code></pre>
+<p>manifest에는 아래 정보가 들어가야 합니다.</p>
+<pre><code class="language-json">{
+  &quot;sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;image_path&quot;: &quot;data/raw/product_A/lot_001/WAFER_0001.png&quot;,
+  &quot;image_shape&quot;: [1024, 1024],
+  &quot;product_id&quot;: &quot;product_A&quot;
+}</code></pre>
+<h2 id="3-label-package">3. label package</h2>
+<p>사람이 wafer 하나를 보고 작업한 원천 label은 아래처럼 저장할 수 있습니다.</p>
+<pre><code class="language-text">data/labels/WAFER_0001/
+  wafer.png
+  labels.json
+  masks/
+    local.png
+    scratch.png
+    mixed_unknown.png</code></pre>
+<p>이 label package는 사람이 이해하기 위한 원천 기록입니다. 학습에 바로 들어가는 최종 형태는 <code>arrays.npz</code>의 <code>pattern_masks</code>입니다.</p>
+<h2 id="4-pattern-asset">4. pattern asset</h2>
+<p>학습에 쓸 만한 clean mask는 pattern asset으로 승격합니다.</p>
+<pre><code class="language-text">data/pattern_assets/
+  local/
+    local_000001/
+      image.png
+      mask.png
+      metadata.json
+  scratch/
+    scratch_000001/
+      image.png
+      mask.png
+      metadata.json</code></pre>
+<p>metadata 예시:</p>
+<pre><code class="language-json">{
+  &quot;asset_id&quot;: &quot;local_000001&quot;,
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;source_sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;label_type&quot;: &quot;manual_mask&quot;,
+  &quot;bbox_xywh&quot;: [120, 720, 80, 70],
+  &quot;quality&quot;: &quot;usable&quot;
+}</code></pre>
+<h2 id="5-synthetic-sample">5. synthetic sample</h2>
+<p>합성 sample은 U-Net 학습이 읽는 최종 단위입니다.</p>
+<pre><code class="language-text">data/synthetic/asset_composed/
+  asset_composed_000001/
+    arrays.npz
+    metadata.json
+    preview.png</code></pre>
+<p><code>arrays.npz</code>의 필수 key:</p>
+<div class="table-wrap"><table><thead><tr><th>Key</th><th>의미</th></tr></thead><tbody><tr><td><code>severity</code></td><td>최종 wafer fail/severity map</td></tr><tr><td><code>wafer_mask</code></td><td>wafer 내부 영역</td></tr><tr><td><code>valid_test_mask</code></td><td>실제 측정 가능한 영역</td></tr><tr><td><code>stby_mask</code></td><td>STBY/missing-test 영역</td></tr><tr><td><code>chip_index</code></td><td>die/chip id</td></tr><tr><td><code>pattern_masks</code></td><td>family별 binary target mask</td></tr><tr><td><code>pattern_intensity</code></td><td>family별 defect intensity</td></tr></tbody></table></div>
+<h2 id="6-training-manifest">6. training manifest</h2>
+<p>readiness 단계에서 학습용 CSV를 만듭니다.</p>
+<pre><code class="language-text">outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv</code></pre>
+<p>대표 column:</p>
+<pre><code class="language-text">sample_id
+split
+arrays_path
+metadata_path
+input_channels
+target_channels
+has_local
+local_mask_ratio
+has_scratch
+scratch_mask_ratio
+...</code></pre>
+<p>이 manifest가 <code>train_unet_segmentation.py</code>의 직접 입력입니다.</p>
+<h2 id="7-model-artifact">7. model artifact</h2>
+<p>학습 결과는 <code>outputs/models/</code> 아래에 둡니다.</p>
+<pre><code class="language-text">outputs/models/
+  asset_unet_segmentation.pt</code></pre>
+<p>모델 artifact는 git에 넣지 않습니다. 재현에 필요한 것은 코드, config, manifest, 문서화된 command입니다.</p>
+<h2 id="8-prediction-output">8. prediction output</h2>
+<p>예측 결과는 tool에서 다시 고칠 수 있게 JSON 또는 mask bundle로 저장합니다.</p>
+<pre><code class="language-text">outputs/predictions/
+  fbm_prediction_masks.json</code></pre>
+<p>schema marker 예시:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;fbm_prediction_masks/v1&quot;,
+  &quot;model_path&quot;: &quot;outputs/models/asset_unet_segmentation.pt&quot;,
+  &quot;samples&quot;: []
+}</code></pre>
+<h2 id="9-좌표-기준">9. 좌표 기준</h2>
+<p>모든 mask와 array는 같은 좌표계를 사용합니다.</p>
+<pre><code class="language-text">y = row index
+x = column index
+shape = [H, W]
+bbox_xywh = [x, y, width, height]</code></pre>
+<p>좌표가 어긋나면 합성 preview는 그럴듯해 보여도 U-Net target이 틀어집니다. 따라서 resize/crop을 할 때는 반드시 mask도 같은 변환을 적용해야 합니다.</p>
+<h2 id="10-코드-위치">10. 코드 위치</h2>
+<div class="table-wrap"><table><thead><tr><th>데이터 단계</th><th>주요 코드</th></tr></thead><tbody><tr><td>raw PNG manifest</td><td><code>scripts/analyze_png_raw_folders.py</code>, <code>src/wafermap/real/</code></td></tr><tr><td>pattern asset</td><td><code>src/wafermap/assets/</code></td></tr><tr><td>synthetic sample</td><td><code>scripts/compose_synthetic_from_assets.py</code>, <code>src/wafermap/synth/</code></td></tr><tr><td>readiness manifest</td><td><code>scripts/build_segmentation_readiness.py</code></td></tr><tr><td>coordinate-aware small U-Net</td><td><code>src/wafermap/training/segmentation.py</code></td></tr><tr><td>prediction export</td><td><code>scripts/export_unet_predictions.py</code></td></tr></tbody></table></div>
+<p>자세한 학습 규격은 <a href="training_data_contract.html">학습 데이터 규격</a>을 봅니다.</p>
+    </article>
+  </main>
+</body>
+</html>

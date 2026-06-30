@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>핵심 방향 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>핵심 방향</h1>
+      <p>docs/core_direction.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#핵심-방향">핵심 방향</a>
+<a class="toc-level-2" href="#1-제품-경계">1. 제품 경계</a>
+<a class="toc-level-2" href="#2-지금-집중하는-것">2. 지금 집중하는 것</a>
+<a class="toc-level-2" href="#3-범위-안">3. 범위 안</a>
+<a class="toc-level-2" href="#4-범위-밖">4. 범위 밖</a>
+<a class="toc-level-2" href="#5-라벨링-판단-규칙">5. 라벨링 판단 규칙</a>
+<a class="toc-level-2" href="#6-의사결정-규칙">6. 의사결정 규칙</a>
+<a class="toc-level-2" href="#7-예시-좋은-방향과-나쁜-방향">7. 예시: 좋은 방향과 나쁜 방향</a>
+    </aside>
+    <article class="content">
+      <h1 id="핵심-방향">핵심 방향</h1>
+<p>이 프로젝트의 목적은 FBM wafer map에서 “불량이 어디에 어떤 형태로 있는지”를 가르칠 수 있는 segmentation 학습 데이터를 만드는 것입니다.</p>
+<p>중요한 결론은 하나입니다.</p>
+<pre><code class="language-text">모든 wafer를 사람이 전부 누끼 따는 프로젝트가 아니다.
+대표 불량 패턴과 규칙을 모아,
+라벨을 아는 합성 wafer map을 만들고,
+그 데이터로 multi-label segmentation 모델을 시작한다.</code></pre>
+<h2 id="1-제품-경계">1. 제품 경계</h2>
+<p>WaferMap은 현재 아래 흐름을 제품의 중심으로 둡니다.</p>
+<pre><code class="language-text">FBM maps
+-&gt; defect generation
+-&gt; multi-defect synthetic maps
+-&gt; multi-defect segmentation training and validation
+-&gt; real-data pattern asset extraction</code></pre>
+<p>한국어로 풀면 이렇습니다.</p>
+<pre><code class="language-text">실제 FBM wafer map 수집
+-&gt; 대표 불량 패턴 추출
+-&gt; 여러 불량이 섞인 합성 wafer map 생성
+-&gt; family별 mask를 가진 U-Net 학습/검증
+-&gt; 실제 wafer 예측 결과를 사람이 고쳐 다시 asset으로 축적</code></pre>
+<h2 id="2-지금-집중하는-것">2. 지금 집중하는 것</h2>
+<p>현재 1순위는 “큰 모델을 바로 학습하는 것”이 아니라 학습 가능한 라벨 데이터를 만드는 것입니다.</p>
+<p>구체적으로는 아래 네 가지입니다.</p>
+<div class="table-wrap"><table><thead><tr><th>작업</th><th>의미</th><th>예시</th></tr></thead><tbody><tr><td>실제 wafer에서 패턴 추출</td><td>좋은 대표 불량을 골라 asset으로 저장</td><td><code>local</code> blob 하나를 mask로 저장</td></tr><tr><td>규칙 기반 라벨 정의</td><td>손마스킹이 비효율적인 패턴을 파라미터로 표현</td><td><code>shot_grid</code>, <code>ring</code>, <code>edge</code></td></tr><tr><td>합성 wafer 생성</td><td>base wafer 위에 asset/rule을 얹어 정답 mask를 자동 생성</td><td>local + scratch + edge가 함께 있는 sample</td></tr><tr><td>작은 U-Net 학습</td><td>완벽한 모델이 아니라 correction loop의 시작점 생성</td><td>prediction을 tool에서 다시 수정</td></tr></tbody></table></div>
+<h2 id="3-범위-안">3. 범위 안</h2>
+<p>아래 작업은 이 프로젝트의 현재 범위 안입니다.</p>
+<ul>
+<li>실제 raw PNG 또는 semantic <code>.npz</code>에서 wafer sample을 manifest로 정리합니다.</li>
+<li>segmentation tool에서 사람이 명확한 불량만 mask로 저장합니다.</li>
+<li><code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>, <code>random</code> family를 관리합니다.</li>
+<li><code>ring</code>, <code>edge</code>, <code>shot_grid</code>, 긴 <code>scratch</code>는 parametric mask를 적극 사용합니다.</li>
+<li>pattern asset과 procedural pattern을 base wafer에 합성합니다.</li>
+<li><code>arrays.npz</code>, <code>metadata.json</code>, manifest CSV를 만들어 U-Net 학습에 연결합니다.</li>
+<li>모델 예측을 JSON/mask로 export해서 다시 사람이 고칠 수 있게 합니다.</li>
+</ul>
+<h2 id="4-범위-밖">4. 범위 밖</h2>
+<p>아래는 지금 우선순위가 아닙니다.</p>
+<ul>
+<li>처음부터 완벽한 production AI 모델 만들기</li>
+<li>모든 불량을 사람 손으로 pixel 단위 라벨링하기</li>
+<li>애매한 불량을 억지로 known family에 끼워 넣기</li>
+<li>좌표 정보 없이 이미지만 보고 일반 분류 모델을 만드는 것</li>
+<li>wafer 단위 단일 label classification으로 문제를 축소하는 것</li>
+</ul>
+<p>예를 들어 wafer 한 장에 <code>ring</code>, <code>scratch</code>, <code>local</code>이 같이 있으면 “이 wafer는 scratch”라고 하나로 분류하면 안 됩니다. 우리에게 필요한 정답은 family별 mask입니다.</p>
+<pre><code class="language-text">target[local, y, x] = 1 또는 0
+target[scratch, y, x] = 1 또는 0
+target[ring, y, x] = 1 또는 0</code></pre>
+<h2 id="5-라벨링-판단-규칙">5. 라벨링 판단 규칙</h2>
+<p>사람이 모든 pixel을 다 칠하려고 하면 프로젝트가 멈춥니다. 그래서 불량별로 라벨링 방식을 다르게 가져갑니다.</p>
+<div class="table-wrap"><table><thead><tr><th>불량 유형</th><th>권장 라벨 방식</th><th>이유</th></tr></thead><tbody><tr><td><code>local</code> blob</td><td>수동 mask</td><td>영역이 작고 경계가 비교적 명확함</td></tr><tr><td><code>scratch</code></td><td>polyline + width 또는 수동 mask</td><td>긴 선은 점 몇 개와 폭으로 표현 가능</td></tr><tr><td><code>ring</code></td><td>center, radius, width</td><td>원형/호형은 코드로 mask 생성이 쉬움</td></tr><tr><td><code>edge</code></td><td>angle range, edge width</td><td>wafer edge sector는 규칙이 더 안정적</td></tr><tr><td><code>shot_grid</code></td><td>shot layout, affected slot</td><td>반복 구조라 손으로 칠하면 비효율적</td></tr><tr><td>애매한 diffuse</td><td><code>mixed_unknown</code>, review-only</td><td>억지 라벨은 모델을 망침</td></tr></tbody></table></div>
+<h2 id="6-의사결정-규칙">6. 의사결정 규칙</h2>
+<p>새 기능이나 문서를 추가할 때는 아래 질문으로 판단합니다.</p>
+<ol>
+<li>이 변경이 대표 불량 패턴을 더 잘 모으게 하는가?</li>
+<li>이 변경이 합성 wafer와 정답 mask를 더 안정적으로 만들게 하는가?</li>
+<li>이 변경이 U-Net 학습 데이터 규격과 직접 연결되는가?</li>
+<li>이 변경이 실제 wafer 예측을 사람이 고쳐 다시 asset으로 축적하는 loop를 돕는가?</li>
+</ol>
+<p>위 질문에 “아니오”가 많으면 지금 할 일이 아닐 가능성이 큽니다.</p>
+<h2 id="7-예시-좋은-방향과-나쁜-방향">7. 예시: 좋은 방향과 나쁜 방향</h2>
+<p>좋은 방향:</p>
+<pre><code class="language-text">실제 wafer에서 명확한 scratch 30개를 저장한다.
+각 scratch의 mask와 metadata를 정리한다.
+base wafer에 scratch를 여러 위치/강도로 합성한다.
+scratch target mask가 들어간 manifest를 만든다.
+U-Net을 학습하고 실제 wafer 예측을 다시 수정한다.</code></pre>
+<p>나쁜 방향:</p>
+<pre><code class="language-text">wafer 전체를 보고 &quot;불량 A&quot;라고만 적는다.
+불량 위치 mask는 없다.
+ring인지 scratch인지 애매한데 억지로 scratch라고 저장한다.
+그 데이터를 바로 모델에 넣는다.</code></pre>
+<p>이 경우 모델은 “어디가 scratch인지” 배우지 못하고, 애매한 라벨 때문에 family 경계도 흐려집니다.</p>
+    </article>
+  </main>
+</body>
+</html>

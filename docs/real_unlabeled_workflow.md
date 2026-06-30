@@ -1,192 +1,143 @@
 # 라벨 없는 실제 Wafer 처리 절차
 
-## 목적
+이 문서는 label이 없는 실제 wafer batch를 받았을 때 어떻게 처리할지 설명합니다.
+핵심은 “모델 학습용 정답이 없다”는 점을 인정하고, 먼저 triage와 asset 후보를
+만드는 것입니다.
 
-라벨 없는 실제 wafer FBM raw image/array를 읽어서 feature, sanity report, nearest-neighbor 결과, 전문가 리뷰 양식을 만든다.
+## 1. 목적
 
-```text
-제품별 raw PNG 폴더 또는 FBM 배열
--> manifest 자동 생성 또는 real_unlabeled_manifest/v1
--> feature 추출
--> sanity / drift report
--> nearest-neighbor CSV
--> 전문가 리뷰 양식
-```
+라벨 없는 실제 wafer는 바로 supervised training에 넣을 수 없습니다.
+대신 아래 용도로 씁니다.
 
-Schema 세부 기준은 [데이터 형식](data_schema.md)을 따른다. 실제 raw PNG 실행 순서는 [실제 raw PNG 운영 안내서](real_png_operator_runbook.md)을 우선 따른다.
+- 대표 불량 후보 찾기
+- family별 asset 후보 수집
+- 모델 prediction correction 대상 만들기
+- synthetic-real gap 확인
 
-## 입력 준비 A. 제품별 raw PNG 폴더
-
-현재 실제 raw data가 8-bit grayscale PNG라면 이 경로를 우선 사용한다.
+## 2. 입력 준비 A: 제품별 raw PNG 폴더
 
 ```text
-data/raw/
-  product_a/
-    wafer_001.png
-    wafer_002.png
-  product_b/
-    wafer_101.png
+data/raw/product_A/
+  WAFER_0001.png
+  WAFER_0002.png
 ```
 
-인트라넷 공유 폴더나 다른 드라이브 경로도 그대로 사용할 수 있다.
+manifest 생성:
+
+```powershell
+python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json `
+  --out-report-dir outputs/reports/product_A_raw
+```
+
+## 3. 입력 준비 B: Semantic `.npz`
+
+이미 wafer array가 준비되어 있다면 sample folder를 사용할 수 있습니다.
 
 ```text
-Z:/fbm/raw_png/
-  product_a/
-    wafer_001.png
+data/real_unlabeled/product_A/
+  WAFER_0001/
+    arrays.npz
+    metadata.json
 ```
 
-PNG gray value 기준:
+이 경우에도 sample id, path, shape가 manifest로 정리되어야 합니다.
 
-| Gray value | 의미 |
-| --- | --- |
-| `0` | Grade 0, good |
-| `31` | Grade 1 |
-| `151` | Grade 2 |
-| `175` | Grade 3 |
-| `191` | Grade 4 |
-| `207` | Grade 5 |
-| `223` | Grade 6 |
-| `255` | Grade 7 또는 stby 후보 |
-
-Stby 판정:
-
-- chip block 전체가 `255`이면 stby fail chip으로 본다.
-- 일부 pixel만 `255`이면 Grade 7 fail로 본다.
-- stby chip은 내부 배열에서 `stby_mask=1`, `valid_test_mask=0`, `severity=0`으로 변환된다.
-
-제품별 chip size와 grid는 full-255 stby block에서 먼저 추론한다. 추론이 실패하거나 제품 기준을 고정하고 싶으면 `--geometry-json`으로 제품별 `chip_blocks`, `grid`, 필요 시 `actual_net_die`를 준다.
-
-## 입력 준비 B. Semantic `.npz`
-
-sample별 semantic array export가 가능하면 `.npz` manifest도 사용할 수 있다.
-
-필수 array:
-
-- `severity`: Grade 0~7, `[H, W]`
-- `wafer_mask`: wafer 내부 1, wafer 밖 0
-- `valid_test_mask`: 실제 test된 pixel 1
-- `stby_mask`: stby fail chip 영역 1
-
-권장 array:
-
-- `chip_index`: die/chip id. wafer 밖은 -1
-
-## Manifest 예시
+## 4. Manifest 예시
 
 ```json
 {
-  "schema_version": "real_unlabeled_manifest/v1",
-  "feature_schema_version": "observable_fbm_features/v1",
   "samples": [
     {
-      "sample_id": "product_a_wafer_001",
-      "source_type": "npz_semantic_arrays",
-      "arrays_npz": "data/raw/product_a/wafer_001_arrays.npz",
-      "parser_name": "fbm_npz_parser",
-      "parser_version": "0.1.0",
-      "orientation": "not_rotated",
-      "chip_blocks": { "width": 100, "height": 50 },
-      "grid": { "rows": 38, "cols": 20 },
-      "actual_net_die": 600
+      "sample_id": "WAFER_0001",
+      "image_path": "data/raw/product_A/WAFER_0001.png",
+      "product_id": "product_A",
+      "split": "unlabeled"
     }
   ]
 }
 ```
 
-원본 key 이름이 다르면 `array_keys`로 매핑한다.
+## 5. Feature 추출
 
-```json
-"array_keys": {
-  "severity": "grade",
-  "wafer_mask": "in_wafer",
-  "valid_test_mask": "valid",
-  "stby_mask": "stby",
-  "chip_index": "die_id"
-}
-```
-
-Manifest 기준:
-
-- `sample_id`는 비어 있지 않으면 된다.
-- 상대경로와 절대경로를 모두 허용한다.
-- PNG batch manifest 기본 위치는 `outputs/manifests/<out-dir-name>_manifest.json`이다.
-
-## 실행
-
-제품별 raw PNG 폴더 실행:
-
-```powershell
-python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz
-```
-
-Synthetic smoke:
+retrieval이나 sanity check가 필요하면 feature를 추출합니다.
 
 ```powershell
 python scripts/extract_real_unlabeled_features.py `
-  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --features-out outputs/reports/real_unlabeled_features.csv `
-  --sanity-out outputs/reports/real_unlabeled_sanity.json `
-  --report-out outputs/reports/real_unlabeled_report.html `
-  --neighbors-out outputs/reports/real_unlabeled_neighbors.csv `
-  --review-template-out outputs/reports/real_unlabeled_expert_review_template.csv
+  --manifest outputs/manifests/product_A_manifest.json `
+  --out outputs/features/product_A_real_features.parquet
 ```
 
-직접 만든 manifest:
+이 단계는 현재 주력 segmentation workflow의 보조입니다.
+좋은 asset 후보를 찾는 데 사용할 수 있습니다.
+
+## 6. Segmentation tool 연결
+
+라벨 없는 wafer에서 실제로 중요한 작업은 대표 불량을 골라 mask로 저장하는 것입니다.
 
 ```powershell
-python scripts/extract_real_unlabeled_features.py `
-  --manifest data/raw/real_manifest.json `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets
 ```
 
-## 산출물
+작업자는 명확한 패턴만 저장합니다.
 
-- `features.csv`
-- `sanity.json`
-- `batch_metadata.json`
-- `neighbors.csv`
-- `review_template.csv`
-- `report.html`
+```text
+확실한 local blob       -> asset 저장
+확실한 scratch          -> asset 또는 parametric 저장
+shot 반복 위치 불량     -> shot_grid rule 후보
+애매한 diffuse          -> mixed_unknown/review-only
+```
 
-## Sanity / Drift 해석
+## 7. 모델 prediction을 이용하는 경우
 
-Sanity check는 parser와 입력 배열이 정해진 형식을 지키는지 확인하는 단계다.
-
-확인 항목:
-
-- PNG gray value가 허용 값만 포함하는지
-- PNG stby chip이 full-255 chip 단위로 분리되는지
-- 제품별 chip size/grid 추론 또는 명시값이 맞는지
-- severity/mask shape 일치
-- severity 0~7
-- mask binary
-- wafer 밖 severity 0
-- invalid-test severity 0
-- stby는 wafer 안, valid-test 밖, severity 0
-- chip_index는 wafer 밖 -1, wafer 안 non-negative
-
-Reference feature를 주면 drift summary를 만든다.
-
-- query/reference compact feature 평균 차이
-- reference 표준편차 기준 z-score shift
-- 가장 크게 달라진 feature
-
-Drift summary는 성능 metric이 아니다. 실제 wafer가 synthetic reference 분포와 얼마나 다른지 보는 sanity signal이다.
-
-## 전문가 리뷰 연결
-
-`review_template.csv`를 채운 뒤 아래 명령으로 요약한다.
+이미 학습된 모델이 있으면 prediction을 seed로 열 수 있습니다.
 
 ```powershell
-python scripts/summarize_expert_review.py `
-  --review outputs/reports/real_png_batch/review_template.csv `
-  --out outputs/reports/real_png_batch/review_summary.html `
-  --metrics outputs/reports/real_png_batch/review_summary_metrics.json
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json
 ```
+
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets `
+  --prediction-json outputs/predictions/fbm_prediction_masks.json
+```
+
+## 8. 산출물
+
+라벨 없는 wafer batch에서 기대하는 산출물:
+
+```text
+outputs/manifests/product_A_manifest.json
+outputs/reports/product_A_raw/
+data/pattern_assets/<family>/<asset_id>/
+outputs/reviews/product_A_review_template.csv
+```
+
+## 9. Sanity / Drift 해석
+
+실제 wafer와 합성 wafer가 다르면 prediction 품질이 낮을 수 있습니다.
+이때는 모델이 틀렸다고만 보지 말고 아래를 봅니다.
+
+- 실제 wafer에 없는 family를 합성에서 과하게 만들었는가?
+- 실제 wafer의 intensity 분포가 합성과 다른가?
+- shot layout이 합성 rule과 다른가?
+- edge/ring 위치 기준이 제품마다 다른가?
+
+## 10. 다음 의사결정
+
+| 상황 | 다음 행동 |
+|---|---|
+| 명확한 local이 많이 보임 | local asset을 우선 저장 |
+| 반복 shot 문제가 보임 | shot layout metadata 확보 |
+| 모델 prediction이 blank | synthetic coverage 부족 확인 |
+| 모델 false positive가 많음 | threshold 조정, negative/random context 보강 |
+| family 정의가 애매함 | 전문가 review protocol로 넘김 |

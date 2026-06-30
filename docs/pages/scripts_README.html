@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>실행 명령 지도 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>실행 명령 지도</h1>
+      <p>scripts/README.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#실행-명령-지도">실행 명령 지도</a>
+<a class="toc-level-2" href="#1-현재-주력-segmentation-pipeline">1. 현재 주력 Segmentation Pipeline</a>
+<a class="toc-level-2" href="#2-데이터와-합성-생성">2. 데이터와 합성 생성</a>
+<a class="toc-level-2" href="#3-실제-wafer-진단">3. 실제 wafer 진단</a>
+<a class="toc-level-2" href="#4-모델링과-retrieval-진단">4. 모델링과 Retrieval 진단</a>
+<a class="toc-level-2" href="#5-연구-이력용-평가">5. 연구/이력용 평가</a>
+<a class="toc-level-2" href="#6-호환성">6. 호환성</a>
+<a class="toc-level-2" href="#7-report와-상태-공유">7. Report와 상태 공유</a>
+<a class="toc-level-2" href="#8-새-script-추가-규칙">8. 새 script 추가 규칙</a>
+    </aside>
+    <article class="content">
+      <h1 id="실행-명령-지도">실행 명령 지도</h1>
+<p>이 폴더는 사용자가 직접 실행하는 안정적인 command entrypoint를 모아 둡니다. 핵심 구현은 가능하면 <code>src/wafermap/</code>에 두고, <code>scripts/</code> 파일은 argument를 받고 라이브러리 함수를 호출하는 얇은 wrapper로 유지합니다.</p>
+<h2 id="1-현재-주력-segmentation-pipeline">1. 현재 주력 Segmentation Pipeline</h2>
+<p>먼저 볼 명령입니다. 현재 제품 방향은 이 흐름을 기준으로 합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th><th>언제 쓰나</th></tr></thead><tbody><tr><td><code>analyze_png_raw_folders.py</code></td><td>raw PNG 폴더를 manifest와 report로 변환</td><td>실제 wafer image가 있을 때</td></tr><tr><td><code>run_segmentation_tool.py</code></td><td>local browser segmentation tool 실행, pattern asset 저장</td><td>사람이 mask를 만들 때</td></tr><tr><td><code>build_pattern_asset_report.py</code></td><td>저장된 pattern asset 검수 report 생성</td><td>asset 품질 확인</td></tr><tr><td><code>compose_synthetic_from_assets.py</code></td><td>asset/procedural defect를 base wafer에 합성</td><td>학습 sample 생성</td></tr><tr><td><code>build_segmentation_readiness.py</code></td><td>segmentation manifest와 readiness metric 생성</td><td>학습 전 점검</td></tr><tr><td><code>run_pattern_asset_pipeline.py</code></td><td>합성, readiness, smoke, report를 한 번에 실행</td><td>전체 경로 점검</td></tr><tr><td><code>train_unet_segmentation.py</code></td><td>coordinate-aware small U-Net 학습</td><td>학습 시작</td></tr><tr><td><code>export_unet_predictions.py</code></td><td>U-Net prediction을 <code>fbm_prediction_masks/v1</code>로 export</td><td>tool correction seed 생성</td></tr></tbody></table></div>
+<p>예시:</p>
+<pre><code class="language-powershell">python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</code></pre>
+<h2 id="2-데이터와-합성-생성">2. 데이터와 합성 생성</h2>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>generate_synthetic.py</code></td><td>procedural synthetic wafer sample 생성</td></tr><tr><td><code>validate_synthetic.py</code></td><td>synthetic sample schema 검증</td></tr><tr><td><code>build_segmentation_readiness.py</code></td><td>학습 manifest, readiness metric, gallery 생성</td></tr><tr><td><code>train_segmentation_smoke.py</code></td><td>segmentation tensor/loss 연결 smoke test</td></tr><tr><td><code>train_embedding_smoke.py</code></td><td>embedding retrieval wiring smoke test</td></tr></tbody></table></div>
+<h2 id="3-실제-wafer-진단">3. 실제 wafer 진단</h2>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>extract_real_unlabeled_features.py</code></td><td>real/unlabeled manifest에서 feature 추출</td></tr><tr><td><code>extract_features.py</code></td><td>synthetic sample feature 추출</td></tr><tr><td><code>interpret_fbm.py</code></td><td>feature/sanity/neighbor 결과 해석 report 생성</td></tr><tr><td><code>summarize_defect_locations.py</code></td><td>defect 위치 분포 요약</td></tr><tr><td><code>make_expert_review_template.py</code></td><td>전문가 리뷰용 CSV template 생성</td></tr><tr><td><code>summarize_expert_review.py</code></td><td>전문가 리뷰 CSV 집계</td></tr></tbody></table></div>
+<h2 id="4-모델링과-retrieval-진단">4. 모델링과 Retrieval 진단</h2>
+<p>이 영역은 현재 segmentation dataset pipeline보다 우선순위가 낮습니다. 하지만 과거 실험 재현과 후보 추천에 필요할 수 있어 유지합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>train_cpu_encoder_model.py</code></td><td>가벼운 CPU encoder baseline 학습</td></tr><tr><td><code>score_unlabeled_cpu_encoder.py</code></td><td>unlabeled wafer batch scoring</td></tr><tr><td><code>evaluate_defect_feature_retrieval.py</code></td><td>defect feature retrieval 동작 평가</td></tr><tr><td><code>evaluate_interest_retrieval.py</code></td><td>interest/retrieval target 평가</td></tr><tr><td><code>evaluate_retrieval_confidence.py</code></td><td>retrieval confidence 평가</td></tr><tr><td><code>evaluate_resize_benchmark.py</code></td><td>resize-only representation benchmark</td></tr></tbody></table></div>
+<h2 id="5-연구-이력용-평가">5. 연구/이력용 평가</h2>
+<p>아래 명령은 실험 추적을 위해 남깁니다. 메인 workflow로 보지 않습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>analyze_fbm_grouping.py</code></td><td>FBM synthetic grouping 분석</td></tr><tr><td><code>evaluate_curve_proposals.py</code></td><td>curve/ring proposal 평가</td></tr><tr><td><code>evaluate_feature_ablation.py</code></td><td>feature ablation 평가</td></tr><tr><td><code>evaluate_grouping_stability.py</code></td><td>grouping stability 평가</td></tr><tr><td><code>evaluate_methodology.py</code></td><td>methodology probe 평가</td></tr><tr><td><code>evaluate_patch_proposals.py</code></td><td>patch proposal 평가</td></tr><tr><td><code>sweep_grouping_parameters.py</code></td><td>grouping parameter sweep</td></tr></tbody></table></div>
+<h2 id="6-호환성">6. 호환성</h2>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>run_pattern_asset_editor.py</code></td><td>기존 이름을 유지하는 호환 wrapper. 실제 방향은 segmentation tool 중심</td></tr></tbody></table></div>
+<h2 id="7-report와-상태-공유">7. Report와 상태 공유</h2>
+<div class="table-wrap"><table><thead><tr><th>Script</th><th>목적</th></tr></thead><tbody><tr><td><code>make_report.py</code></td><td>synthetic experiment report 생성</td></tr><tr><td><code>make_progress_briefing.py</code></td><td>진행 상황 briefing artifact 생성</td></tr><tr><td><code>make_leader_status_report.py</code></td><td>리더/상태 report 생성</td></tr><tr><td><code>run_pre_real_readiness.py</code></td><td>pre-real readiness pipeline 실행</td></tr></tbody></table></div>
+<h2 id="8-새-script-추가-규칙">8. 새 script 추가 규칙</h2>
+<ul>
+<li>core logic은 <code>src/wafermap/</code>에 둡니다.</li>
+<li>script는 argument parsing과 출력 경로 안내에 집중합니다.</li>
+<li>작업자가 직접 쓰는 명령이면 <code>README.md</code>, <code>docs/operator_manual.md</code>, 관련 workflow 문서에 추가합니다.</li>
+<li>실험용이면 이 문서의 연구/이력 섹션에 표시합니다.</li>
+<li>기존 script 파일명을 없애야 한다면 wrapper를 남겨 호환성을 지킵니다.</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

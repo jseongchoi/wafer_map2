@@ -23,6 +23,9 @@ USER_FACING_DOCS = [
     DOCS / "fbm_pattern_asset_pipeline.md",
     DOCS / "semiconductor_ai_review.md",
     DOCS / "project_overview.md",
+    DOCS / "label_data_guidelines.md",
+    DOCS / "training_data_contract.md",
+    DOCS / "documentation_quality_audit.md",
     DOCS / "experiment_history.md",
     DOCS / "roadmap.md",
     DOCS / "data_schema.md",
@@ -37,6 +40,18 @@ USER_FACING_DOCS = [
     DOCS / "legacy_pattern_asset_editor.md",
 ]
 
+GENERATED_HTML_DOCS = [
+    DOCS / "pages" / "label_data_guidelines.html",
+    DOCS / "pages" / "training_data_contract.html",
+    DOCS / "pages" / "modeling_strategy.html",
+    DOCS / "pages" / "end_to_end_workflow.html",
+    DOCS / "pages" / "operator_manual.html",
+    DOCS / "pages" / "pattern_taxonomy.html",
+    DOCS / "pages" / "fbm_pattern_asset_pipeline.html",
+    DOCS / "pages" / "documentation_quality_audit.html",
+    DOCS / "pages" / "scripts_README.html",
+]
+
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 HTML_HREF_RE = re.compile(r"""href=["']([^"']+)["']""")
@@ -45,6 +60,11 @@ MOJIBAKE_RE = re.compile(r"\ufffd")
 
 def test_core_documentation_files_exist() -> None:
     missing = [path.relative_to(ROOT).as_posix() for path in USER_FACING_DOCS if not path.exists()]
+    assert missing == []
+
+
+def test_generated_html_document_pages_exist() -> None:
+    missing = [path.relative_to(ROOT).as_posix() for path in GENERATED_HTML_DOCS if not path.exists()]
     assert missing == []
 
 
@@ -70,20 +90,34 @@ def test_markdown_file_links_resolve() -> None:
 
 def test_html_file_links_resolve() -> None:
     broken: list[str] = []
-    html_path = DOCS / "index.html"
-    text = html_path.read_text(encoding="utf-8")
-    for raw_target in HTML_HREF_RE.findall(text):
-        target = raw_target.split("#", 1)[0].strip()
-        if not target or "://" in target:
-            continue
-        resolved = (html_path.parent / target).resolve()
-        try:
-            resolved.relative_to(ROOT)
-        except ValueError:
-            continue
-        if not resolved.exists():
-            broken.append(f"{html_path.relative_to(ROOT).as_posix()} -> {raw_target}")
+    html_paths = [DOCS / "index.html", *sorted((DOCS / "pages").glob("*.html"))]
+    for html_path in html_paths:
+        text = html_path.read_text(encoding="utf-8")
+        for raw_target in HTML_HREF_RE.findall(text):
+            target = raw_target.split("#", 1)[0].strip()
+            if not target or "://" in target:
+                continue
+            resolved = (html_path.parent / target).resolve()
+            try:
+                resolved.relative_to(ROOT)
+            except ValueError:
+                continue
+            if not resolved.exists():
+                broken.append(f"{html_path.relative_to(ROOT).as_posix()} -> {raw_target}")
     assert broken == []
+
+
+def test_documentation_home_links_to_styled_html_pages() -> None:
+    index_html = (DOCS / "index.html").read_text(encoding="utf-8")
+    local_targets = [
+        target.split("#", 1)[0].strip()
+        for target in HTML_HREF_RE.findall(index_html)
+        if target and "://" not in target
+    ]
+    markdown_targets = [target for target in local_targets if target.endswith(".md")]
+    assert markdown_targets == []
+    assert "pages/label_data_guidelines.html" in local_targets
+    assert "pages/training_data_contract.html" in local_targets
 
 
 def test_core_documentation_has_no_replacement_mojibake_codepoints() -> None:
@@ -95,6 +129,30 @@ def test_core_documentation_has_no_replacement_mojibake_codepoints() -> None:
                 offenders.append(f"{path.relative_to(ROOT).as_posix()}:{line_no}")
                 break
     assert offenders == []
+
+
+def test_core_documentation_is_korean_and_example_driven() -> None:
+    core_docs = [
+        DOCS / "core_direction.md",
+        DOCS / "end_to_end_workflow.md",
+        DOCS / "operator_manual.md",
+        DOCS / "segmentation_tool_workflow.md",
+        DOCS / "fbm_data_flow_guide.md",
+        DOCS / "fbm_pattern_asset_pipeline.md",
+        DOCS / "validation_protocol.md",
+        DOCS / "modeling_strategy.md",
+        DOCS / "documentation_quality_audit.md",
+    ]
+
+    weak_docs: list[str] = []
+    for path in core_docs:
+        text = path.read_text(encoding="utf-8")
+        korean_count = len(re.findall(r"[가-힣]", text))
+        example_signals = len(re.findall(r"```|예시|json|powershell", text, flags=re.IGNORECASE))
+        if korean_count < 250 or example_signals < 3:
+            weak_docs.append(path.relative_to(ROOT).as_posix())
+
+    assert weak_docs == []
 
 
 def test_documentation_guides_current_project_direction() -> None:
@@ -112,6 +170,10 @@ def test_documentation_guides_current_project_direction() -> None:
     experiment_history = (DOCS / "experiment_history.md").read_text(encoding="utf-8")
     glossary = (DOCS / "glossary.md").read_text(encoding="utf-8")
     roadmap_html = (DOCS / "index.html").read_text(encoding="utf-8")
+    label_guidelines = (DOCS / "label_data_guidelines.md").read_text(encoding="utf-8")
+    training_contract = (DOCS / "training_data_contract.md").read_text(encoding="utf-8")
+    modeling_strategy = (DOCS / "modeling_strategy.md").read_text(encoding="utf-8")
+    audit = (DOCS / "documentation_quality_audit.md").read_text(encoding="utf-8")
 
     assert "core_direction.md" in docs_index
     assert "end_to_end_workflow.md" in docs_index
@@ -120,7 +182,7 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "multi-defect synthetic maps" in core_direction
     assert "multi-defect segmentation training and validation" in core_direction
     assert "real-data pattern asset extraction" in core_direction
-    assert "End-To-End Workflow" in workflow
+    assert "전체 실행 흐름" in workflow
     assert "run_segmentation_tool.py" in workflow
     assert "compose_synthetic_from_assets.py" in workflow
     assert "train_unet_segmentation.py" in workflow
@@ -131,28 +193,30 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "segmentation_tool_workflow.md" in docs_index
     assert "fbm_pattern_asset_pipeline.md" in docs_index
     assert "semiconductor_ai_review.md" in docs_index
+    assert "label_data_guidelines.md" in docs_index
+    assert "training_data_contract.md" in docs_index
     assert "fbm_data_flow_guide.md" in docs_index
     assert "project_overview.md" in docs_index
     assert "roadmap.md" in docs_index
     assert "glossary.md" in docs_index
     assert "real_png_operator_runbook.md" in docs_index
     assert "experiment_history.md" in docs_index
-    assert "scripts command map" in docs_index
-    assert "Product Boundary" in architecture
-    assert "Package Boundaries" in architecture
+    assert "실행 명령 지도" in docs_index
+    assert "제품 경계" in architecture
+    assert "패키지 경계" in architecture
     assert "src/wafermap" in architecture
     assert "scripts/README.md" in architecture
-    assert "Operator Manual" in operator_manual
+    assert "작업자 매뉴얼" in operator_manual
     assert "Troubleshooting" in operator_manual
     assert "Release Checklist" in operator_manual
-    assert "Primary In-Repo Segmentation Pipeline" in scripts_map
+    assert "현재 주력 Segmentation Pipeline" in scripts_map
     assert "export_unet_predictions.py" in scripts_map
-    assert "Compatibility" in scripts_map
-    assert "Research / Historical Evaluation" in scripts_map
-    assert "in-repo segmentation tool" in overview
+    assert "호환성" in scripts_map
+    assert "연구/이력용 평가" in scripts_map
+    assert "segmentation tool" in overview
     assert "run_segmentation_tool.py" in overview
-    assert "run_pattern_asset_editor.py" in overview
-    assert "hybrid synthetic data" in overview
+    assert "pattern asset library" in overview
+    assert "합성 데이터" in overview
     assert "train_unet_segmentation.py" in overview
     assert "export_unet_predictions.py" in overview
     assert "Direct Segmentation Tool" in roadmap
@@ -170,15 +234,38 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "asset_segmentation_manifest.csv" in data_flow
     assert "coordinate-aware small U-Net" in data_flow
     assert "export_unet_predictions.py" in data_flow
+    assert "학습 데이터 규격" in data_flow
+    assert "readiness" in pipeline
     assert "resize-only representation" in experiment_history
     assert "patch proposal" in experiment_history
     assert "Segmentation Smoke Test" in experiment_history
     assert "Phase 4" in roadmap_html
+    assert "이 파일부터 보면 됩니다" in roadmap_html
+    assert "학습 데이터 규격" in roadmap_html
+    assert "구현 위치 지도" in roadmap_html
     assert "core_direction.md" in roadmap_html
     assert "end_to_end_workflow.md" in roadmap_html
-    assert "glossary.md" in roadmap_html
+    assert "label_data_guidelines.md" in roadmap_html
+    assert "training_data_contract.md" in roadmap_html
+    assert "modeling_strategy.html" in roadmap_html
+    assert "pages/glossary.html" in roadmap_html
+    assert "documentation_quality_audit.html" in roadmap_html
     assert "`severity`" in glossary
     assert "`retrieval_failure_mode`" in glossary
+    assert "bbox_xywh = 어디를 볼지 알려주는 사각형 힌트" in label_guidelines
+    assert "mask.png  = U-Net이 실제로 학습하는 정답" in label_guidelines
+    assert "parametric_mask" in label_guidelines
+    assert "arrays.npz" in training_contract
+    assert "pattern_masks" in training_contract
+    assert "severity_mean" in training_contract
+    assert "target = pattern_mask & wafer_mask & valid_test_mask" in training_contract
+    assert "BCEWithLogitsLoss" in modeling_strategy
+    assert "sigmoid multi-label segmentation" in modeling_strategy
+    assert "X.shape = [12, output_size, output_size]" in modeling_strategy
+    assert "Y.shape = [6, output_size, output_size]" in modeling_strategy
+    assert "문서별 검증 결과" in audit
+    assert "대표 불량 패턴" in audit
+    assert "U-Net 구조" in audit
 
 
 def test_core_direction_avoids_removed_workflows() -> None:

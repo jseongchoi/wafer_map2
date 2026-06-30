@@ -2,9 +2,9 @@
 
 WaferMap은 wafer Fail Bit Map(FBM)에서 defect segmentation model을 만들기 위한 데이터셋 제작 도구입니다. 현재 1순위는 모델 학습 자체가 아니라, 실제 wafer에서 defect mask를 직접 만들고 그 mask를 합성 데이터 생성 파이프라인으로 연결하는 것입니다.
 
-## Current Direction
+## 현재 방향
 
-Core direction:
+핵심 방향:
 
 ```text
 FBM maps
@@ -26,7 +26,7 @@ real/unlabeled wafer manifest
 
 모델 학습과 평가(`train_unet_segmentation.py`)는 데이터셋 생성 경로가 안정화된 뒤 붙입니다. 지금은 1) Defect Segmentation Model용 mask asset 제작, 2) 실제 defect pattern을 real/base wafer에 붙여 합성 데이터를 만드는 경로에 집중합니다.
 
-## Main Commands
+## 주요 명령
 
 wafer manifest에서 직접 세그멘테이션 툴을 엽니다.
 
@@ -78,38 +78,43 @@ python scripts/export_unet_predictions.py `
   --threshold 0.5
 ```
 
-## Segmentation Families
+## 세그멘테이션 Family
 
 현재 핵심 mask family:
 
-| Family | Use |
+| Family | 용도 |
 |---|---|
-| `local` | blob/local defect |
-| `scratch` | scratch defect |
-| `ring` | ring or partial ring defect |
-| `edge` | abnormal edge band/sector |
-| `shot_grid` | repeated shot-relative defect |
-| `random` | sparse baseline fail pattern |
+| `local` | 작은 국소 blob 또는 cluster |
+| `scratch` | 길게 이어지는 선형/곡선형 긁힘 |
+| `ring` | 원형 또는 부분 원형 band |
+| `edge` | wafer edge 근처 band/sector |
+| `shot_grid` | shot 상대 위치가 반복되는 불량 |
+| `random` | 뚜렷한 구조 없는 sparse baseline fail |
 
 `stby_pattern`은 valid-test mask를 설명하는 보조 패턴이며, 현재 primary segmentation target에서는 제외합니다.
 
-## Docs
+## 문서
 
-- [Core Direction](docs/core_direction.md)
-- [End-To-End Workflow](docs/end_to_end_workflow.md)
-- [Architecture](docs/architecture.md)
-- [Operator Manual](docs/operator_manual.md)
-- [Segmentation Tool Workflow](docs/segmentation_tool_workflow.md)
-- [Project Overview](docs/project_overview.md)
-- [Data Flow Guide](docs/fbm_data_flow_guide.md)
-- [Hybrid Synthetic Data Pipeline](docs/fbm_pattern_asset_pipeline.md)
-- [Semiconductor AI Data Science Review](docs/semiconductor_ai_review.md)
-- [Scripts Command Map](scripts/README.md)
-- [Pattern Taxonomy](docs/pattern_taxonomy.md)
-- [Roadmap](docs/roadmap.md)
-- [Glossary](docs/glossary.md)
+- [문서 표지판](docs/index.html)
+- [핵심 방향](docs/core_direction.md)
+- [전체 실행 흐름](docs/end_to_end_workflow.md)
+- [설계 구조](docs/architecture.md)
+- [작업자 매뉴얼](docs/operator_manual.md)
+- [세그멘테이션 도구 흐름](docs/segmentation_tool_workflow.md)
+- [프로젝트 개요](docs/project_overview.md)
+- [데이터 흐름 가이드](docs/fbm_data_flow_guide.md)
+- [합성 데이터 파이프라인](docs/fbm_pattern_asset_pipeline.md)
+- [반도체 AI 설계 검토](docs/semiconductor_ai_review.md)
+- [실행 명령 지도](scripts/README.md)
+- [불량 family 정의](docs/pattern_taxonomy.md)
+- [라벨 데이터 가이드](docs/label_data_guidelines.md)
+- [학습 데이터 규격](docs/training_data_contract.md)
+- [모델 이해 가이드](docs/modeling_strategy.md)
+- [로드맵](docs/roadmap.md)
+- [용어 사전](docs/glossary.md)
+- [문서 품질 검증표](docs/documentation_quality_audit.md)
 
-## Validation
+## 검증
 
 기본 테스트는 느린 end-to-end 테스트를 건너뜁니다.
 
@@ -129,6 +134,6 @@ python -m pytest -q --run-slow --basetemp .pytest_tmp_full
 python -m pytest tests/test_pattern_asset_pipeline.py -q
 ```
 
-## Repository Policy
+## 저장소 정책
 
 원본 wafer, 생성된 pattern assets, synthetic samples, model checkpoints, reports는 로컬 산출물입니다. Git에는 code, configs, schemas, docs, tests만 넣습니다.

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>라벨 데이터 가이드 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>라벨 데이터 가이드</h1>
+      <p>docs/label_data_guidelines.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#라벨-데이터-가이드">라벨 데이터 가이드</a>
+<a class="toc-level-2" href="#1-라벨은-세-단계로-모읍니다">1. 라벨은 세 단계로 모읍니다</a>
+<a class="toc-level-2" href="#2-wafer-한-장-예시">2. wafer 한 장 예시</a>
+<a class="toc-level-2" href="#3-labels-json-예시">3. labels.json 예시</a>
+<a class="toc-level-2" href="#4-bbox와-mask는-역할이-다릅니다">4. bbox와 mask는 역할이 다릅니다</a>
+<a class="toc-level-2" href="#5-label_type을-꼭-나눕니다">5. label_type을 꼭 나눕니다</a>
+<a class="toc-level-2" href="#6-parametric_mask-예시">6. parametric_mask 예시</a>
+<a class="toc-level-2" href="#7-좋은-예시만-pattern-asset으로-승격합니다">7. 좋은 예시만 pattern asset으로 승격합니다</a>
+<a class="toc-level-2" href="#8-처음-모을-목표량">8. 처음 모을 목표량</a>
+<a class="toc-level-2" href="#9-최소-metadata-필드">9. 최소 metadata 필드</a>
+<a class="toc-level-2" href="#10-판단-규칙">10. 판단 규칙</a>
+    </aside>
+    <article class="content">
+      <h1 id="라벨-데이터-가이드">라벨 데이터 가이드</h1>
+<p>이 문서는 WaferMap에서 사람이 라벨을 어떻게 모으고 저장해야 하는지 설명합니다. 가장 중요한 원칙은 이것입니다.</p>
+<pre><code class="language-text">bbox_xywh = 어디를 볼지 알려주는 사각형 힌트
+mask.png  = U-Net이 실제로 학습하는 정답</code></pre>
+<p>U-Net은 <code>bbox_xywh</code>를 보고 배우지 않습니다. U-Net은 최종적으로 family별 binary mask를 봅니다.</p>
+<pre><code class="language-text">local_mask[y, x] = 1 또는 0
+scratch_mask[y, x] = 1 또는 0
+ring_mask[y, x] = 1 또는 0
+...</code></pre>
+<p>그래서 불량이 사각형이 아니어도 괜찮습니다. 오히려 그래서 segmentation을 쓰는 것입니다.</p>
+<h2 id="1-라벨은-세-단계로-모읍니다">1. 라벨은 세 단계로 모읍니다</h2>
+<p>처음부터 모든 wafer의 모든 불량을 완벽하게 누끼 따려고 하면 오래 못 갑니다. 라벨은 세 단계로 나누어 저장합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>단계</th><th>사람이 하는 일</th><th>학습 사용</th></tr></thead><tbody><tr><td>Wafer-level tag</td><td>wafer 전체에 어떤 불량이 보이는지만 빠르게 체크</td><td>샘플링, triage</td></tr><tr><td>Rough region</td><td>bbox, lasso, sector 정도로 대략 위치 표시</td><td>review, proposal</td></tr><tr><td>Clean mask</td><td>학습에 쓸 명확한 불량만 pixel mask로 저장</td><td>U-Net target, pattern asset</td></tr></tbody></table></div>
+<p>애매한 불량은 억지로 <code>scratch</code>나 <code>ring</code>에 넣지 않습니다. <code>mixed_unknown</code> 또는 review-only label로 남겨두는 것이 더 낫습니다.</p>
+<h2 id="2-wafer-한-장-예시">2. wafer 한 장 예시</h2>
+<p>원본 wafer image가 하나 있다고 가정합니다.</p>
+<pre><code class="language-text">data/raw/product_A/WAFER_0001.png</code></pre>
+<p>작업자가 이 wafer를 보고 이렇게 판단했다고 해봅니다.</p>
+<ul>
+<li>왼쪽 아래에 명확한 <code>local</code> blob이 있음</li>
+<li>중앙을 가로지르는 <code>scratch</code>가 있음</li>
+<li>오른쪽 edge 근처에 애매한 diffuse 패턴이 있음</li>
+</ul>
+<p>그러면 label package는 이렇게 저장합니다.</p>
+<pre><code class="language-text">data/labels/WAFER_0001/
+  wafer.png
+  labels.json
+  masks/
+    local.png
+    scratch.png
+    ring.png
+    edge.png
+    shot_grid.png
+    random.png
+    mixed_unknown.png</code></pre>
+<p>각 mask 이미지는 원본 wafer와 같은 크기입니다.</p>
+<pre><code class="language-text">검정 또는 0   = 해당 family 아님
+흰색 또는 255 = 해당 family가 있는 pixel</code></pre>
+<p>현재 primary model target은 아래 여섯 개입니다.</p>
+<pre><code class="language-text">local, scratch, ring, edge, shot_grid, random</code></pre>
+<p><code>mixed_unknown</code>은 학습 target이 아니라 review-only 보관함입니다.</p>
+<h2 id="3-labels-json-예시">3. labels.json 예시</h2>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;wafer_label/v1&quot;,
+  &quot;sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;image_path&quot;: &quot;data/raw/product_A/WAFER_0001.png&quot;,
+  &quot;image_shape&quot;: {
+    &quot;height&quot;: 1024,
+    &quot;width&quot;: 1024
+  },
+  &quot;wafer_level_tags&quot;: {
+    &quot;has_local&quot;: true,
+    &quot;has_scratch&quot;: true,
+    &quot;has_ring&quot;: false,
+    &quot;has_edge&quot;: false,
+    &quot;has_shot_grid&quot;: false,
+    &quot;has_random&quot;: false,
+    &quot;has_mixed_unknown&quot;: true
+  },
+  &quot;masks&quot;: {
+    &quot;local&quot;: &quot;masks/local.png&quot;,
+    &quot;scratch&quot;: &quot;masks/scratch.png&quot;,
+    &quot;ring&quot;: &quot;masks/ring.png&quot;,
+    &quot;edge&quot;: &quot;masks/edge.png&quot;,
+    &quot;shot_grid&quot;: &quot;masks/shot_grid.png&quot;,
+    &quot;random&quot;: &quot;masks/random.png&quot;,
+    &quot;mixed_unknown&quot;: &quot;masks/mixed_unknown.png&quot;
+  },
+  &quot;instances&quot;: [
+    {
+      &quot;instance_id&quot;: &quot;WAFER_0001_local_0001&quot;,
+      &quot;family&quot;: &quot;local&quot;,
+      &quot;label_type&quot;: &quot;manual_mask&quot;,
+      &quot;bbox_xywh&quot;: [120, 720, 80, 70],
+      &quot;mask_path&quot;: &quot;masks/local.png&quot;,
+      &quot;label_confidence&quot;: &quot;high&quot;,
+      &quot;mask_quality&quot;: &quot;clean&quot;,
+      &quot;is_training_eligible&quot;: true
+    },
+    {
+      &quot;instance_id&quot;: &quot;WAFER_0001_scratch_0001&quot;,
+      &quot;family&quot;: &quot;scratch&quot;,
+      &quot;label_type&quot;: &quot;manual_mask&quot;,
+      &quot;bbox_xywh&quot;: [300, 430, 420, 55],
+      &quot;mask_path&quot;: &quot;masks/scratch.png&quot;,
+      &quot;label_confidence&quot;: &quot;medium&quot;,
+      &quot;mask_quality&quot;: &quot;usable&quot;,
+      &quot;is_training_eligible&quot;: true
+    },
+    {
+      &quot;instance_id&quot;: &quot;WAFER_0001_unknown_0001&quot;,
+      &quot;family&quot;: &quot;mixed_unknown&quot;,
+      &quot;label_type&quot;: &quot;weak_region&quot;,
+      &quot;bbox_xywh&quot;: [760, 180, 120, 180],
+      &quot;mask_path&quot;: &quot;masks/mixed_unknown.png&quot;,
+      &quot;label_confidence&quot;: &quot;low&quot;,
+      &quot;mask_quality&quot;: &quot;rough&quot;,
+      &quot;is_training_eligible&quot;: false,
+      &quot;ambiguous_reason&quot;: &quot;edge인지 diffuse인지 명확하지 않음&quot;
+    }
+  ]
+}</code></pre>
+<h2 id="4-bbox와-mask는-역할이-다릅니다">4. bbox와 mask는 역할이 다릅니다</h2>
+<p><code>bbox_xywh</code>는 외곽 사각형입니다.</p>
+<pre><code class="language-text">[x, y, width, height]</code></pre>
+<p>사용처는 이런 쪽입니다.</p>
+<ul>
+<li>defect 위치를 다시 찾기</li>
+<li>crop preview 만들기</li>
+<li>pattern asset 저장하기</li>
+<li>source wafer에서 어디서 나온 불량인지 추적하기</li>
+<li>synthetic wafer에 다시 붙일 때 위치와 크기 잡기</li>
+</ul>
+<p>하지만 U-Net의 정답은 bbox가 아니라 mask입니다.</p>
+<div class="table-wrap"><table><thead><tr><th>불량 형태</th><th>bbox 역할</th><th>mask 역할</th></tr></thead><tbody><tr><td>작은 blob</td><td>blob 주변 crop</td><td>blob pixel만 1</td></tr><tr><td>긴 scratch</td><td>선 전체를 감싸는 crop</td><td>얇은 line/arc pixel만 1</td></tr><tr><td>ring</td><td>ring 주변 crop</td><td>annulus 또는 arc band만 1</td></tr><tr><td>edge sector</td><td>edge 근처 crop</td><td>비정상 edge band/sector만 1</td></tr><tr><td>shot repeat</td><td>반복 패턴이 있는 영역 crop</td><td>반복 die 위치만 1</td></tr></tbody></table></div>
+<h2 id="5-label_type을-꼭-나눕니다">5. label_type을 꼭 나눕니다</h2>
+<p>모든 라벨이 사람이 직접 칠한 mask일 필요는 없습니다.</p>
+<div class="table-wrap"><table><thead><tr><th><code>label_type</code></th><th>의미</th><th>학습 사용</th></tr></thead><tbody><tr><td><code>manual_mask</code></td><td>사람이 brush/lasso로 직접 칠한 mask</td><td>clean/usable이면 사용</td></tr><tr><td><code>parametric_mask</code></td><td>사람이 규칙을 지정하고 코드가 만든 mask</td><td>preview 확인 후 사용</td></tr><tr><td><code>weak_region</code></td><td>대략적인 bbox/lasso/sector</td><td>review/proposal용</td></tr><tr><td><code>wafer_tag_only</code></td><td>wafer 전체에 이런 불량이 있다는 tag</td><td>샘플링/triage용</td></tr></tbody></table></div>
+<p>예를 들어 <code>shot_grid</code>는 사람이 모든 die를 칠하지 않습니다.</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;shot_grid&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;parameters&quot;: {
+    &quot;shot_rows&quot;: 3,
+    &quot;shot_cols&quot;: 3,
+    &quot;affected_slot&quot;: [2, 0],
+    &quot;anchor_region&quot;: &quot;lower_left&quot;,
+    &quot;intra_die_region&quot;: {
+      &quot;x_min&quot;: 0.0,
+      &quot;x_max&quot;: 0.35,
+      &quot;y_min&quot;: 0.65,
+      &quot;y_max&quot;: 1.0
+    }
+  }
+}</code></pre>
+<p>뜻은 이렇습니다.</p>
+<pre><code class="language-text">3x3 shot 반복 구조에서
+왼쪽 아래 slot에 해당하는 die만 보고
+그 die 내부의 lower-left 영역을 mask로 만든다</code></pre>
+<h2 id="6-parametric_mask-예시">6. parametric_mask 예시</h2>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>사람이 지정하는 값</th><th>코드가 만드는 mask</th></tr></thead><tbody><tr><td><code>shot_grid</code></td><td>shot rows/cols, affected slot, die 내부 영역</td><td>반복 위치 mask</td></tr><tr><td><code>ring</code></td><td>center, radius, width, angle range</td><td>원형/부분원형 band</td></tr><tr><td><code>edge</code></td><td>radial range, angle sector</td><td>edge band/sector</td></tr><tr><td><code>scratch</code></td><td>polyline points, width</td><td>선 주변 tube mask</td></tr><tr><td><code>local</code></td><td>center/radius 또는 lasso</td><td>blob mask</td></tr></tbody></table></div>
+<p><code>ring</code> 예시:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;ring&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;parameters&quot;: {
+    &quot;center_xy&quot;: [512, 512],
+    &quot;radius&quot;: 310,
+    &quot;width&quot;: 18,
+    &quot;theta_start_deg&quot;: 20,
+    &quot;theta_end_deg&quot;: 210
+  }
+}</code></pre>
+<p><code>scratch</code> 예시:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;scratch&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;parameters&quot;: {
+    &quot;points_xy&quot;: [[180, 420], [350, 455], [620, 470]],
+    &quot;width&quot;: 8
+  }
+}</code></pre>
+<p>코드가 mask를 만들 때는 항상 아래 조건을 적용합니다.</p>
+<pre><code class="language-text">mask &amp;= wafer_mask
+mask &amp;= valid_test_mask</code></pre>
+<p>필요하면 severity 조건도 씁니다.</p>
+<pre><code class="language-text">mask &amp;= severity &gt;= severity_threshold</code></pre>
+<h2 id="7-좋은-예시만-pattern-asset으로-승격합니다">7. 좋은 예시만 pattern asset으로 승격합니다</h2>
+<p>full-wafer label package는 라벨 관리용입니다. 학습과 합성에 재사용할 좋은 조각만 pattern asset으로 저장합니다.</p>
+<pre><code class="language-text">data/pattern_assets/&lt;family&gt;/&lt;asset_id&gt;/
+  grade.png
+  mask.png
+  preview.png
+  metadata.json</code></pre>
+<p>예:</p>
+<pre><code class="language-text">data/pattern_assets/scratch/WAFER_0001_scratch_0001/
+  grade.png
+  mask.png
+  preview.png
+  metadata.json</code></pre>
+<p><code>metadata.json</code> 예시:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;fbm_pattern_asset/v1&quot;,
+  &quot;family&quot;: &quot;scratch&quot;,
+  &quot;source_sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;bbox_xywh&quot;: [300, 430, 420, 55],
+  &quot;mask_pixel_count&quot;: 1830,
+  &quot;mask_quality&quot;: &quot;usable&quot;,
+  &quot;label_confidence&quot;: &quot;medium&quot;,
+  &quot;is_training_eligible&quot;: true,
+  &quot;composition_rule&quot;: &quot;max&quot;
+}</code></pre>
+<p>승격 기준은 단순합니다.</p>
+<pre><code class="language-text">애매함 -&gt; 보류
+대략 위치만 있음 -&gt; review/proposal
+명확하고 재사용 가능함 -&gt; pattern asset</code></pre>
+<h2 id="8-처음-모을-목표량">8. 처음 모을 목표량</h2>
+<p>처음부터 많이 모으는 것보다, 흔들리지 않는 예시를 먼저 모으는 게 좋습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>1차 목표</th></tr></thead><tbody><tr><td><code>local</code></td><td>30-50 clean/usable assets</td></tr><tr><td><code>scratch</code></td><td>30-50 clean/usable assets</td></tr><tr><td><code>ring</code></td><td>30-50 clean/usable assets</td></tr><tr><td><code>edge</code></td><td>30-50 clean/usable assets</td></tr><tr><td><code>shot_grid</code></td><td>10-30 assets 또는 parametric rule 중심</td></tr><tr><td><code>random</code></td><td>procedural 중심</td></tr></tbody></table></div>
+<p>추천 흐름:</p>
+<pre><code class="language-text">1. 많은 wafer에 wafer-level tag만 빠르게 저장
+2. 명확한 불량만 rough region 표시
+3. 학습에 쓸 것만 clean/usable mask 생성
+4. 애매한 것은 mixed_unknown으로 남기고 학습 제외
+5. 좋은 mask만 data/pattern_assets로 승격
+6. 합성 데이터 생성 후 readiness report 확인
+7. U-Net 예측을 실제 wafer에서 고쳐 다시 asset으로 저장</code></pre>
+<h2 id="9-최소-metadata-필드">9. 최소 metadata 필드</h2>
+<p>각 instance에는 최소한 아래 필드를 남깁니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>의미</th></tr></thead><tbody><tr><td><code>instance_id</code></td><td>이 결함 라벨의 고유 id</td></tr><tr><td><code>family</code></td><td><code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>, <code>random</code>, 또는 <code>mixed_unknown</code></td></tr><tr><td><code>label_type</code></td><td><code>manual_mask</code>, <code>parametric_mask</code>, <code>weak_region</code>, <code>wafer_tag_only</code></td></tr><tr><td><code>bbox_xywh</code></td><td>source wafer 기준 외곽 사각형</td></tr><tr><td><code>mask_path</code></td><td>full-size family mask 경로</td></tr><tr><td><code>label_confidence</code></td><td><code>high</code>, <code>medium</code>, <code>low</code></td></tr><tr><td><code>mask_quality</code></td><td><code>clean</code>, <code>usable</code>, <code>rough</code></td></tr><tr><td><code>is_training_eligible</code></td><td>U-Net target으로 써도 되는지</td></tr><tr><td><code>ambiguous_reason</code></td><td>학습 제외 또는 low confidence일 때 이유</td></tr></tbody></table></div>
+<p>추가로 있으면 좋은 필드:</p>
+<ul>
+<li><code>product_id</code></li>
+<li><code>lot_id</code></li>
+<li><code>process_step</code></li>
+<li><code>reviewer</code></li>
+<li><code>review_status</code></li>
+<li><code>source_manifest</code></li>
+<li><code>location_summary</code></li>
+</ul>
+<h2 id="10-판단-규칙">10. 판단 규칙</h2>
+<ul>
+<li>모양이 명확하면 공정 원인 추정보다 geometry 기준으로 라벨링합니다.</li>
+<li>family가 애매하면 <code>mixed_unknown</code>으로 보관하고 학습에서 제외합니다.</li>
+<li>normal background가 많이 들어간 mask는 training eligible이 아닙니다.</li>
+<li>wafer-wide pattern도 의미 있는 band, arc, 반복 위치만 mask로 잡습니다.</li>
+<li>한 pixel이 여러 family에 해당하면 multi-label을 허용합니다.</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

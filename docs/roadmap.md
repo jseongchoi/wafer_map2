@@ -1,167 +1,174 @@
-# Roadmap
+# 로드맵
 
-현재 로드맵은 direct segmentation dataset pipeline을 기준으로 합니다. 모델은 중요하지만, 지금 병목은 학습 코드가 아니라 믿을 수 있는 defect mask 데이터셋입니다.
+이 문서는 WaferMap을 어떤 순서로 구현하고 검증할지 정리합니다.
+현재 중심은 “대표 불량 패턴을 모아 합성 segmentation dataset을 만드는 것”입니다.
 
-## Phase 0. Scope Lock
+## Phase 0. 범위 고정
 
 상태: 완료
 
-- 입력은 wafer grade 0-7 map입니다.
-- 1차 목표는 defect segmentation dataset 제작입니다.
-- label은 in-repo segmentation family로 관리합니다.
-- model training/evaluation은 dataset path 안정화 뒤 진행합니다.
-- `run_segmentation_tool.py`를 primary annotation surface로 사용합니다.
+결정:
 
-참조 문서:
+- wafer classification이 아니라 multi-label segmentation을 목표로 합니다.
+- target은 family별 binary mask입니다.
+- `local`, `scratch`, `ring`, `edge`, `shot_grid`, `random`을 primary family로 둡니다.
+- 애매한 불량은 억지로 학습 target에 넣지 않습니다.
 
-- [Project Overview](project_overview.md)
-- [End-To-End Workflow](end_to_end_workflow.md)
-- [Segmentation Tool Workflow](segmentation_tool_workflow.md)
+산출물:
+
+- [핵심 방향](core_direction.md)
+- [불량 Family 정의](pattern_taxonomy.md)
 
 ## Phase 1. Direct Segmentation Tool
 
-상태: 구현됨, 실제 wafer 운영 검증 필요
+상태: 현재
 
-구현됨:
+목표:
 
-- `scripts/run_segmentation_tool.py`
-- browser canvas 기반 brush/lasso mask editing
-- family별 multi-label mask 저장
-- prediction mask prefill
-- model proposal preview/apply
-- large wafer downsample editing and source-resolution save
+- 실제 wafer를 열고 사람이 mask를 만들 수 있어야 합니다.
+- prediction JSON을 prefill로 불러와 수정할 수 있어야 합니다.
+- 수정된 mask를 pattern asset으로 저장할 수 있어야 합니다.
 
-다음 보강:
+예시 명령:
 
-- 실제 wafer batch에서 annotator가 family를 헷갈리지 않는지 확인합니다.
-- save/reopen review loop를 더 짧게 만듭니다.
-- correction history를 asset metadata와 연결합니다.
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets
+```
+
+완료 기준:
+
+- `local` blob을 수동 mask로 저장 가능
+- `scratch`, `ring`, `edge`, `shot_grid`는 parametric workflow 방향이 문서화됨
+- asset report에서 저장 결과 확인 가능
 
 ## Phase 2. Pattern Asset Library
 
-상태: 구현됨, 품질 축적 필요
+상태: 현재
 
-구현됨:
+목표:
 
-- `grade.png`, `mask.png`, `preview.png`, `metadata.json` asset format
-- direct tool source metadata
-- asset scan/report
-- compatibility Pattern Asset Builder filename
+- family별 좋은 대표 예시를 모읍니다.
+- asset마다 source wafer, family, label_type, bbox, quality가 남아야 합니다.
 
-다음 보강:
+처음 목표량:
 
-- `local`, `scratch`, `ring`, `edge` 실제 asset을 충분히 모읍니다.
-- edge band와 ring처럼 전역적으로 큰 pattern의 라벨링 규칙을 문서화합니다.
-- asset quality report에서 mask leakage, wrong family, split/merge issue를 바로 보이게 합니다.
+| Family | 1차 목표 |
+|---|---|
+| `local` | 50개 이상 |
+| `scratch` | 30개 이상 |
+| `ring` | 20개 이상 또는 rule 중심 |
+| `edge` | 20개 이상 또는 rule 중심 |
+| `shot_grid` | 10개 이상 또는 rule 중심 |
+| `random` | baseline sample 충분히 |
 
 ## Phase 3. Hybrid Synthetic Data
 
-상태: 구현됨
+상태: 현재
 
-구현됨:
+목표:
 
-- `compose_synthetic_from_assets.py`
-- `source_jitter`, `polar_jitter`, and `random_valid` placement
-- procedural fallback for `scratch`, `edge`, `shot_grid`, `random`
-- multi-label `pattern_masks`
+- 실제 asset과 procedural fallback을 섞어 합성 sample을 만듭니다.
+- 각 sample은 `arrays.npz`와 `metadata.json`을 가져야 합니다.
+- `pattern_masks`가 family별 target을 포함해야 합니다.
 
-다음 보강:
+예시 명령:
 
-- 실제 wafer feedback으로 edge sector, ring continuity, shot-grid realism을 조정합니다.
-- product별 shot layout 정보가 있으면 `shot_grid` generator를 보정합니다.
-- STBY/missing-test blob을 별도 model channel로 둘지 결정합니다.
+```powershell
+python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20
+```
 
-## Phase 4. Readiness And Smoke Validation
+## Phase 4. Readiness와 Smoke Validation
 
-상태: 구현됨
+상태: 현재
 
-구현됨:
+목표:
 
-- `asset_segmentation_manifest.csv`
-- segmentation readiness report
-- Segmentation Smoke Test
-- embedding smoke diagnostic
+- synthetic dataset이 U-Net 학습에 들어갈 수 있는지 검사합니다.
+- family coverage, mask ratio, split을 확인합니다.
 
-다음 보강:
+예시 명령:
 
-- synthetic dataset versioning을 추가합니다.
-- family별 최소 positive sample 기준을 운영 config로 뺍니다.
-- asset report와 readiness report를 더 직접 연결합니다.
+```powershell
+python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html
+```
+
+완료 기준:
+
+- `asset_segmentation_manifest.csv` 생성
+- report 생성
+- pipeline test 통과
 
 ## Phase 5. Small U-Net Training
 
-상태: entrypoint 구현됨, 실제 학습은 PyTorch 환경 필요
+상태: 다음
 
-구현 파일:
+목표:
 
-```text
-scripts/train_unet_segmentation.py
-scripts/export_unet_predictions.py
-```
+- coordinate-aware small U-Net을 학습합니다.
+- 모델 prediction을 correction tool seed로 export합니다.
 
-학습 명령:
+예시 명령:
 
 ```powershell
 python scripts/train_unet_segmentation.py `
   --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
-  --model-out outputs/models/asset_unet_segmentation.pt `
-  --output-size 96 `
-  --epochs 20
+  --out-model outputs/models/asset_unet_segmentation.pt
 ```
-
-Prediction export command:
 
 ```powershell
 python scripts/export_unet_predictions.py `
   --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
   --model outputs/models/asset_unet_segmentation.pt `
-  --out outputs/predictions/fbm_prediction_masks.json `
-  --split val `
-  --threshold 0.5
+  --out outputs/predictions/fbm_prediction_masks.json
 ```
 
-완료 기준:
+성공 기준:
 
-- family별 validation IoU/recall 계산
-- scratch recall, local small-blob recall, ring continuity 확인
-- edge/ring 같은 global pattern에서 failure case 수집
-- model output을 `fbm_prediction_masks/v1`로 export하고 tool에서 correction seed로 로드
+- 모델이 shape 오류 없이 학습됨
+- prediction이 전부 blank가 아님
+- segmentation tool에서 prediction을 수정 가능
 
 ## Phase 6. Active Learning
 
-상태: 설계 단계
+상태: 다음
 
 목표:
 
 ```text
-model prediction
--> export_unet_predictions.py
--> fbm_prediction_masks/v1
--> run_segmentation_tool.py --prediction-json
--> human correction
--> updated pattern assets / training labels
--> retraining
+모델 예측
+-> 사람이 수정
+-> 수정 mask를 새 asset으로 저장
+-> 합성 데이터 업데이트
+-> 재학습
 ```
 
-필요 작업:
+이 단계부터 실제 wafer와 synthetic wafer 사이의 차이를 줄입니다.
 
-- threshold, split, and sample selection policy for repeated prediction export
-- correction history를 asset metadata와 연결
-- repeated wafer review loop 운영
-- model proposals를 family별 confidence와 함께 표시
+## Phase 7. Retrieval과 유사 wafer 검색
 
-## Phase 7. Retrieval And Similarity Search
+상태: 보조
 
-상태: smoke diagnostic만 유지
+retrieval/embedding 계열 실험은 남겨두지만 현재 주력 workflow는 아닙니다.
+나중에 아래 용도로 사용할 수 있습니다.
 
-embedding retrieval은 최종 제품에는 유용하지만 지금 1순위는 아닙니다. segmentation model이 안정화된 뒤 encoder embedding을 저장하고, cosine/FAISS 기반 similar wafer search로 확장합니다.
+- 비슷한 wafer 찾기
+- 리뷰 우선순위 정하기
+- 새 defect 후보 추천
 
-## Current Priority
+## 현재 우선순위
 
-1. 실제 wafer manifest를 segmentation tool로 열어 mask asset 저장 workflow를 검증합니다.
-2. family별 annotation rule을 운영 가능한 형태로 다듬습니다.
-3. 저장된 asset 품질을 review합니다.
-4. 합성 dataset report를 보고 edge/ring/global pattern realism을 보정합니다.
-5. PyTorch 환경에서 small U-Net 학습을 시작합니다.
+1. 실제 wafer에서 명확한 family별 예시를 모읍니다.
+2. `shot_grid`, `ring`, `edge` parametric label을 더 실용적으로 만듭니다.
+3. 합성 sample의 `pattern_masks`를 계속 검증합니다.
+4. U-Net prediction correction loop를 실제 wafer에서 반복합니다.

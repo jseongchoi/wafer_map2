@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>불량 Family 정의 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>불량 Family 정의</h1>
+      <p>docs/pattern_taxonomy.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#불량-family-정의">불량 Family 정의</a>
+<a class="toc-level-2" href="#1-현재-모델-family">1. 현재 모델 family</a>
+<a class="toc-level-2" href="#2-local">2. local</a>
+<a class="toc-level-2" href="#3-scratch">3. scratch</a>
+<a class="toc-level-2" href="#4-ring">4. ring</a>
+<a class="toc-level-2" href="#5-edge">5. edge</a>
+<a class="toc-level-2" href="#6-shot_grid">6. shot_grid</a>
+<a class="toc-level-2" href="#7-random">7. random</a>
+<a class="toc-level-2" href="#8-stby-missing-test">8. STBY / Missing Test</a>
+<a class="toc-level-2" href="#9-애매한-경우">9. 애매한 경우</a>
+<a class="toc-level-2" href="#10-target-계약">10. Target 계약</a>
+    </aside>
+    <article class="content">
+      <h1 id="불량-family-정의">불량 Family 정의</h1>
+<p>이 문서는 WaferMap에서 사용하는 defect family를 정의합니다. family 정의가 흔들리면 라벨 품질이 바로 무너지므로, 애매한 경우 이 문서를 기준으로 판단합니다.</p>
+<h2 id="1-현재-모델-family">1. 현재 모델 family</h2>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>정의</th><th>예시</th><th>라벨 방식</th></tr></thead><tbody><tr><td><code>local</code></td><td>작고 국소적인 blob/cluster</td><td>특정 die 근처만 fail</td><td>수동 mask</td></tr><tr><td><code>scratch</code></td><td>길게 이어지는 선형/곡선형 불량</td><td>중앙 대각선 scratch</td><td>polyline+width 또는 mask</td></tr><tr><td><code>ring</code></td><td>원형/부분 원형 band</td><td>반지름 300px 부근 ring</td><td>center/radius/width</td></tr><tr><td><code>edge</code></td><td>wafer edge 근처 band/sector</td><td>오른쪽 edge fail</td><td>angle/radial range</td></tr><tr><td><code>shot_grid</code></td><td>shot 상대 위치 반복 불량</td><td>각 shot의 왼쪽 아래 die fail</td><td>shot layout + affected slot</td></tr><tr><td><code>random</code></td><td>구조가 약한 산발 fail</td><td>드문드문 fail pixel</td><td>procedural 또는 보조</td></tr></tbody></table></div>
+<h2 id="2-local">2. local</h2>
+<p><code>local</code>은 작은 영역에 국소적으로 몰린 불량입니다.</p>
+<p>좋은 예:</p>
+<pre><code class="language-text">한 wafer의 왼쪽 아래에 20x30px 정도의 뚜렷한 blob
+특정 die 주변만 fail density가 높음</code></pre>
+<p>나쁜 예:</p>
+<pre><code class="language-text">wafer 절반이 흐리게 나빠짐
+edge 전체가 나빠짐
+긴 선 형태</code></pre>
+<h2 id="3-scratch">3. scratch</h2>
+<p><code>scratch</code>는 선처럼 이어지는 불량입니다. 직선일 수도 있고 곡선일 수도 있습니다.</p>
+<p>좋은 예:</p>
+<pre><code class="language-text">wafer 중앙을 가로지르는 긴 선
+여러 die를 관통하는 얇은 band</code></pre>
+<p>라벨 팁:</p>
+<ul>
+<li>선 중심을 polyline으로 찍고 width를 지정할 수 있으면 parametric label이 좋습니다.</li>
+<li>실제 경계가 복잡하면 수동 mask를 씁니다.</li>
+</ul>
+<h2 id="4-ring">4. ring</h2>
+<p><code>ring</code>은 wafer 중심 기준 특정 반지름 근처에 나타나는 원형 또는 호형 불량입니다.</p>
+<p>좋은 예:</p>
+<pre><code class="language-text">반지름 300px 부근에 얇은 원형 band
+270도 정도만 이어진 partial ring</code></pre>
+<p>라벨 팁:</p>
+<pre><code class="language-json">{
+  &quot;center_xy&quot;: [512, 512],
+  &quot;radius&quot;: 300,
+  &quot;width&quot;: 24,
+  &quot;theta_range_deg&quot;: [20, 310]
+}</code></pre>
+<h2 id="5-edge">5. edge</h2>
+<p><code>edge</code>는 wafer edge 근처에 붙어 있는 불량입니다.</p>
+<p>좋은 예:</p>
+<pre><code class="language-text">오른쪽 2시~5시 방향 edge만 fail
+wafer 외곽 10% ring 영역에만 이상</code></pre>
+<p><code>ring</code>과 헷갈릴 때:</p>
+<ul>
+<li>wafer 중심에서 특정 반지름 전체가 문제면 <code>ring</code></li>
+<li>wafer 가장자리 sector가 문제면 <code>edge</code></li>
+</ul>
+<h2 id="6-shot_grid">6. shot_grid</h2>
+<p><code>shot_grid</code>는 shot 구조 기준으로 같은 상대 위치에 반복되는 불량입니다.</p>
+<p>예:</p>
+<pre><code class="language-text">모든 shot마다 왼쪽 아래 die가 fail
+3x3 shot 안에서 [2, 0] slot만 반복적으로 낮음</code></pre>
+<p>이 경우 사람이 모든 반복 위치를 칠하지 않습니다. shot layout과 affected slot을 저장하고 코드가 mask를 만듭니다.</p>
+<h2 id="7-random">7. random</h2>
+<p><code>random</code>은 구조가 약한 sparse fail pattern입니다. 주요 목적은 모델이 모든 fail을 <code>local</code>이나 <code>scratch</code>로 오해하지 않게 하는 baseline context입니다.</p>
+<p>주의:</p>
+<ul>
+<li>뚜렷한 family가 있으면 <code>random</code>으로 숨기지 않습니다.</li>
+<li>너무 많은 random을 넣으면 모델이 defect family를 덜 선명하게 배울 수 있습니다.</li>
+</ul>
+<h2 id="8-stby-missing-test">8. STBY / Missing Test</h2>
+<p><code>stby_pattern</code>은 primary defect target이 아닙니다. 이는 측정/관측 가능 영역을 설명하는 context입니다.</p>
+<p>학습 target:</p>
+<pre><code class="language-text">local, scratch, ring, edge, shot_grid, random</code></pre>
+<p>보조 context:</p>
+<pre><code class="language-text">stby_mask, valid_test_mask, wafer_mask</code></pre>
+<h2 id="9-애매한-경우">9. 애매한 경우</h2>
+<p>애매하면 억지로 family를 정하지 않습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>상황</th><th>처리</th></tr></thead><tbody><tr><td>scratch인지 edge인지 불명확</td><td>review-only</td></tr><tr><td>diffuse라 경계가 없음</td><td><code>mixed_unknown</code></td></tr><tr><td>두 family가 겹쳐 분리 어려움</td><td>instance를 나누거나 학습 제외</td></tr><tr><td>실제 defect인지 전처리 artifact인지 모름</td><td>학습 제외</td></tr></tbody></table></div>
+<h2 id="10-target-계약">10. Target 계약</h2>
+<p>U-Net target은 family별 binary mask입니다.</p>
+<pre><code class="language-text">target channel order:
+local
+scratch
+ring
+edge
+shot_grid
+random</code></pre>
+<p>각 pixel은 여러 family에 동시에 속할 수 있습니다. 따라서 multi-class softmax가 아니라 multi-label sigmoid 구조가 맞습니다.</p>
+    </article>
+  </main>
+</body>
+</html>

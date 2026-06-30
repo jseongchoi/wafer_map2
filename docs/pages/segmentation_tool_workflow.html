@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>세그멘테이션 도구 흐름 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>세그멘테이션 도구 흐름</h1>
+      <p>docs/segmentation_tool_workflow.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#세그멘테이션-도구-흐름">세그멘테이션 도구 흐름</a>
+<a class="toc-level-2" href="#1-도구를-여는-명령">1. 도구를 여는 명령</a>
+<a class="toc-level-2" href="#2-도구에서-하는-일">2. 도구에서 하는 일</a>
+<a class="toc-level-2" href="#3-family-선택-기준">3. Family 선택 기준</a>
+<a class="toc-level-2" href="#4-bbox와-mask의-차이">4. bbox와 mask의 차이</a>
+<a class="toc-level-2" href="#5-parametric-label이-필요한-경우">5. Parametric label이 필요한 경우</a>
+<a class="toc-level-3" href="#shot_grid-예시">shot_grid 예시</a>
+<a class="toc-level-3" href="#ring-예시">ring 예시</a>
+<a class="toc-level-3" href="#scratch-예시">scratch 예시</a>
+<a class="toc-level-2" href="#6-저장하면-안-되는-경우">6. 저장하면 안 되는 경우</a>
+<a class="toc-level-2" href="#7-좋은-asset의-기준">7. 좋은 asset의 기준</a>
+<a class="toc-level-2" href="#8-prediction-prefill-사용법">8. Prediction prefill 사용법</a>
+<a class="toc-level-2" href="#9-도구-품질-체크">9. 도구 품질 체크</a>
+    </aside>
+    <article class="content">
+      <h1 id="세그멘테이션-도구-흐름">세그멘테이션 도구 흐름</h1>
+<p>이 문서는 <code>run_segmentation_tool.py</code>를 열었을 때 어떤 기준으로 mask를 만들고 asset을 저장해야 하는지 설명합니다.</p>
+<h2 id="1-도구를-여는-명령">1. 도구를 여는 명령</h2>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p>모델 예측을 먼저 깔아놓고 수정하려면:</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets `
+  --prediction-json outputs/predictions/fbm_prediction_masks.json</code></pre>
+<h2 id="2-도구에서-하는-일">2. 도구에서 하는 일</h2>
+<p>작업자는 wafer image를 보고 family별 mask를 만듭니다.</p>
+<pre><code class="language-text">wafer image
+-&gt; family 선택
+-&gt; mask 또는 rule 생성
+-&gt; preview 확인
+-&gt; pattern asset 저장</code></pre>
+<p>저장된 asset은 나중에 합성 wafer를 만들 때 재사용됩니다.</p>
+<h2 id="3-family-선택-기준">3. Family 선택 기준</h2>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>도구에서 찾는 모습</th><th>좋은 저장 방식</th></tr></thead><tbody><tr><td><code>local</code></td><td>작고 뚜렷한 blob</td><td>brush/lasso mask</td></tr><tr><td><code>scratch</code></td><td>긴 선, 곡선, 대각선</td><td>polyline + width 또는 mask</td></tr><tr><td><code>ring</code></td><td>원형/호형 band</td><td>center/radius/width rule</td></tr><tr><td><code>edge</code></td><td>edge 근처 sector/band</td><td>angle range + radial width</td></tr><tr><td><code>shot_grid</code></td><td>shot마다 같은 상대 위치 반복</td><td>shot layout + affected slot</td></tr><tr><td><code>random</code></td><td>산발 fail</td><td>학습 baseline용 sparse mask</td></tr></tbody></table></div>
+<h2 id="4-bbox와-mask의-차이">4. bbox와 mask의 차이</h2>
+<p>도구에서 bbox가 필요할 수 있지만, bbox는 학습 정답이 아닙니다.</p>
+<pre><code class="language-json">{
+  &quot;bbox_xywh&quot;: [120, 720, 80, 70],
+  &quot;mask_path&quot;: &quot;masks/local.png&quot;
+}</code></pre>
+<ul>
+<li><code>bbox_xywh</code>: 사람이 review하거나 crop할 때 쓰는 위치 힌트</li>
+<li><code>mask_path</code>: U-Net이 실제로 배우는 정답</li>
+</ul>
+<p>불량이 사각형이 아니라면 bbox 안의 실제 불량 pixel만 mask로 칠하면 됩니다.</p>
+<h2 id="5-parametric-label이-필요한-경우">5. Parametric label이 필요한 경우</h2>
+<p>아래 유형은 손으로 전부 칠하지 않는 것이 좋습니다.</p>
+<h3 id="shot_grid-예시">shot_grid 예시</h3>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;shot_grid&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;params&quot;: {
+    &quot;shot_rows&quot;: 3,
+    &quot;shot_cols&quot;: 3,
+    &quot;affected_slot&quot;: [2, 0],
+    &quot;region&quot;: &quot;lower_left&quot;,
+    &quot;region_fraction&quot;: [0.0, 0.0, 0.35, 0.35]
+  }
+}</code></pre>
+<p>뜻:</p>
+<pre><code class="language-text">3x3 shot layout에서
+각 shot의 왼쪽 아래 die 영역이 반복적으로 불량이다.</code></pre>
+<p>코드는 이 rule을 full-size binary mask로 바꿉니다.</p>
+<h3 id="ring-예시">ring 예시</h3>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;ring&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;params&quot;: {
+    &quot;center_xy&quot;: [512, 512],
+    &quot;radius&quot;: 310,
+    &quot;width&quot;: 24,
+    &quot;theta_range_deg&quot;: [0, 360]
+  }
+}</code></pre>
+<h3 id="scratch-예시">scratch 예시</h3>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;scratch&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;params&quot;: {
+    &quot;polyline_xy&quot;: [[180, 650], [340, 620], [620, 590], [810, 540]],
+    &quot;width&quot;: 18
+  }
+}</code></pre>
+<h2 id="6-저장하면-안-되는-경우">6. 저장하면 안 되는 경우</h2>
+<p>아래 상황에서는 학습 target으로 저장하지 않습니다.</p>
+<ul>
+<li>경계가 너무 흐려서 family가 불명확함</li>
+<li>여러 family가 섞였는데 분리하기 어려움</li>
+<li>sensor/전처리 artifact처럼 실제 defect인지 모름</li>
+<li>wafer 밖 영역이 mask에 많이 포함됨</li>
+</ul>
+<p>이런 경우는 <code>mixed_unknown</code> 또는 review-only 기록으로 남깁니다.</p>
+<h2 id="7-좋은-asset의-기준">7. 좋은 asset의 기준</h2>
+<p>좋은 asset:</p>
+<pre><code class="language-text">family가 명확하다.
+mask가 원본 불량 위치와 맞다.
+wafer 밖을 포함하지 않는다.
+metadata에 source wafer와 label_type이 남아 있다.
+합성에 재사용해도 자연스럽다.</code></pre>
+<p>나쁜 asset:</p>
+<pre><code class="language-text">왜 이 family인지 설명이 안 된다.
+bbox만 있고 mask가 없다.
+불량보다 정상 영역이 훨씬 많이 들어 있다.
+애매한 diffuse를 억지로 scratch라고 저장했다.</code></pre>
+<h2 id="8-prediction-prefill-사용법">8. Prediction prefill 사용법</h2>
+<p>모델이 만든 예측은 작업을 줄이기 위한 초안입니다. 그대로 정답으로 믿으면 안 됩니다.</p>
+<p>예측 JSON은 보통 <code>export_unet_predictions.py</code>로 만듭니다.</p>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json</code></pre>
+<p>작업 순서:</p>
+<ol>
+<li>prediction mask를 불러옵니다.</li>
+<li>family가 틀린 영역을 지웁니다.</li>
+<li>빠진 명확한 영역을 추가합니다.</li>
+<li>수정된 mask를 새 asset 또는 correction data로 저장합니다.</li>
+</ol>
+<p>이 loop가 쌓이면 synthetic-only 모델에서 실제 wafer에 더 맞는 모델로 이동할 수 있습니다.</p>
+<h2 id="9-도구-품질-체크">9. 도구 품질 체크</h2>
+<p>도구를 수정한 뒤 확인할 것:</p>
+<ul>
+<li>wafer image가 정상적으로 표시되는가?</li>
+<li>brush/lasso가 mask를 실제로 바꾸는가?</li>
+<li>family별 mask가 저장되는가?</li>
+<li><code>--prediction-json</code>을 넣으면 예측이 prefill되는가?</li>
+<li>저장된 asset을 report에서 다시 볼 수 있는가?</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

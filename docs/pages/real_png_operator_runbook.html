@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>실제 raw PNG 운영 안내서 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>실제 raw PNG 운영 안내서</h1>
+      <p>docs/real_png_operator_runbook.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#실제-raw-png-운영-안내서">실제 raw PNG 운영 안내서</a>
+<a class="toc-level-2" href="#1-입력-폴더">1. 입력 폴더</a>
+<a class="toc-level-2" href="#2-geometry-json">2. Geometry JSON</a>
+<a class="toc-level-2" href="#3-manifest-생성">3. manifest 생성</a>
+<a class="toc-level-2" href="#4-생성-산출물">4. 생성 산출물</a>
+<a class="toc-level-2" href="#5-실행-후-확인-순서">5. 실행 후 확인 순서</a>
+<a class="toc-level-2" href="#6-리뷰-작성">6. 리뷰 작성</a>
+<a class="toc-level-2" href="#7-실패-시-판단">7. 실패 시 판단</a>
+<a class="toc-level-2" href="#8-다음-단계">8. 다음 단계</a>
+    </aside>
+    <article class="content">
+      <h1 id="실제-raw-png-운영-안내서">실제 raw PNG 운영 안내서</h1>
+<p>이 문서는 실제 wafer PNG 폴더를 받았을 때 처음 실행하는 절차를 설명합니다. 목표는 raw PNG를 바로 모델에 넣는 것이 아니라, sample manifest와 검토 report를 만들어 segmentation asset 작업으로 연결하는 것입니다.</p>
+<h2 id="1-입력-폴더">1. 입력 폴더</h2>
+<p>예시:</p>
+<pre><code class="language-text">data/raw/product_A/
+  lot_001/
+    WAFER_0001.png
+    WAFER_0002.png
+  lot_002/
+    WAFER_0101.png</code></pre>
+<p>권장:</p>
+<ul>
+<li>제품/공정/lot 단위가 경로에 드러나게 둡니다.</li>
+<li>원본 파일명은 가능하면 바꾸지 않습니다.</li>
+<li>raw data는 git에 넣지 않습니다.</li>
+</ul>
+<h2 id="2-geometry-json">2. Geometry JSON</h2>
+<p>wafer center, radius, die size 같은 geometry가 있으면 JSON으로 둡니다.</p>
+<pre><code class="language-json">{
+  &quot;wafer_center_xy&quot;: [512, 512],
+  &quot;wafer_radius_px&quot;: 490,
+  &quot;die_pitch_xy&quot;: [12, 12],
+  &quot;notch_direction&quot;: &quot;down&quot;
+}</code></pre>
+<p>geometry가 없으면 초기 분석은 가능하지만 <code>edge</code>, <code>ring</code>, <code>shot_grid</code> 같은 위치 기반 label 품질이 떨어질 수 있습니다.</p>
+<h2 id="3-manifest-생성">3. manifest 생성</h2>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/real_png_batch_manifest.json `
+  --out-report-dir outputs/reports/real_png_batch</code></pre>
+<p>geometry를 줄 수 있으면:</p>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --geometry-json configs/geometry/product_A.json `
+  --out-manifest outputs/manifests/real_png_batch_manifest.json `
+  --out-report-dir outputs/reports/real_png_batch</code></pre>
+<h2 id="4-생성-산출물">4. 생성 산출물</h2>
+<pre><code class="language-text">outputs/manifests/real_png_batch_manifest.json
+outputs/reports/real_png_batch/
+  index.html
+  sample_summary.csv
+  thumbnails/</code></pre>
+<p>manifest는 이후 segmentation tool의 입력이 됩니다.</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<h2 id="5-실행-후-확인-순서">5. 실행 후 확인 순서</h2>
+<ol>
+<li>report HTML을 열어 image가 정상적으로 보이는지 확인합니다.</li>
+<li>sample 수가 예상과 맞는지 확인합니다.</li>
+<li>wafer가 뒤집히거나 crop되지 않았는지 preview를 봅니다.</li>
+<li><code>actual_net_die=0</code> 같은 이상값이 있으면 geometry 또는 threshold를 의심합니다.</li>
+<li>대표 wafer 몇 장을 segmentation tool로 열어 asset 저장을 시작합니다.</li>
+</ol>
+<h2 id="6-리뷰-작성">6. 리뷰 작성</h2>
+<p>전문가가 wafer를 빠르게 triage할 때는 review CSV를 사용할 수 있습니다.</p>
+<pre><code class="language-powershell">python scripts/make_expert_review_template.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --out outputs/reviews/product_A_review_template.csv</code></pre>
+<p>리뷰어가 채우면:</p>
+<pre><code class="language-powershell">python scripts/summarize_expert_review.py `
+  --review-csv outputs/reviews/product_A_review_template.csv `
+  --out outputs/reviews/product_A_review_summary.json</code></pre>
+<h2 id="7-실패-시-판단">7. 실패 시 판단</h2>
+<div class="table-wrap"><table><thead><tr><th>증상</th><th>원인 후보</th><th>조치</th></tr></thead><tbody><tr><td>PNG가 하나도 잡히지 않음</td><td>경로/확장자 문제</td><td><code>--input-root</code>와 파일 확장자 확인</td></tr><tr><td>wafer가 검게만 보임</td><td>gray scale 해석 문제</td><td>raw image min/max 확인</td></tr><tr><td>center/radius가 이상함</td><td>geometry 누락/오류</td><td>geometry JSON 추가</td></tr><tr><td>sample id가 중복됨</td><td>파일명 충돌</td><td>lot/path 정보를 sample id에 포함</td></tr><tr><td>report는 되지만 tool이 못 엶</td><td>manifest path 문제</td><td>manifest의 <code>image_path</code> 존재 확인</td></tr></tbody></table></div>
+<h2 id="8-다음-단계">8. 다음 단계</h2>
+<p>raw PNG 분석은 시작점일 뿐입니다. 이후 반드시 아래로 이어져야 합니다.</p>
+<pre><code class="language-text">manifest
+-&gt; segmentation tool
+-&gt; pattern asset 저장
+-&gt; asset report
+-&gt; synthetic dataset
+-&gt; readiness manifest</code></pre>
+    </article>
+  </main>
+</body>
+</html>

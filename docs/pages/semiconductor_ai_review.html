@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>반도체 AI 설계 검토 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>반도체 AI 설계 검토</h1>
+      <p>docs/semiconductor_ai_review.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#반도체-ai-설계-검토">반도체 AI 설계 검토</a>
+<a class="toc-level-2" href="#1-현재-기술-판단">1. 현재 기술 판단</a>
+<a class="toc-level-2" href="#2-왜-segmentation인가">2. 왜 segmentation인가</a>
+<a class="toc-level-2" href="#3-왜-합성-데이터를-쓰는가">3. 왜 합성 데이터를 쓰는가</a>
+<a class="toc-level-2" href="#4-observed-target만-학습">4. Observed target만 학습</a>
+<a class="toc-level-2" href="#5-입력-channel-설계">5. 입력 channel 설계</a>
+<a class="toc-level-2" href="#6-resize와-label-policy">6. Resize와 label policy</a>
+<a class="toc-level-2" href="#7-asset-composition-판단">7. Asset composition 판단</a>
+<a class="toc-level-2" href="#8-모델-성능-해석">8. 모델 성능 해석</a>
+<a class="toc-level-2" href="#9-남은-전문가-질문">9. 남은 전문가 질문</a>
+<a class="toc-level-2" href="#10-이-검토로-추가된-체크">10. 이 검토로 추가된 체크</a>
+    </aside>
+    <article class="content">
+      <h1 id="반도체-ai-설계-검토">반도체 AI 설계 검토</h1>
+<p>이 문서는 현재 WaferMap의 AI/데이터 사이언스 설계가 왜 이런 방향인지 설명합니다. 핵심은 “실제 wafer를 완벽하게 다 라벨링하지 못한다”는 현실을 전제로, 학습 가능한 segmentation dataset을 만드는 것입니다.</p>
+<h2 id="1-현재-기술-판단">1. 현재 기술 판단</h2>
+<div class="table-wrap"><table><thead><tr><th>판단</th><th>결론</th></tr></thead><tbody><tr><td>문제 형태</td><td>wafer classification이 아니라 multi-label segmentation</td></tr><tr><td>label 단위</td><td>family별 binary mask</td></tr><tr><td>데이터 확보</td><td>실제 asset + parametric rule + 합성</td></tr><tr><td>모델 역할</td><td>최종 자동 판정기보다 correction seed</td></tr><tr><td>위치 정보</td><td>wafer 좌표, radius, angle, edge distance를 input에 포함</td></tr><tr><td>검증 기준</td><td>mask 품질, readiness, correction 가능성</td></tr></tbody></table></div>
+<h2 id="2-왜-segmentation인가">2. 왜 segmentation인가</h2>
+<p>wafer 한 장에는 여러 불량이 같이 나타납니다.</p>
+<pre><code class="language-text">local blob + scratch + edge band</code></pre>
+<p>classification으로 “scratch wafer”라고만 하면 local과 edge 정보가 사라집니다. 따라서 target은 아래처럼 family별 mask가 되어야 합니다.</p>
+<pre><code class="language-text">target[local, y, x]
+target[scratch, y, x]
+target[edge, y, x]</code></pre>
+<p>이는 multi-class가 아니라 multi-label입니다. 한 pixel이 여러 family에 겹칠 수도 있으므로 sigmoid 기반 target이 더 자연스럽습니다.</p>
+<h2 id="3-왜-합성-데이터를-쓰는가">3. 왜 합성 데이터를 쓰는가</h2>
+<p>실제 wafer만으로는 세 가지 문제가 있습니다.</p>
+<ol>
+<li>불량 수가 family별로 불균형합니다.</li>
+<li>모든 pixel mask를 사람이 만들기 어렵습니다.</li>
+<li>애매한 불량은 정의 자체가 흔들립니다.</li>
+</ol>
+<p>합성 데이터는 이 문제를 완화합니다.</p>
+<pre><code class="language-text">실제 wafer에서 local asset 저장
+ring은 radius/width rule로 생성
+shot_grid는 shot layout rule로 생성
+base wafer 위에 조합
+-&gt; 정답 mask를 아는 sample 생성</code></pre>
+<h2 id="4-observed-target만-학습">4. Observed target만 학습</h2>
+<p>모델은 관측 가능한 영역에서만 학습해야 합니다.</p>
+<pre><code class="language-text">target = pattern_mask &amp; wafer_mask &amp; valid_test_mask</code></pre>
+<p>wafer 밖이나 측정되지 않은 영역을 target으로 넣으면 모델이 잘못된 위치 prior를 배울 수 있습니다.</p>
+<h2 id="5-입력-channel-설계">5. 입력 channel 설계</h2>
+<p>U-Net 입력은 단순 image 한 장이 아니라 좌표 정보를 함께 포함합니다.</p>
+<p>예시 channel:</p>
+<pre><code class="language-text">severity_mean
+severity_max
+fail_density
+wafer_mask
+valid_test_mask
+stby_mask
+x_norm
+y_norm
+radial_norm
+angle_sin
+angle_cos
+edge_distance_norm</code></pre>
+<p>반도체 wafer defect는 위치 의존성이 큽니다. <code>edge</code>, <code>ring</code>, <code>shot_grid</code> 같은 패턴은 좌표 정보를 주지 않으면 모델이 더 어렵게 배웁니다.</p>
+<h2 id="6-resize와-label-policy">6. Resize와 label policy</h2>
+<p>image를 resize할 때는 input과 mask를 같은 좌표 변환으로 처리해야 합니다.</p>
+<p>권장:</p>
+<ul>
+<li>severity 같은 연속/등급 값은 적절한 interpolation 또는 보존 규칙 사용</li>
+<li>binary mask는 nearest-like 방식으로 class boundary를 보존</li>
+<li>target은 최종적으로 0/1 binary로 유지</li>
+</ul>
+<p>위험한 예:</p>
+<pre><code class="language-text">image만 resize하고 mask는 원본 좌표를 그대로 둠</code></pre>
+<p>이 경우 preview는 그럴듯해도 학습 target이 어긋납니다.</p>
+<h2 id="7-asset-composition-판단">7. Asset composition 판단</h2>
+<p>합성할 때는 너무 예쁘거나 너무 비현실적인 sample을 만들면 안 됩니다.</p>
+<p>좋은 합성:</p>
+<pre><code class="language-text">실제 local asset 1개
+scratch procedural 1개
+edge sector 1개
+기존 wafer fail density 유지</code></pre>
+<p>나쁜 합성:</p>
+<pre><code class="language-text">wafer 대부분을 defect로 채움
+family가 6개 모두 과하게 겹침
+valid_test_mask 밖에 target 생성</code></pre>
+<h2 id="8-모델-성능-해석">8. 모델 성능 해석</h2>
+<p>초기 U-Net은 production 판정기가 아닙니다. 초기 성공 기준은 아래와 같습니다.</p>
+<ul>
+<li>prediction이 blank보다 낫다.</li>
+<li>사람이 수정할 때 시간을 줄인다.</li>
+<li>특정 family에서 false positive/false negative 경향이 보인다.</li>
+<li>수정 결과를 asset으로 다시 축적할 수 있다.</li>
+</ul>
+<p>즉, “한 번 학습해서 끝”이 아니라 correction loop가 설계의 일부입니다.</p>
+<h2 id="9-남은-전문가-질문">9. 남은 전문가 질문</h2>
+<p>전문가에게 확인해야 할 질문:</p>
+<ul>
+<li><code>shot_grid</code>의 실제 shot layout metadata를 어디서 얻을 수 있는가?</li>
+<li><code>ring</code>과 <code>edge</code>가 겹치는 wafer를 어떤 기준으로 나눌 것인가?</li>
+<li>diffuse 불량을 별도 family로 둘지, <code>mixed_unknown</code>으로 둘지?</li>
+<li><code>random</code>을 defect family로 유지할지 baseline context로만 둘지?</li>
+<li>제품/공정별로 family 정의가 달라지는가?</li>
+</ul>
+<h2 id="10-이-검토로-추가된-체크">10. 이 검토로 추가된 체크</h2>
+<ul>
+<li>문서에서 <code>bbox</code>와 <code>mask</code>의 역할을 분리합니다.</li>
+<li>U-Net target contract를 <code>training_data_contract.md</code>에 명확히 둡니다.</li>
+<li><code>parametric_mask</code>를 정식 라벨 유형으로 설명합니다.</li>
+<li>readiness report에서 family coverage와 mask ratio를 봅니다.</li>
+<li>HTML 문서로 생성해 작업자가 읽기 쉽게 만듭니다.</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

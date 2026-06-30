@@ -1,194 +1,137 @@
-# Real Wafer 리뷰 체크리스트
+# 실제 Wafer 리뷰 체크리스트
 
-## 결론
+이 문서는 실제 wafer 결과를 사람이 검토할 때 체크할 항목을 정리합니다.
+리뷰의 목적은 “예쁘게 점수 내기”가 아니라 다음 학습 cycle에 넣을 수 있는
+좋은 asset과 correction 정보를 얻는 것입니다.
 
-실제 wafer 5~20장으로 바로 리뷰할 수 있다. 입력은 제품별 raw PNG 폴더 또는 semantic `.npz` manifest 중 편한 방식을 쓴다.
+## 1. 리뷰 결론 형식
 
-```text
-제품별 raw PNG 폴더
--> manifest 자동 생성
--> feature / sanity / nearest-neighbor 생성
--> 전문가 리뷰 CSV 작성
--> 요약 지표 확인
-```
+wafer 하나를 보고 아래 중 하나로 결론을 냅니다.
 
-## 내가 해야 할 일
+| 결론 | 의미 | 다음 행동 |
+|---|---|---|
+| `usable_asset` | 명확한 불량 mask로 저장 가능 | asset 저장 |
+| `needs_parametric_rule` | 반복/규칙 패턴 | rule 작성 |
+| `review_only` | 애매하지만 기록 필요 | 학습 제외 |
+| `bad_input` | image/geometry 문제 | 입력 수정 |
+| `no_defect` | 학습 target 없음 | negative/context로만 사용 |
 
-1. real wafer sample 5~20장을 고른다.
-   - 가능하면 정상/edge/local/shot/ring/scratch/stby가 섞이게 고른다.
+## 2. 리뷰어가 보는 순서
 
-2. 제품별 폴더에 raw PNG를 모은다.
-   - 예: `data/raw/product_a/*.png`
-   - PNG는 8-bit grayscale이어야 한다.
-   - gray value 기준은 `0, 31, 151, 175, 191, 207, 223, 255`다.
-   - chip 전체가 `255`인 경우만 stby fail chip으로 분리한다.
+1. wafer 전체 preview를 봅니다.
+2. edge/ring/shot 반복처럼 큰 구조를 먼저 봅니다.
+3. local blob과 scratch 후보를 봅니다.
+4. family가 명확한 것만 mask로 저장합니다.
+5. 애매한 것은 억지로 넣지 않고 review-only로 남깁니다.
 
-3. batch script를 실행한다.
-   - 제품별 stby chip에서 chip size/grid를 먼저 추론한다.
-   - stby가 없거나 geometry가 애매한 제품은 `--geometry-json`으로 제품별 geometry를 준다.
+## 3. 입력 준비
 
-4. sanity 결과를 먼저 본다.
-   - FAIL이면 retrieval 리뷰보다 parser/export 문제를 먼저 고친다.
-   - PASS이면 top-k 리뷰로 넘어간다.
-
-5. `review_template.csv` 파일의 리뷰 항목을 채운다.
-   - query당 top-5 neighbor를 본다.
-   - 전체 20~50 pair 정도를 먼저 채운다.
-   - `reviewer_decision`, `dominant_defect`, `retrieval_failure_mode`, `next_action`은 가능하면 꼭 채운다.
-
-6. review summary를 생성한다.
-   - `same_family_rate`
-   - `accepted_match_rate`
-   - `missed_major_defect_rate`
-   - `next_action_queue`
-
-## 입력 준비
-
-권장 수량:
-
-- 첫 리뷰: real wafer 5~20장
-- 가능하면 정상/edge/local/shot/ring/scratch/stby가 섞인 sample
-
-폴더 예시:
+리뷰어에게 줄 파일:
 
 ```text
-data/raw/
-  product_a/
-    wafer_001.png
-    wafer_002.png
-  product_b/
-    wafer_101.png
+outputs/reports/real_png_batch/index.html
+outputs/manifests/real_png_batch_manifest.json
+outputs/reviews/product_A_review_template.csv
 ```
 
-인트라넷 공유 폴더를 그대로 써도 된다.
+가능하면 함께 줄 정보:
 
-```text
-Z:/fbm/raw_png/
-  product_a/
-    wafer_001.png
-```
+- 제품/공정 설명
+- wafer orientation
+- shot layout
+- die pitch
+- known bad region rule
 
-## 실행 명령
+## 4. 실행 명령
 
-제품별 raw PNG 폴더 실행:
+review template 생성:
 
 ```powershell
-python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz
+python scripts/make_expert_review_template.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --out outputs/reviews/product_A_review_template.csv
 ```
 
-Semantic `.npz` manifest를 직접 쓸 때:
+segmentation tool 실행:
 
 ```powershell
-python scripts/extract_real_unlabeled_features.py `
-  --manifest data/raw/real_manifest.json `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --features-out outputs/reports/real_unlabeled_features.csv `
-  --sanity-out outputs/reports/real_unlabeled_sanity.json `
-  --report-out outputs/reports/real_unlabeled_report.html `
-  --neighbors-out outputs/reports/real_unlabeled_neighbors.csv `
-  --review-template-out outputs/reports/real_unlabeled_expert_review_template.csv
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets
 ```
 
-먼저 볼 것:
+## 5. 리뷰어가 채울 것
 
-1. `report.html`
-2. `sanity.json`
-3. `features.csv`
-4. reference feature가 있으면 `review_template.csv`
+권장 column:
 
-## 리뷰어가 채울 것
+| Column | 예시 | 설명 |
+|---|---|---|
+| `sample_id` | `WAFER_0001` | wafer id |
+| `primary_family` | `scratch` | 가장 뚜렷한 family |
+| `secondary_family` | `edge` | 함께 보이는 family |
+| `review_decision` | `usable_asset` | 리뷰 결론 |
+| `label_type` | `manual_mask` | mask/rule/review-only |
+| `notes` | `중앙 scratch 명확함` | 사람이 보는 설명 |
 
-PNG batch 경로에서는 `outputs/reports/real_png_batch/review_template.csv`를 채운다.
+## 6. Family별 리뷰 질문
 
-최소 리뷰 권장:
+| Family | 질문 |
+|---|---|
+| `local` | blob 경계가 충분히 명확한가? |
+| `scratch` | 선 중심과 폭을 설명할 수 있는가? |
+| `ring` | 중심/반지름/두께로 표현 가능한가? |
+| `edge` | edge sector 범위를 말할 수 있는가? |
+| `shot_grid` | shot layout과 affected slot을 알 수 있는가? |
+| `random` | 구조 없는 sparse fail인지 확인했는가? |
 
-- query당 top-5 neighbor
-- 전체 20~50 pair
-
-필수로 채우면 좋은 column:
-
-- `reviewer_decision`
-- `query_defect_family`
-- `neighbor_defect_family`
-- `dominant_defect`
-- `clock_position_match`
-- `missed_major_defect`
-- `retrieval_failure_mode`
-- `next_action`
-- `review_comment`
-
-## 리뷰 후 요약
+## 7. 리뷰 후 요약
 
 ```powershell
 python scripts/summarize_expert_review.py `
-  --review outputs/reports/real_png_batch/review_template.csv `
-  --out outputs/reports/real_png_batch/review_summary.html `
-  --metrics outputs/reports/real_png_batch/review_summary_metrics.json
+  --review-csv outputs/reviews/product_A_review_template.csv `
+  --out outputs/reviews/product_A_review_summary.json
 ```
 
-## 나에게 주면 되는 결과
+요약에서 볼 것:
 
-- `outputs/reports/real_png_batch/sanity.json`
-- `outputs/reports/real_png_batch/batch_metadata.json`
-- `outputs/reports/real_png_batch/report.html`
-- `outputs/reports/real_png_batch/features.csv`
-- `outputs/reports/real_png_batch/neighbors.csv`
-- 채운 `outputs/reports/real_png_batch/review_template.csv`
-- `outputs/reports/real_png_batch/review_summary_metrics.json`
-- `outputs/reports/real_png_batch/review_summary.html`
+- family별 usable asset 수
+- review-only 비율
+- parametric rule이 필요한 wafer 수
+- bad input 비율
 
-같이 알려주면 좋은 메모:
+## 8. 나에게 주면 되는 결과
 
-- real wafer sample 수
-- 제품별 `chip_blocks`, `grid`
-- `stby_chip_count_est` 범위
-- `grade_min`, `grade_max`
-- sanity warning 종류
-- 사용한 옵션: `--geometry-json`, `--wafer-mask-strategy`
-- `.npz` 경로를 썼다면 사용한 array key mapping
-- `orientation` 값
-- sanity FAIL이 있었다면 어떤 error였는지
+사용자가 리뷰를 마친 뒤 다음 세 가지를 주면 됩니다.
 
-## 판단 기준
+```text
+1. 수정된 review CSV
+2. 저장된 pattern assets 폴더
+3. 리뷰 중 애매했던 예시 목록
+```
 
-우선 성공 기준:
+이 정보로 다음 합성 데이터셋과 U-Net 재학습을 진행할 수 있습니다.
 
-- sanity error 0
-- feature extraction 완료
-- query별 top-k neighbor 생성
-- reviewer가 봤을 때 top-k 안에 `same_family` 또는 `partial_match`가 일부 존재
+## 9. 파일럿 성공 기준
 
-주의 신호:
+처음 파일럿은 작게 봅니다.
 
-- 대부분 `mismatch`
-- `parser_or_mask_issue`가 반복
-- `missed_major_defect=yes`가 많음
-- scratch/local에서 계속 놓침
-- stby가 Grade 7처럼 처리된 흔적
+- 20~50장 wafer를 열어볼 수 있음
+- family별로 최소 몇 개의 명확한 예시를 저장함
+- `shot_grid` 또는 `edge`처럼 rule이 필요한 유형을 식별함
+- asset report에서 품질을 확인함
+- 합성 sample로 readiness manifest를 만들 수 있음
 
-리뷰 후 결정:
+## 10. AI 모델 구현 상태
 
-- accepted match가 충분하면 현재 feature 검색을 real triage용 최소 버전으로 유지
-- 특정 family만 약하면 해당 feature 보강
-- scratch/local이 약하면 segmentation 또는 scratch 전용 representation으로 이동
-- parser/mask 문제가 있으면 AI/model보다 export 형식부터 수정
+현재 AI 모델은 “완성된 자동 검사기”가 아닙니다.
+현재 역할은 아래입니다.
 
-## 파일럿 성공 판정 기준
+```text
+synthetic data로 small U-Net 학습
+-> 실제 wafer에 prediction seed 제공
+-> 사람이 수정
+-> 수정 결과를 다시 asset으로 축적
+```
 
-- 실제 batch 기본 검사 오류: `0`
-- 실제 산출물 행 수: `features.csv`, `sanity.json`, `neighbors.csv`, `review_template.csv`가 `png_sample_count`와 모순되지 않음
-- Reviewed query wafer: 최소 `20`, 권장 `50` 이상
-- `accepted_match_rate`: `same_family` 또는 `partial_match` 비율 `70%` 이상
-- `query_topk_accept_rate`: query별 top-k 안에 accept가 하나 이상 있는 비율 `80%` 이상
-- `missed_major_defect_rate`: `5%` 이하
-- `parser_or_mask_issue`: `0`
-- Scratch/local/stby 관련 실패가 반복되면 해당 family는 별도 개선 track으로 분리한다.
-
-## AI 모델 구현 상태
-
-현재 deep-learning 주 경로는 pattern asset 기반 hybrid synthetic data와 multi-label segmentation이다. 실제 wafer 리뷰에서 반복적으로 놓치는 family를 확인한 뒤, 해당 family를 asset/label로 보강하고 U-Net 학습 데이터에 반영한다.
+따라서 리뷰어는 prediction을 정답으로 받아들이지 말고 수정 가능한 초안으로 봐야 합니다.

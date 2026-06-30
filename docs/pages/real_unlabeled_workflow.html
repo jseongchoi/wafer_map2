@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>라벨 없는 실제 Wafer 처리 절차 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>라벨 없는 실제 Wafer 처리 절차</h1>
+      <p>docs/real_unlabeled_workflow.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#라벨-없는-실제-wafer-처리-절차">라벨 없는 실제 Wafer 처리 절차</a>
+<a class="toc-level-2" href="#1-목적">1. 목적</a>
+<a class="toc-level-2" href="#2-입력-준비-a-제품별-raw-png-폴더">2. 입력 준비 A: 제품별 raw PNG 폴더</a>
+<a class="toc-level-2" href="#3-입력-준비-b-semantic-npz">3. 입력 준비 B: Semantic `.npz`</a>
+<a class="toc-level-2" href="#4-manifest-예시">4. Manifest 예시</a>
+<a class="toc-level-2" href="#5-feature-추출">5. Feature 추출</a>
+<a class="toc-level-2" href="#6-segmentation-tool-연결">6. Segmentation tool 연결</a>
+<a class="toc-level-2" href="#7-모델-prediction을-이용하는-경우">7. 모델 prediction을 이용하는 경우</a>
+<a class="toc-level-2" href="#8-산출물">8. 산출물</a>
+<a class="toc-level-2" href="#9-sanity-drift-해석">9. Sanity / Drift 해석</a>
+<a class="toc-level-2" href="#10-다음-의사결정">10. 다음 의사결정</a>
+    </aside>
+    <article class="content">
+      <h1 id="라벨-없는-실제-wafer-처리-절차">라벨 없는 실제 Wafer 처리 절차</h1>
+<p>이 문서는 label이 없는 실제 wafer batch를 받았을 때 어떻게 처리할지 설명합니다. 핵심은 “모델 학습용 정답이 없다”는 점을 인정하고, 먼저 triage와 asset 후보를 만드는 것입니다.</p>
+<h2 id="1-목적">1. 목적</h2>
+<p>라벨 없는 실제 wafer는 바로 supervised training에 넣을 수 없습니다. 대신 아래 용도로 씁니다.</p>
+<ul>
+<li>대표 불량 후보 찾기</li>
+<li>family별 asset 후보 수집</li>
+<li>모델 prediction correction 대상 만들기</li>
+<li>synthetic-real gap 확인</li>
+</ul>
+<h2 id="2-입력-준비-a-제품별-raw-png-폴더">2. 입력 준비 A: 제품별 raw PNG 폴더</h2>
+<pre><code class="language-text">data/raw/product_A/
+  WAFER_0001.png
+  WAFER_0002.png</code></pre>
+<p>manifest 생성:</p>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json `
+  --out-report-dir outputs/reports/product_A_raw</code></pre>
+<h2 id="3-입력-준비-b-semantic-npz">3. 입력 준비 B: Semantic <code>.npz</code></h2>
+<p>이미 wafer array가 준비되어 있다면 sample folder를 사용할 수 있습니다.</p>
+<pre><code class="language-text">data/real_unlabeled/product_A/
+  WAFER_0001/
+    arrays.npz
+    metadata.json</code></pre>
+<p>이 경우에도 sample id, path, shape가 manifest로 정리되어야 합니다.</p>
+<h2 id="4-manifest-예시">4. Manifest 예시</h2>
+<pre><code class="language-json">{
+  &quot;samples&quot;: [
+    {
+      &quot;sample_id&quot;: &quot;WAFER_0001&quot;,
+      &quot;image_path&quot;: &quot;data/raw/product_A/WAFER_0001.png&quot;,
+      &quot;product_id&quot;: &quot;product_A&quot;,
+      &quot;split&quot;: &quot;unlabeled&quot;
+    }
+  ]
+}</code></pre>
+<h2 id="5-feature-추출">5. Feature 추출</h2>
+<p>retrieval이나 sanity check가 필요하면 feature를 추출합니다.</p>
+<pre><code class="language-powershell">python scripts/extract_real_unlabeled_features.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --out outputs/features/product_A_real_features.parquet</code></pre>
+<p>이 단계는 현재 주력 segmentation workflow의 보조입니다. 좋은 asset 후보를 찾는 데 사용할 수 있습니다.</p>
+<h2 id="6-segmentation-tool-연결">6. Segmentation tool 연결</h2>
+<p>라벨 없는 wafer에서 실제로 중요한 작업은 대표 불량을 골라 mask로 저장하는 것입니다.</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p>작업자는 명확한 패턴만 저장합니다.</p>
+<pre><code class="language-text">확실한 local blob       -&gt; asset 저장
+확실한 scratch          -&gt; asset 또는 parametric 저장
+shot 반복 위치 불량     -&gt; shot_grid rule 후보
+애매한 diffuse          -&gt; mixed_unknown/review-only</code></pre>
+<h2 id="7-모델-prediction을-이용하는-경우">7. 모델 prediction을 이용하는 경우</h2>
+<p>이미 학습된 모델이 있으면 prediction을 seed로 열 수 있습니다.</p>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json</code></pre>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets `
+  --prediction-json outputs/predictions/fbm_prediction_masks.json</code></pre>
+<h2 id="8-산출물">8. 산출물</h2>
+<p>라벨 없는 wafer batch에서 기대하는 산출물:</p>
+<pre><code class="language-text">outputs/manifests/product_A_manifest.json
+outputs/reports/product_A_raw/
+data/pattern_assets/&lt;family&gt;/&lt;asset_id&gt;/
+outputs/reviews/product_A_review_template.csv</code></pre>
+<h2 id="9-sanity-drift-해석">9. Sanity / Drift 해석</h2>
+<p>실제 wafer와 합성 wafer가 다르면 prediction 품질이 낮을 수 있습니다. 이때는 모델이 틀렸다고만 보지 말고 아래를 봅니다.</p>
+<ul>
+<li>실제 wafer에 없는 family를 합성에서 과하게 만들었는가?</li>
+<li>실제 wafer의 intensity 분포가 합성과 다른가?</li>
+<li>shot layout이 합성 rule과 다른가?</li>
+<li>edge/ring 위치 기준이 제품마다 다른가?</li>
+</ul>
+<h2 id="10-다음-의사결정">10. 다음 의사결정</h2>
+<div class="table-wrap"><table><thead><tr><th>상황</th><th>다음 행동</th></tr></thead><tbody><tr><td>명확한 local이 많이 보임</td><td>local asset을 우선 저장</td></tr><tr><td>반복 shot 문제가 보임</td><td>shot layout metadata 확보</td></tr><tr><td>모델 prediction이 blank</td><td>synthetic coverage 부족 확인</td></tr><tr><td>모델 false positive가 많음</td><td>threshold 조정, negative/random context 보강</td></tr><tr><td>family 정의가 애매함</td><td>전문가 review protocol로 넘김</td></tr></tbody></table></div>
+    </article>
+  </main>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WaferMap Documentation</title>
+  <title>WaferMap 문서 표지판</title>
   <style>
     :root {
       --bg: #f7f9fb;
@@ -12,6 +12,8 @@
       --muted: #5f6f83;
       --line: #d9e1ea;
       --accent: #0f766e;
+      --accent-soft: #ecfdf5;
+      --warn-soft: #fff7ed;
     }
     * { box-sizing: border-box; }
     body {
@@ -19,21 +21,29 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
       color: var(--ink);
       background: var(--bg);
-      line-height: 1.6;
+      line-height: 1.65;
     }
     header {
       background: #102027;
       color: white;
-      padding: 40px 24px;
+      padding: 42px 24px;
     }
     main, .wrap {
-      max-width: 1080px;
+      max-width: 1120px;
       margin: 0 auto;
     }
     main { padding: 24px; }
-    h1 { margin: 0 0 10px; font-size: 42px; line-height: 1.1; letter-spacing: 0; }
+    h1 { margin: 0 0 10px; font-size: 40px; line-height: 1.15; letter-spacing: 0; }
     h2 { margin: 0 0 12px; font-size: 24px; letter-spacing: 0; }
+    h3 { margin: 18px 0 8px; font-size: 18px; }
     p { margin: 0 0 12px; }
+    a { color: #0f766e; }
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #eef2f7;
+      color: #172033;
+    }
     pre {
       margin: 14px 0 0;
       padding: 14px;
@@ -53,12 +63,18 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
       gap: 12px;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+      gap: 14px;
+      align-items: start;
     }
     .card {
       display: block;
-      min-height: 112px;
+      min-height: 118px;
       padding: 15px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -76,6 +92,69 @@
       color: var(--muted);
       font-size: 14px;
     }
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      background: var(--accent-soft);
+      color: #12352f;
+      border-radius: 6px;
+    }
+    .warning {
+      border-left: 4px solid #ea580c;
+      padding: 12px 14px;
+      background: var(--warn-soft);
+      color: #431407;
+      border-radius: 6px;
+    }
+    .mini {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .steps {
+      counter-reset: step;
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .steps li {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+    }
+    .steps li::before {
+      content: counter(step);
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #0f766e;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      background: white;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th { background: #eef6f5; color: #12352f; }
     .phase {
       display: grid;
       grid-template-columns: 90px 1fr 110px;
@@ -95,8 +174,9 @@
       font-size: 12px;
       font-weight: 700;
     }
-    @media (max-width: 700px) {
-      h1 { font-size: 32px; }
+    @media (max-width: 760px) {
+      h1 { font-size: 31px; }
+      .two-col { grid-template-columns: 1fr; }
       .phase { grid-template-columns: 1fr; }
     }
   </style>
@@ -104,70 +184,171 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>WaferMap Documentation</h1>
-      <p>Direct FBM defect assets, hybrid synthetic maps, and multi-defect segmentation training.</p>
-      <pre>FBM maps
--> defect generation
--> multi-defect synthetic maps
--> multi-defect segmentation training and validation
--> local segmentation tool for real-data pattern asset extraction</pre>
+      <h1>WaferMap 문서 표지판</h1>
+      <p>FBM wafer map에서 대표 불량 패턴을 모으고, 라벨을 아는 합성맵을 만들어, multi-label U-Net segmentation 모델을 시작하는 프로젝트입니다.</p>
+      <pre>대표 불량 패턴
+-> manual asset / parametric rule
+-> 합성 wafer map + 정답 mask
+-> multi-label U-Net
+-> 실제 wafer 예측
+-> 사람이 수정
+-> 더 좋은 asset으로 다시 축적</pre>
     </div>
   </header>
 
   <main>
     <section>
-      <h2>Read First</h2>
-      <div class="grid">
-        <a class="card" href="core_direction.md"><strong>core_direction.md</strong><span>Project boundary and the workflow we must not drift from.</span></a>
-        <a class="card" href="end_to_end_workflow.md"><strong>end_to_end_workflow.md</strong><span>Canonical command flow from wafer input to prediction correction.</span></a>
-        <a class="card" href="operator_manual.md"><strong>operator_manual.md</strong><span>Short operator runbook and troubleshooting.</span></a>
-        <a class="card" href="semiconductor_ai_review.md"><strong>semiconductor_ai_review.md</strong><span>Technical review of resize policy, target clipping, and composition choices.</span></a>
+      <h2>이 파일부터 보면 됩니다</h2>
+      <div class="two-col">
+        <div>
+          <p class="callout">핵심은 모든 wafer를 손으로 누끼 따지 않는 것입니다. 사람이 대표 패턴이나 규칙을 지정하고, 코드는 그 규칙을 full-size binary mask로 만들어 학습 데이터에 넣습니다.</p>
+          <p>이 HTML은 프로젝트의 메인 표지판입니다. 어떤 문서를 먼저 봐야 하는지, 지금 구현된 코드가 어디인지, 다음에 무엇을 해야 하는지 여기서 출발하면 됩니다.</p>
+        </div>
+        <div>
+          <pre>한 장 요약:
+1. 대표 불량 패턴을 모은다
+2. 애매한 불량은 억지로 라벨링하지 않는다
+3. ring/edge/shot_grid는 코드 기반 mask도 쓴다
+4. 합성맵은 정답 mask를 자동으로 안다
+5. 모델 예측을 실제 wafer에서 고쳐 다시 asset으로 쌓는다</pre>
+        </div>
       </div>
     </section>
 
     <section>
-      <h2>Reference</h2>
+      <h2>먼저 읽을 순서</h2>
+      <ol class="steps">
+        <li><span><strong>프로젝트 목적 확인:</strong> <a href="pages/core_direction.html">core_direction.md</a>에서 이 프로젝트가 분류기가 아니라 segmentation dataset factory라는 점을 확인합니다.</span></li>
+        <li><span><strong>전체 흐름 확인:</strong> <a href="pages/end_to_end_workflow.html">end_to_end_workflow.md</a>에서 raw wafer부터 prediction correction까지 명령 순서를 봅니다.</span></li>
+        <li><span><strong>라벨을 어떻게 모을지:</strong> <a href="pages/label_data_guidelines.html">label_data_guidelines.md</a>에서 bbox, mask, manual label, parametric label, mixed_unknown 예시를 봅니다.</span></li>
+        <li><span><strong>학습 데이터 규격:</strong> <a href="pages/training_data_contract.html">training_data_contract.md</a>에서 `arrays.npz`, `metadata.json`, manifest CSV, U-Net input/target channel을 봅니다.</span></li>
+        <li><span><strong>실행할 때:</strong> <a href="pages/operator_manual.html">operator_manual.md</a>에서 실제 command와 troubleshooting을 봅니다.</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>지금 설계 결론</h2>
+      <table>
+        <tr><th>질문</th><th>결론</th><th>예시</th></tr>
+        <tr><td>모든 불량을 손으로 mask 해야 하나?</td><td>아니요.</td><td>local blob은 사람이 lasso로 따도 되지만, shot_grid를 모든 die마다 칠하면 지옥입니다.</td></tr>
+        <tr><td>U-Net 학습의 진짜 정답은?</td><td>family별 binary mask입니다.</td><td>`bbox_xywh`는 crop/review용이고, `pattern_masks[family, y, x] = 1`이 학습 정답입니다.</td></tr>
+        <tr><td>shot마다 왼쪽 아래가 불량이면?</td><td>parametric label로 저장하고 코드로 mask를 만듭니다.</td><td>3x3 shot, affected slot `[2, 0]`, intra-die lower-left region을 지정합니다.</td></tr>
+        <tr><td>ring, edge, 긴 scratch는?</td><td>가능하면 규칙 기반으로 mask를 만듭니다.</td><td>ring은 center/radius/width, edge는 angle/radial band, scratch는 polyline+width.</td></tr>
+        <tr><td>합성맵의 역할은?</td><td>라벨을 아는 training sample을 만드는 것입니다.</td><td>asset을 어디에 붙였는지 아니까 local/scratch/ring mask를 자동으로 알 수 있습니다.</td></tr>
+        <tr><td>실제 wafer와의 차이는?</td><td>prediction correction loop로 줄입니다.</td><td>synthetic으로 첫 모델을 만들고, 실제 wafer 예측을 사람이 고쳐 real asset으로 다시 저장합니다.</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>불량별 라벨링 방식 예시</h2>
+      <table>
+        <tr><th>불량 유형</th><th>사람이 할 일</th><th>코드가 할 일</th><th>학습 사용</th></tr>
+        <tr><td>`local` blob</td><td>blob 주변을 brush/lasso로 칠함</td><td>mask를 valid 영역으로 자르고 asset 저장</td><td>`manual_mask`로 사용</td></tr>
+        <tr><td>`scratch`</td><td>선을 따라 점 몇 개를 찍고 width 지정</td><td>polyline 주변 tube mask 생성</td><td>`parametric_mask` 또는 수동 mask</td></tr>
+        <tr><td>`ring`</td><td>중심, 반지름, 두께, 각도 범위 지정</td><td>annulus/arc mask 생성</td><td>`parametric_mask`</td></tr>
+        <tr><td>`edge`</td><td>몇 시 방향부터 몇 시 방향인지, edge 폭 지정</td><td>edge sector mask 생성</td><td>`parametric_mask`</td></tr>
+        <tr><td>`shot_grid`</td><td>shot layout과 affected slot 지정</td><td>반복 위치 mask 자동 생성</td><td>`parametric_mask`</td></tr>
+        <tr><td>애매한 diffuse</td><td>대략 region만 표시하고 이유 기록</td><td>학습 제외, review 후보로 유지</td><td>`mixed_unknown`, `weak_region`</td></tr>
+      </table>
+      <p class="warning">애매한 걸 억지로 `scratch`나 `ring`에 넣으면 모델이 잘 배우는 게 아니라 헷갈리게 배웁니다. 애매하면 `mixed_unknown`으로 빼는 게 더 건강합니다.</p>
+    </section>
+
+    <section>
+      <h2>학습 데이터는 이렇게 생깁니다</h2>
+      <div class="two-col">
+        <div>
+          <p>U-Net이 바로 읽는 최종 training sample은 사람이 그린 JSON이 아니라 rasterize된 `arrays.npz`입니다.</p>
+          <pre>data/synthetic/asset_composed/
+  asset_composed_000001/
+    arrays.npz
+    metadata.json
+
+outputs/pattern_asset_pipeline/
+  asset_segmentation_manifest.csv</pre>
+        </div>
+        <div>
+          <pre>arrays.npz 핵심:
+severity             [H, W]
+wafer_mask           [H, W]
+valid_test_mask      [H, W]
+stby_mask            [H, W]
+pattern_masks        [7, H, W]
+pattern_intensity    [7, H, W]</pre>
+        </div>
+      </div>
+      <p>자세한 규격은 <a href="pages/training_data_contract.html">학습 데이터 규격 문서</a>에 예시와 함께 정리했습니다.</p>
+    </section>
+
+    <section>
+      <h2>주요 문서</h2>
       <div class="grid">
-        <a class="card" href="architecture.md"><strong>Architecture</strong><span>Product Boundary, Package Boundaries, and code ownership.</span></a>
-        <a class="card" href="project_overview.md"><strong>Project Overview</strong><span>Current product shape and next implementation order.</span></a>
-        <a class="card" href="segmentation_tool_workflow.md"><strong>Segmentation Tool</strong><span>Mask editing, asset save, and prediction prefill.</span></a>
-        <a class="card" href="fbm_data_flow_guide.md"><strong>Data Flow</strong><span>Manifest, asset, synthetic sample, and model artifact paths.</span></a>
-        <a class="card" href="fbm_pattern_asset_pipeline.md"><strong>Synthetic Pipeline</strong><span>Pattern asset format, procedural fallback, readiness, and U-Net training.</span></a>
-        <a class="card" href="pattern_taxonomy.md"><strong>Pattern Taxonomy</strong><span>Family meanings for local, scratch, ring, edge, shot_grid, and random.</span></a>
-        <a class="card" href="data_schema.md"><strong>Data Schema</strong><span>Arrays, masks, metadata, and manifest schemas.</span></a>
-        <a class="card" href="../scripts/README.md"><strong>Scripts Command Map</strong><span>Stable command-line entrypoints.</span></a>
-        <a class="card" href="glossary.md"><strong>glossary.md</strong><span>Shared terms used across the project.</span></a>
+        <a class="card" href="pages/label_data_guidelines.html"><strong>라벨 데이터 가이드</strong><span>wafer 1장 기준으로 labels.json, masks 폴더, bbox와 mask 차이, parametric label 예시를 설명합니다.</span></a>
+        <a class="card" href="pages/training_data_contract.html"><strong>학습 데이터 규격</strong><span>U-Net이 읽는 `arrays.npz`, `metadata.json`, manifest CSV, input/target channel 규격입니다.</span></a>
+        <a class="card" href="pages/modeling_strategy.html"><strong>모델 이해 가이드</strong><span>U-Net이 무엇을 입력받고, 어떤 mask를 예측하고, prediction을 어떻게 해석하는지 설명합니다.</span></a>
+        <a class="card" href="pages/end_to_end_workflow.html"><strong>전체 실행 흐름</strong><span>raw wafer부터 asset, synthetic dataset, U-Net, prediction correction까지의 command 흐름입니다.</span></a>
+        <a class="card" href="pages/operator_manual.html"><strong>작업자 매뉴얼</strong><span>실제로 명령을 실행할 때 보는 짧은 runbook입니다.</span></a>
+        <a class="card" href="pages/pattern_taxonomy.html"><strong>불량 family 정의</strong><span>local, scratch, ring, edge, shot_grid, random을 어떤 기준으로 나누는지 정리합니다.</span></a>
+        <a class="card" href="pages/fbm_pattern_asset_pipeline.html"><strong>합성 데이터 파이프라인</strong><span>pattern asset을 base wafer에 붙이고 readiness report를 만드는 과정입니다.</span></a>
+        <a class="card" href="pages/documentation_quality_audit.html"><strong>문서 품질 검증표</strong><span>문서 하나하나가 현재 목적과 맞는지 검토한 결과입니다.</span></a>
       </div>
     </section>
 
     <section>
-      <h2>Real Data And Review</h2>
-      <div class="grid">
-        <a class="card" href="real_png_operator_runbook.md"><strong>Real PNG Runbook</strong><span>Raw FBM PNG folder input and report output.</span></a>
-        <a class="card" href="real_unlabeled_workflow.md"><strong>Real Unlabeled Workflow</strong><span>Manifest, feature, retrieval, and review path.</span></a>
-        <a class="card" href="expert_review_protocol.md"><strong>Expert Review</strong><span>Review CSV and aggregation metrics.</span></a>
-        <a class="card" href="real_wafer_review_checklist.md"><strong>Real Wafer Checklist</strong><span>Checklist for reviewing real wafer artifacts.</span></a>
+      <h2>구현 위치 지도</h2>
+      <table>
+        <tr><th>단계</th><th>코드</th><th>관련 문서</th><th>상태</th></tr>
+        <tr><td>raw PNG 분석과 manifest 생성</td><td><code>scripts/analyze_png_raw_folders.py</code>, <code>src/wafermap/real/</code></td><td><a href="pages/real_png_operator_runbook.html">실제 PNG 실행 가이드</a></td><td>구현됨</td></tr>
+        <tr><td>수동 mask / asset 저장</td><td><code>scripts/run_segmentation_tool.py</code>, <code>scripts/run_pattern_asset_editor.py</code>, <code>src/wafermap/assets/</code></td><td><a href="pages/label_data_guidelines.html">라벨 데이터 가이드</a></td><td>구현됨, real asset 축적 필요</td></tr>
+        <tr><td>parametric/procedural mask</td><td><code>src/wafermap/synth/procedural_patterns.py</code></td><td><a href="pages/training_data_contract.html">학습 데이터 규격</a></td><td>procedural fallback 구현됨, human parametric workflow는 확장 여지 있음</td></tr>
+        <tr><td>asset 합성</td><td><code>scripts/compose_synthetic_from_assets.py</code></td><td><a href="pages/fbm_pattern_asset_pipeline.html">합성 데이터 파이프라인</a></td><td>구현됨</td></tr>
+        <tr><td>readiness와 manifest</td><td><code>scripts/build_segmentation_readiness.py</code></td><td><a href="pages/training_data_contract.html">학습 데이터 규격</a></td><td>구현됨</td></tr>
+        <tr><td>U-Net 학습</td><td><code>scripts/train_unet_segmentation.py</code>, <code>src/wafermap/training/segmentation.py</code></td><td><a href="pages/training_data_contract.html">학습 데이터 규격</a></td><td>구현됨, PyTorch 환경 필요</td></tr>
+        <tr><td>예측 mask 재수정 loop</td><td><code>scripts/export_unet_predictions.py</code>, <code>run_segmentation_tool.py --prediction-json</code></td><td><a href="pages/end_to_end_workflow.html">전체 실행 흐름</a></td><td>경로 구현됨, 실제 correction cycle 필요</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>다음에 할 일</h2>
+      <div class="two-col">
+        <div>
+          <ol class="steps">
+            <li><span>실제 wafer에서 명확한 `local`, `scratch`, `ring`, `edge` 예시를 먼저 모읍니다. 애매한 것은 `mixed_unknown`으로 빼둡니다.</span></li>
+            <li><span>`shot_grid`, `edge`, `ring`, 긴 `scratch`는 손마스킹보다 parametric rule로 mask를 생성하는 방식을 우선합니다.</span></li>
+            <li><span>학습에 쓸 만한 clean/usable mask만 <code>data/pattern_assets</code>로 승격합니다.</span></li>
+            <li><span>합성 데이터셋을 만들고 readiness report에서 family coverage와 mask ratio를 봅니다.</span></li>
+            <li><span>U-Net을 학습하고 실제 wafer 예측을 다시 tool에서 고쳐 real asset으로 저장합니다.</span></li>
+          </ol>
+        </div>
+        <div>
+          <pre>python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</pre>
+          <p class="mini">이 명령으로 합성, readiness, smoke check, report 생성을 한 번에 확인합니다.</p>
+        </div>
       </div>
     </section>
 
     <section>
-      <h2>Phase Status</h2>
-      <div class="phase"><strong>Phase 0</strong><span>Scope lock and family taxonomy.</span><span class="tag">Done</span></div>
-      <div class="phase"><strong>Phase 1</strong><span>Direct segmentation tool and pattern asset save workflow.</span><span class="tag">Current</span></div>
-      <div class="phase"><strong>Phase 2</strong><span>Pattern asset quality accumulation and review.</span><span class="tag">Current</span></div>
-      <div class="phase"><strong>Phase 3</strong><span>Hybrid synthetic data and readiness reports.</span><span class="tag">Current</span></div>
-      <div class="phase"><strong>Phase 4</strong><span>Small U-Net training, export, and correction loop.</span><span class="tag">Next</span></div>
+      <h2>진행 상태</h2>
+      <div class="phase"><strong>Phase 0</strong><span>범위 고정과 family taxonomy 정리</span><span class="tag">완료</span></div>
+      <div class="phase"><strong>Phase 1</strong><span>segmentation tool과 pattern asset 저장 workflow</span><span class="tag">현재</span></div>
+      <div class="phase"><strong>Phase 2</strong><span>대표 pattern asset 품질 축적과 review</span><span class="tag">현재</span></div>
+      <div class="phase"><strong>Phase 3</strong><span>hybrid synthetic dataset과 readiness report</span><span class="tag">현재</span></div>
+      <div class="phase"><strong>Phase 4</strong><span>small U-Net 학습, prediction export, correction loop</span><span class="tag">다음</span></div>
     </section>
 
     <section>
-      <h2>Secondary Docs</h2>
+      <h2>참고 문서</h2>
       <div class="grid">
-        <a class="card" href="roadmap.md"><strong>Roadmap</strong><span>Detailed phase plan.</span></a>
-        <a class="card" href="modeling_strategy.md"><strong>Modeling Strategy</strong><span>Segmentation, embedding, and active learning notes.</span></a>
-        <a class="card" href="validation_protocol.md"><strong>Validation Protocol</strong><span>Validation checks across data and model stages.</span></a>
-        <a class="card" href="experiment_history.md"><strong>Experiment History</strong><span>Why the current path exists.</span></a>
-        <a class="card" href="enterprise_readiness_assessment.md"><strong>Enterprise Readiness Assessment</strong><span>Historical readiness notes.</span></a>
-        <a class="card" href="legacy_pattern_asset_editor.md"><strong>Compatibility Editor</strong><span>Why the old command filename remains.</span></a>
+        <a class="card" href="pages/architecture.html"><strong>설계 구조</strong><span>패키지 경계와 새 코드를 어디에 넣을지 정리합니다.</span></a>
+        <a class="card" href="pages/fbm_data_flow_guide.html"><strong>데이터 흐름</strong><span>manifest, asset, synthetic sample, model artifact 경로를 정리합니다.</span></a>
+        <a class="card" href="pages/segmentation_tool_workflow.html"><strong>세그멘테이션 도구</strong><span>tool 조작, prediction prefill, asset 저장 흐름입니다.</span></a>
+        <a class="card" href="pages/semiconductor_ai_review.html"><strong>AI 설계 검토</strong><span>target clipping, resize policy, coordinate-aware U-Net 판단 근거입니다.</span></a>
+        <a class="card" href="pages/scripts_README.html"><strong>실행 명령 지도</strong><span>실행 가능한 command 목록입니다.</span></a>
+        <a class="card" href="pages/glossary.html"><strong>용어 사전</strong><span>프로젝트에서 쓰는 용어를 정리합니다.</span></a>
+        <a class="card" href="pages/documentation_quality_audit.html"><strong>문서 검증표</strong><span>한국어 설명, 예시, 목표 적합성을 문서별로 점검한 표입니다.</span></a>
       </div>
     </section>
   </main>

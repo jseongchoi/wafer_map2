@@ -1,115 +1,128 @@
 # 실제 raw PNG 운영 안내서
 
-이 문서는 실제 FBM raw PNG를 프로젝트 파이프라인에 넣는 방법만 정리합니다. 경로 정책, 외부 반출, 접근 권한은 사용 환경에서 별도로 관리한다고 가정합니다.
+이 문서는 실제 wafer PNG 폴더를 받았을 때 처음 실행하는 절차를 설명합니다.
+목표는 raw PNG를 바로 모델에 넣는 것이 아니라, sample manifest와 검토 report를
+만들어 segmentation asset 작업으로 연결하는 것입니다.
 
-## 입력 폴더
+## 1. 입력 폴더
 
-기본 개발 위치:
-
-```text
-data/raw/
-  product_a/
-    wafer_001.png
-    wafer_002.png
-  product_b/
-    wafer_101.png
-```
-
-인트라넷 운영 위치는 원하는 경로를 그대로 쓸 수 있습니다.
+예시:
 
 ```text
-Z:/fbm/raw_png/
-  product_a/
-    wafer_001.png
-    wafer_002.png
+data/raw/product_A/
+  lot_001/
+    WAFER_0001.png
+    WAFER_0002.png
+  lot_002/
+    WAFER_0101.png
 ```
 
-PNG 조건:
+권장:
 
-- 8-bit grayscale PNG
-- 허용 gray value: `0, 31, 151, 175, 191, 207, 223, 255`
-- chip block 전체가 `255`이면 stby fail chip
-- chip 일부 pixel만 `255`이면 grade 7
+- 제품/공정/lot 단위가 경로에 드러나게 둡니다.
+- 원본 파일명은 가능하면 바꾸지 않습니다.
+- raw data는 git에 넣지 않습니다.
 
-## Geometry JSON
+## 2. Geometry JSON
 
-제품별 chip 크기와 grid 정보를 JSON으로 둡니다. 자동 추론도 가능하지만, 실제 제품에서는 geometry JSON을 쓰는 편이 재현성이 좋습니다.
+wafer center, radius, die size 같은 geometry가 있으면 JSON으로 둡니다.
 
 ```json
 {
-  "product_a": {
-    "chip_blocks": { "width": 100, "height": 50 },
-    "grid": { "rows": 38, "cols": 20 },
-    "actual_net_die": 600
-  }
+  "wafer_center_xy": [512, 512],
+  "wafer_radius_px": 490,
+  "die_pitch_xy": [12, 12],
+  "notch_direction": "down"
 }
 ```
 
-## 실행
+geometry가 없으면 초기 분석은 가능하지만 `edge`, `ring`, `shot_grid` 같은
+위치 기반 label 품질이 떨어질 수 있습니다.
+
+## 3. manifest 생성
 
 ```powershell
 python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch `
-  --reference-features outputs/pre_real_readiness/reports/synthetic_reference_features.csv `
-  --cpu-model outputs/pre_real_readiness/models/fbm_cpu_encoder_model.npz
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/real_png_batch_manifest.json `
+  --out-report-dir outputs/reports/real_png_batch
 ```
 
-`--reference-features`와 `--cpu-model`은 선택입니다. 처음에는 빼고 parser와 sanity부터 확인해도 됩니다.
+geometry를 줄 수 있으면:
 
-## 생성 산출물
+```powershell
+python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --geometry-json configs/geometry/product_A.json `
+  --out-manifest outputs/manifests/real_png_batch_manifest.json `
+  --out-report-dir outputs/reports/real_png_batch
+```
+
+## 4. 생성 산출물
 
 ```text
 outputs/manifests/real_png_batch_manifest.json
-outputs/reports/real_png_batch/batch_metadata.json
-outputs/reports/real_png_batch/features.csv
-outputs/reports/real_png_batch/sanity.json
-outputs/reports/real_png_batch/report.html
-outputs/reports/real_png_batch/neighbors.csv
-outputs/reports/real_png_batch/review_template.csv
-outputs/reports/real_png_batch/cpu_encoder_predictions.csv
-outputs/reports/real_png_batch/cpu_encoder_sanity.json
+outputs/reports/real_png_batch/
+  index.html
+  sample_summary.csv
+  thumbnails/
 ```
 
-## 실행 후 확인 순서
+manifest는 이후 segmentation tool의 입력이 됩니다.
 
-1. `sanity.json`에서 unknown gray value, shape mismatch, geometry 문제를 확인합니다.
-2. `report.html`에서 wafer가 정상적으로 렌더링되는지 봅니다.
-3. `features.csv` row 수가 입력 PNG 수와 맞는지 봅니다.
-4. reference feature를 붙였다면 `neighbors.csv`에서 유사 wafer 후보가 생성됐는지 봅니다.
-5. CPU model을 붙였다면 `cpu_encoder_predictions.csv`에서 확률값이 생성됐는지 봅니다.
+```powershell
+python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets
+```
 
-## 리뷰 작성
+## 5. 실행 후 확인 순서
 
-`outputs/reports/real_png_batch/review_template.csv`를 열고 사람이 판단합니다.
+1. report HTML을 열어 image가 정상적으로 보이는지 확인합니다.
+2. sample 수가 예상과 맞는지 확인합니다.
+3. wafer가 뒤집히거나 crop되지 않았는지 preview를 봅니다.
+4. `actual_net_die=0` 같은 이상값이 있으면 geometry 또는 threshold를 의심합니다.
+5. 대표 wafer 몇 장을 segmentation tool로 열어 asset 저장을 시작합니다.
 
-권장 작성 기준:
+## 6. 리뷰 작성
 
-- query wafer 최소 20개, 권장 50개 이상
-- query당 top-k neighbor 중 의미 있는 쌍 확인
-- `reviewer_decision` 입력
-- `missed_major_defect`, `retrieval_failure_mode`, `next_action` 입력
+전문가가 wafer를 빠르게 triage할 때는 review CSV를 사용할 수 있습니다.
 
-리뷰 요약:
+```powershell
+python scripts/make_expert_review_template.py `
+  --manifest outputs/manifests/real_png_batch_manifest.json `
+  --out outputs/reviews/product_A_review_template.csv
+```
+
+리뷰어가 채우면:
 
 ```powershell
 python scripts/summarize_expert_review.py `
-  --review outputs/reports/real_png_batch/review_template.csv `
-  --out outputs/reports/real_png_batch/review_summary.html `
-  --metrics outputs/reports/real_png_batch/review_summary_metrics.json
+  --review-csv outputs/reviews/product_A_review_template.csv `
+  --out outputs/reviews/product_A_review_summary.json
 ```
 
-## 실패 시 판단
+## 7. 실패 시 판단
 
-기본 검사 오류가 있으면 모델 결과를 해석하지 말고 parser/geometry부터 고칩니다.
+| 증상 | 원인 후보 | 조치 |
+|---|---|---|
+| PNG가 하나도 잡히지 않음 | 경로/확장자 문제 | `--input-root`와 파일 확장자 확인 |
+| wafer가 검게만 보임 | gray scale 해석 문제 | raw image min/max 확인 |
+| center/radius가 이상함 | geometry 누락/오류 | geometry JSON 추가 |
+| sample id가 중복됨 | 파일명 충돌 | lot/path 정보를 sample id에 포함 |
+| report는 되지만 tool이 못 엶 | manifest path 문제 | manifest의 `image_path` 존재 확인 |
 
-대표 원인:
+## 8. 다음 단계
 
-- unknown gray value가 있다.
-- 제품 폴더명이 geometry JSON key와 다르다.
-- PNG shape가 `grid * chip_blocks`와 맞지 않는다.
-- `actual_net_die`가 0이거나 grid보다 크다.
-- `actual_net_die=0`이면 제품 geometry가 비어 있거나 net die 산정 기준이 누락된 상태다.
-- stby chip과 grade 7 chip 기준이 섞였다.
-- wafer 밖 `0`과 in-wafer good `0`을 구분할 mask 기준이 부족하다.
+raw PNG 분석은 시작점일 뿐입니다.
+이후 반드시 아래로 이어져야 합니다.
+
+```text
+manifest
+-> segmentation tool
+-> pattern asset 저장
+-> asset report
+-> synthetic dataset
+-> readiness manifest
+```

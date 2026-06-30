@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>작업자 매뉴얼 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>작업자 매뉴얼</h1>
+      <p>docs/operator_manual.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#작업자-매뉴얼">작업자 매뉴얼</a>
+<a class="toc-level-2" href="#1-목표">1. 목표</a>
+<a class="toc-level-2" href="#2-역할">2. 역할</a>
+<a class="toc-level-2" href="#3-사전-준비">3. 사전 준비</a>
+<a class="toc-level-2" href="#4-manifest-준비">4. manifest 준비</a>
+<a class="toc-level-2" href="#5-segmentation-tool-열기">5. segmentation tool 열기</a>
+<a class="toc-level-2" href="#6-라벨링-규칙">6. 라벨링 규칙</a>
+<a class="toc-level-2" href="#7-asset-저장-후-report-확인">7. asset 저장 후 report 확인</a>
+<a class="toc-level-2" href="#8-합성-데이터-만들기">8. 합성 데이터 만들기</a>
+<a class="toc-level-2" href="#9-readiness-확인">9. readiness 확인</a>
+<a class="toc-level-2" href="#10-u-net-학습과-prediction-export">10. U-Net 학습과 prediction export</a>
+<a class="toc-level-2" href="#11-troubleshooting">11. Troubleshooting</a>
+<a class="toc-level-2" href="#12-release-checklist">12. Release Checklist</a>
+    </aside>
+    <article class="content">
+      <h1 id="작업자-매뉴얼">작업자 매뉴얼</h1>
+<p>이 문서는 실제로 WaferMap 파이프라인을 돌리는 사람이 보는 짧은 실행 안내서입니다. 자세한 설계 설명보다 “무엇을 실행하고 무엇을 확인해야 하는가”에 집중합니다.</p>
+<h2 id="1-목표">1. 목표</h2>
+<p>작업자의 목표는 좋은 training sample을 만드는 것입니다.</p>
+<pre><code class="language-text">좋은 실제 wafer 예시를 찾는다
+-&gt; 명확한 불량만 mask로 저장한다
+-&gt; 합성 데이터셋을 만든다
+-&gt; readiness report를 본다
+-&gt; U-Net prediction을 다시 수정한다</code></pre>
+<h2 id="2-역할">2. 역할</h2>
+<div class="table-wrap"><table><thead><tr><th>역할</th><th>하는 일</th></tr></thead><tbody><tr><td>작업자</td><td>wafer를 열고 불량 mask/asset을 저장</td></tr><tr><td>리뷰어</td><td>family가 맞는지, mask가 학습에 적합한지 확인</td></tr><tr><td>개발자</td><td>command, schema, training pipeline 유지</td></tr></tbody></table></div>
+<p>작업자와 리뷰어가 다르지 않아도 됩니다. 다만 저장할 때와 검수할 때의 관점을 분리하는 것이 좋습니다.</p>
+<h2 id="3-사전-준비">3. 사전 준비</h2>
+<p>필요한 입력:</p>
+<ul>
+<li>raw wafer PNG 또는 이미 준비된 sample manifest</li>
+<li>wafer geometry 정보가 있으면 더 좋음</li>
+<li>저장할 asset 폴더: <code>data/pattern_assets</code></li>
+<li>출력 폴더: <code>outputs/</code></li>
+</ul>
+<p>폴더 예시:</p>
+<pre><code class="language-text">data/raw/product_A/
+  WAFER_0001.png
+  WAFER_0002.png
+
+data/pattern_assets/
+outputs/manifests/
+outputs/reports/</code></pre>
+<h2 id="4-manifest-준비">4. manifest 준비</h2>
+<p>raw PNG 폴더에서 시작할 때:</p>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json</code></pre>
+<p>실행 후 확인:</p>
+<ul>
+<li>manifest 파일이 생성됐는가?</li>
+<li>sample id가 사람이 구분 가능한가?</li>
+<li>image shape가 예상과 맞는가?</li>
+</ul>
+<h2 id="5-segmentation-tool-열기">5. segmentation tool 열기</h2>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p>tool에서 할 일:</p>
+<ol>
+<li>wafer 전체를 먼저 훑습니다.</li>
+<li>확실한 불량만 family를 고릅니다.</li>
+<li><code>local</code>처럼 경계가 명확한 것은 mask로 칠합니다.</li>
+<li><code>ring</code>, <code>edge</code>, <code>shot_grid</code>는 가능하면 규칙 기반으로 저장합니다.</li>
+<li>애매한 것은 <code>mixed_unknown</code> 또는 review-only로 남깁니다.</li>
+</ol>
+<h2 id="6-라벨링-규칙">6. 라벨링 규칙</h2>
+<div class="table-wrap"><table><thead><tr><th>상황</th><th>권장 행동</th></tr></thead><tbody><tr><td>작은 blob이 선명함</td><td><code>local</code>로 mask 저장</td></tr><tr><td>긴 선형 결함</td><td><code>scratch</code>로 저장하되 polyline + width 고려</td></tr><tr><td>둥근 band</td><td><code>ring</code> parametric label 사용</td></tr><tr><td>wafer edge 근처만 이상함</td><td><code>edge</code> sector rule 사용</td></tr><tr><td>shot마다 같은 상대 위치 문제</td><td><code>shot_grid</code> rule 사용</td></tr><tr><td>family가 애매함</td><td>학습 target에 넣지 말고 review-only</td></tr></tbody></table></div>
+<p>가장 중요한 원칙:</p>
+<pre><code class="language-text">bbox는 위치 힌트다.
+U-Net이 배우는 정답은 mask다.</code></pre>
+<h2 id="7-asset-저장-후-report-확인">7. asset 저장 후 report 확인</h2>
+<pre><code class="language-powershell">python scripts/build_pattern_asset_report.py `
+  --assets-root data/pattern_assets `
+  --out outputs/reports/pattern_asset_library_report.html</code></pre>
+<p>report에서 볼 것:</p>
+<ul>
+<li>family별 asset 수</li>
+<li>mask가 비어 있지 않은지</li>
+<li>너무 큰 mask가 아닌지</li>
+<li>같은 wafer에서 중복 저장된 asset이 많은지</li>
+<li>preview가 사람이 보기에 납득되는지</li>
+</ul>
+<h2 id="8-합성-데이터-만들기">8. 합성 데이터 만들기</h2>
+<pre><code class="language-powershell">python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20 `
+  --assets-per-wafer 3 `
+  --procedural-families scratch,edge,shot_grid,random</code></pre>
+<p>처음에는 <code>--count 20</code> 정도로 작게 돌려 preview와 mask가 맞는지 확인합니다.</p>
+<h2 id="9-readiness-확인">9. readiness 확인</h2>
+<pre><code class="language-powershell">python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</code></pre>
+<p>생성되는 핵심 파일:</p>
+<pre><code class="language-text">outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
+outputs/reports/pattern_asset_project_report.html</code></pre>
+<h2 id="10-u-net-학습과-prediction-export">10. U-Net 학습과 prediction export</h2>
+<pre><code class="language-powershell">python scripts/train_unet_segmentation.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out-model outputs/models/asset_unet_segmentation.pt</code></pre>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5</code></pre>
+<h2 id="11-troubleshooting">11. Troubleshooting</h2>
+<div class="table-wrap"><table><thead><tr><th>증상</th><th>확인할 것</th><th>조치</th></tr></thead><tbody><tr><td>manifest가 비어 있음</td><td>입력 폴더 경로</td><td><code>--input-root</code> 재확인</td></tr><tr><td>tool에서 wafer가 안 보임</td><td>image path</td><td>manifest의 path가 실제 존재하는지 확인</td></tr><tr><td>asset report가 비어 있음</td><td>save 여부</td><td>tool에서 asset 저장 버튼/출력 폴더 확인</td></tr><tr><td>readiness에서 target 없음</td><td><code>pattern_masks</code></td><td>합성 sample의 <code>arrays.npz</code> 확인</td></tr><tr><td>U-Net 학습 실패</td><td>manifest column</td><td><code>asset_segmentation_manifest.csv</code> schema 확인</td></tr><tr><td>prediction이 엉뚱함</td><td>threshold, family coverage</td><td>threshold 조정, asset 추가 수집</td></tr></tbody></table></div>
+<h2 id="12-release-checklist">12. Release Checklist</h2>
+<p>작업 결과를 공유하기 전 아래를 확인합니다.</p>
+<ul>
+<li>[ ] <code>data/pattern_assets</code>에 family별 asset이 저장됨</li>
+<li>[ ] pattern asset report가 열림</li>
+<li>[ ] 합성 sample preview가 이상하지 않음</li>
+<li>[ ] <code>asset_segmentation_manifest.csv</code>가 생성됨</li>
+<li>[ ] 문서 링크가 깨지지 않음</li>
+<li>[ ] <code>python -m pytest tests/test_documentation_quality.py -q</code> 통과</li>
+<li>[ ] 관련 pipeline 테스트 통과</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

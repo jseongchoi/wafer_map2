@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>데이터 형식 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>데이터 형식</h1>
+      <p>docs/data_schema.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#데이터-형식">데이터 형식</a>
+<a class="toc-level-2" href="#1-좌표-기준">1. 좌표 기준</a>
+<a class="toc-level-2" href="#2-분석용-배열">2. 분석용 배열</a>
+<a class="toc-level-2" href="#3-실제-raw-png-gray-기준">3. 실제 raw PNG gray 기준</a>
+<a class="toc-level-2" href="#4-geometry-metadata">4. Geometry Metadata</a>
+<a class="toc-level-2" href="#5-합성-sample-형식">5. 합성 Sample 형식</a>
+<a class="toc-level-2" href="#6-라벨-없는-실제-wafer-manifest">6. 라벨 없는 실제 Wafer Manifest</a>
+<a class="toc-level-2" href="#7-feature-table-기준">7. Feature Table 기준</a>
+    </aside>
+    <article class="content">
+      <h1 id="데이터-형식">데이터 형식</h1>
+<p>변수 이름이 낯설면 <a href="glossary.html">용어와 변수 설명</a>을 먼저 본다.</p>
+<h2 id="1-좌표-기준">1. 좌표 기준</h2>
+<p>Wafer map은 2D array로 표현한다.</p>
+<pre><code class="language-text">y axis: top -&gt; bottom
+x axis: left -&gt; right
+wafer center: (cx, cy)
+clock position:
+  12:00 = negative y
+  03:00 = positive x
+  06:00 = positive y
+  09:00 = negative x</code></pre>
+<p>위치 기반 report는 Cartesian coordinate와 polar coordinate를 함께 사용할 수 있다.</p>
+<h2 id="2-분석용-배열">2. 분석용 배열</h2>
+<p>분석 내부에서는 시각화 색보다 의미가 명확한 배열을 우선한다.</p>
+<p>필수 channel:</p>
+<div class="table-wrap"><table><thead><tr><th>Channel</th><th>dtype</th><th>Shape</th><th>Meaning</th></tr></thead><tbody><tr><td><code>severity</code></td><td><code>uint8</code></td><td><code>[H, W]</code></td><td>Grade 0~7. wafer 밖과 stby는 0.</td></tr><tr><td><code>wafer_mask</code></td><td><code>uint8</code>/bool</td><td><code>[H, W]</code></td><td>wafer 내부 1, wafer 밖 0.</td></tr><tr><td><code>valid_test_mask</code></td><td><code>uint8</code>/bool</td><td><code>[H, W]</code></td><td>실제 test된 pixel 1.</td></tr><tr><td><code>stby_mask</code></td><td><code>uint8</code>/bool</td><td><code>[H, W]</code></td><td>stby fail chip 영역 1.</td></tr></tbody></table></div>
+<p>권장 channel:</p>
+<div class="table-wrap"><table><thead><tr><th>Channel</th><th>dtype</th><th>Shape</th><th>Meaning</th></tr></thead><tbody><tr><td><code>chip_index</code></td><td><code>int32</code></td><td><code>[H, W]</code></td><td>die/chip id. wafer 밖은 -1.</td></tr></tbody></table></div>
+<p>핵심 규칙:</p>
+<ul>
+<li>Stby는 Grade 7이 아니다.</li>
+<li>Stby는 <code>stby_mask=1</code>, <code>valid_test_mask=0</code>, <code>severity=0</code>으로 표현한다.</li>
+<li>Wafer 밖 영역과 in-wafer Grade 0은 <code>wafer_mask</code>로 구분한다.</li>
+<li><code>pattern_masks</code>, <code>pattern_intensity</code>는 합성 데이터 검증용 label이며 실제 inference feature가 아니다.</li>
+</ul>
+<h2 id="3-실제-raw-png-gray-기준">3. 실제 raw PNG gray 기준</h2>
+<p>실제 raw PNG를 직접 읽는 경우 gray value는 아래 기준으로 해석한다.</p>
+<div class="table-wrap"><table><thead><tr><th>Gray value</th><th>의미</th></tr></thead><tbody><tr><td><code>0</code></td><td>Grade 0, good</td></tr><tr><td><code>31</code></td><td>Grade 1</td></tr><tr><td><code>151</code></td><td>Grade 2</td></tr><tr><td><code>175</code></td><td>Grade 3</td></tr><tr><td><code>191</code></td><td>Grade 4</td></tr><tr><td><code>207</code></td><td>Grade 5</td></tr><tr><td><code>223</code></td><td>Grade 6</td></tr><tr><td><code>255</code></td><td>Grade 7 또는 stby 후보</td></tr></tbody></table></div>
+<p><code>255</code>는 pixel 단독으로 바로 stby로 보지 않는다. 한 chip block 전체가 <code>255</code>이고 block 내부 <code>min=max=255</code>일 때만 stby fail chip으로 분리한다. 그 chip은 내부 배열에서 <code>stby_mask=1</code>, <code>valid_test_mask=0</code>, <code>severity=0</code>이 된다. 일부 pixel만 <code>255</code>인 경우는 Grade 7 fail로 유지한다.</p>
+<p>PNG 밖 영역과 in-wafer Grade 0이 모두 <code>0</code>일 수 있으므로, PNG 입력은 기본적으로 제품별 chip geometry를 기준으로 centered ellipse wafer mask를 추정한다. 제품 die layout이 centered ellipse와 다르면 별도 geometry 또는 mask export가 필요하다. <code>png_grayscale_raw</code> manifest는 기본적으로 <code>chip_blocks</code>와 <code>grid</code>를 포함해야 한다. geometry를 모르는 smoke/inference 경로만 <code>allow_geometry_inference=true</code>를 명시하고, STBY 255 직사각형이 붙어 있어 애매하면 <code>--geometry-json</code>으로 보완한다.</p>
+<h2 id="4-geometry-metadata">4. Geometry Metadata</h2>
+<p>제품별 chip size와 die layout은 metadata로 명시한다.</p>
+<pre><code class="language-json">{
+  &quot;chip_blocks&quot;: { &quot;width&quot;: 100, &quot;height&quot;: 50 },
+  &quot;grid&quot;: { &quot;rows&quot;: 38, &quot;cols&quot;: 20 },
+  &quot;actual_net_die&quot;: 600
+}</code></pre>
+<p><code>chip_index</code>가 없으면 <code>chip_blocks</code>와 <code>grid</code>로 추정할 수 있지만, 실제 작업에서는 export하는 편이 더 안전하다.</p>
+<h2 id="5-합성-sample-형식">5. 합성 Sample 형식</h2>
+<p>Synthetic sample은 repo 밖에서 재생성 가능한 산출물이다.</p>
+<pre><code class="language-text">sample_id/
+  arrays.npz
+  metadata.json
+  raw_grayscale.png
+  preview.png</code></pre>
+<p><code>arrays.npz</code>:</p>
+<pre><code class="language-text">severity
+wafer_mask
+valid_test_mask
+stby_mask
+chip_index
+pattern_masks        # synthetic validation only
+pattern_intensity    # synthetic validation only</code></pre>
+<p><code>raw_grayscale.png</code>는 실제 raw PNG gray 기준으로 렌더링한 검증용 파일이다. 분석 내부의 <code>severity</code>는 계속 Grade 0~7을 사용한다.</p>
+<h2 id="6-라벨-없는-실제-wafer-manifest">6. 라벨 없는 실제 Wafer Manifest</h2>
+<p>실제 wafer는 raw PNG 또는 <code>.npz</code>를 manifest로 참조한다. 파일은 <code>data/raw</code>, 인트라넷 공유 폴더, 로컬 절대경로 중 편한 위치에 둘 수 있다.</p>
+<p>Top-level:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;real_unlabeled_manifest/v1&quot;,
+  &quot;feature_schema_version&quot;: &quot;observable_fbm_features/v1&quot;,
+  &quot;samples&quot;: []
+}</code></pre>
+<p><code>npz_semantic_arrays</code> sample:</p>
+<pre><code class="language-json">{
+  &quot;sample_id&quot;: &quot;product_a_wafer_001&quot;,
+  &quot;source_type&quot;: &quot;npz_semantic_arrays&quot;,
+  &quot;arrays_npz&quot;: &quot;data/raw/product_a/wafer_001_arrays.npz&quot;,
+  &quot;parser_name&quot;: &quot;fbm_npz_parser&quot;,
+  &quot;parser_version&quot;: &quot;0.1.0&quot;,
+  &quot;orientation&quot;: &quot;not_rotated&quot;,
+  &quot;chip_blocks&quot;: { &quot;width&quot;: 100, &quot;height&quot;: 50 },
+  &quot;grid&quot;: { &quot;rows&quot;: 38, &quot;cols&quot;: 20 }
+}</code></pre>
+<p><code>png_grayscale_raw</code> sample:</p>
+<pre><code class="language-json">{
+  &quot;sample_id&quot;: &quot;product_a_wafer_001&quot;,
+  &quot;source_type&quot;: &quot;png_grayscale_raw&quot;,
+  &quot;png_path&quot;: &quot;data/raw/product_a/wafer_001.png&quot;,
+  &quot;parser_name&quot;: &quot;png_raw_folder_batch&quot;,
+  &quot;parser_version&quot;: &quot;0.1.0&quot;,
+  &quot;orientation&quot;: &quot;not_rotated&quot;,
+  &quot;wafer_mask_strategy&quot;: &quot;centered_ellipse_from_png&quot;,
+  &quot;chip_blocks&quot;: { &quot;width&quot;: 100, &quot;height&quot;: 50 },
+  &quot;grid&quot;: { &quot;rows&quot;: 38, &quot;cols&quot;: 20 }
+}</code></pre>
+<p>제품별 PNG 폴더를 일괄 처리할 때는 manifest를 직접 만들지 않고 <code>scripts/analyze_png_raw_folders.py</code>가 생성한다.</p>
+<pre><code class="language-text">raw_root/
+  product_a/
+    wafer_001.png
+    wafer_002.png
+  product_b/
+    wafer_001.png</code></pre>
+<p>원본 array key가 표준 key와 다르면 <code>array_keys</code>를 사용한다.</p>
+<pre><code class="language-json">{
+  &quot;array_keys&quot;: {
+    &quot;severity&quot;: &quot;grade&quot;,
+    &quot;wafer_mask&quot;: &quot;in_wafer&quot;,
+    &quot;valid_test_mask&quot;: &quot;valid&quot;,
+    &quot;stby_mask&quot;: &quot;stby&quot;,
+    &quot;chip_index&quot;: &quot;die_id&quot;
+  }
+}</code></pre>
+<p>Manifest 기준:</p>
+<ul>
+<li><code>sample_id</code>는 비어 있지 않으면 된다. 사람이 읽기 쉬운 wafer 이름을 써도 된다.</li>
+<li><code>png_path</code>, <code>arrays_npz</code>, optional <code>metadata_json</code>은 상대경로와 절대경로를 모두 허용한다.</li>
+<li><code>scripts/analyze_png_raw_folders.py</code>의 기본 manifest 위치는 <code>outputs/manifests/&amp;lt;run_name&amp;gt;_manifest.json</code>이다.</li>
+</ul>
+<h2 id="7-feature-table-기준">7. Feature Table 기준</h2>
+<p>현재 feature table의 목적:</p>
+<ul>
+<li>similar wafer retrieval</li>
+<li>coarse grouping</li>
+<li>defect score report</li>
+<li>expert review triage</li>
+<li>downstream model input</li>
+</ul>
+<p>기본 column:</p>
+<pre><code class="language-text">sample_id
+actual_net_die
+total_fail_density
+grade_weighted_severity
+stby_ratio
+edge_density
+center_density
+edge_sector_peak_contrast
+ring_radial_peak_contrast
+scratch_angular_peak_contrast
+local_hotspot_peak_contrast
+shot_lower_left_contrast
+shot_bottom_edge_contrast
+shot_left_edge_contrast
+...</code></pre>
+<p>전체 유사 wafer 검색 feature 기준:</p>
+<pre><code class="language-text">compact feature 50개</code></pre>
+<p>전체 유사 wafer 검색에서 제외:</p>
+<pre><code class="language-text">label_*
+*_mask_ratio
+pattern_masks
+pattern_intensity
+polar_*
+stby_polar_*</code></pre>
+<p><code>polar_*</code>, <code>stby_polar_*</code>는 <code>class_location</code>, <code>feature_key</code>처럼 위치가 중요한 검색에서만 조건부로 쓴다.</p>
+<p>현재 repo feature table에는 민감한 lot/tool/recipe/chamber id를 넣지 않는다.</p>
+    </article>
+  </main>
+</body>
+</html>

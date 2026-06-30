@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>문서 품질 검증표 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>문서 품질 검증표</h1>
+      <p>docs/documentation_quality_audit.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#문서-품질-검증표">문서 품질 검증표</a>
+<a class="toc-level-2" href="#1-전체-판정">1. 전체 판정</a>
+<a class="toc-level-2" href="#2-문서별-검증-결과">2. 문서별 검증 결과</a>
+<a class="toc-level-2" href="#3-목표-적합성-검증">3. 목표 적합성 검증</a>
+<a class="toc-level-2" href="#4-문서-유지-규칙">4. 문서 유지 규칙</a>
+<a class="toc-level-2" href="#5-아직-남겨둘-영어">5. 아직 남겨둘 영어</a>
+    </aside>
+    <article class="content">
+      <h1 id="문서-품질-검증표">문서 품질 검증표</h1>
+<p>이 문서는 WaferMap 문서들이 현재 프로젝트 목적에 맞는지 하나씩 검토한 결과입니다. 검토 기준은 아래 네 가지입니다.</p>
+<ol>
+<li>한국어로 읽히는가?</li>
+<li>작업자가 바로 따라 할 예시가 있는가?</li>
+<li>“대표 불량 패턴 → 합성맵 → multi-label U-Net → correction loop” 목적과 맞는가?</li>
+<li>코드/파일 위치와 문서 설명이 어긋나지 않는가?</li>
+</ol>
+<h2 id="1-전체-판정">1. 전체 판정</h2>
+<p>현재 문서 세트는 아래 구조로 정리되어 있습니다.</p>
+<pre><code class="language-text">docs/index.html
+-&gt; 먼저 읽을 문서
+-&gt; 라벨 데이터 가이드
+-&gt; 학습 데이터 규격
+-&gt; 실행 흐름
+-&gt; 도구/데이터/검증 문서
+-&gt; 보조/이력 문서</code></pre>
+<p>사용자가 한 파일만 본다면 <a href="../index.html">문서 표지판</a>을 보면 됩니다. 브라우저에서 보기 좋은 HTML 문서는 <code>docs/pages/</code>에 생성됩니다.</p>
+<h2 id="2-문서별-검증-결과">2. 문서별 검증 결과</h2>
+<div class="table-wrap"><table><thead><tr><th>문서</th><th>현재 역할</th><th>검증 결과</th><th>보강된 예시</th></tr></thead><tbody><tr><td><code>index.html</code></td><td>메인 표지판</td><td>한국어 목차와 구현 위치 지도 제공</td><td>불량별 라벨링 방식, 학습 데이터 구조</td></tr><tr><td><code>README.md</code></td><td>repository 첫 설명</td><td>프로젝트 목적과 주요 command 안내</td><td>segmentation family 표</td></tr><tr><td><code>docs/README.md</code></td><td>문서 목차</td><td>읽을 순서와 문서 관리 규칙 제공</td><td>HTML 생성 명령</td></tr><tr><td><code>core_direction.md</code></td><td>프로젝트 경계</td><td>classification이 아니라 segmentation dataset factory임을 명확화</td><td>좋은/나쁜 방향 예시</td></tr><tr><td><code>project_overview.md</code></td><td>제품 개요</td><td>전체 파이프라인과 완료 기준 정리</td><td>구성요소별 코드 위치</td></tr><tr><td><code>architecture.md</code></td><td>코드 구조</td><td>새 기능을 어디에 넣을지 설명</td><td>기능별 command와 패키지 지도</td></tr><tr><td><code>end_to_end_workflow.md</code></td><td>전체 실행 순서</td><td>raw wafer부터 prediction correction까지 연결</td><td>단계별 PowerShell command</td></tr><tr><td><code>operator_manual.md</code></td><td>작업자 실행 안내</td><td>실제 작업 순서와 troubleshooting 정리</td><td>manifest, tool, readiness, U-Net 명령</td></tr><tr><td><code>segmentation_tool_workflow.md</code></td><td>도구 조작 기준</td><td>bbox/mask 차이와 prediction prefill 설명</td><td>shot_grid/ring/scratch parametric JSON</td></tr><tr><td><code>label_data_guidelines.md</code></td><td>라벨 저장 방식</td><td>wafer 1장 기준 labels/masks 구조 설명</td><td><code>labels.json</code>, <code>manual_mask</code>, <code>parametric_mask</code></td></tr><tr><td><code>training_data_contract.md</code></td><td>학습 데이터 규격</td><td><code>arrays.npz</code>, manifest, input/target channel 정의</td><td>sample folder, metadata, CSV 예시</td></tr><tr><td><code>pattern_taxonomy.md</code></td><td>defect family 정의</td><td>family별 판단 기준과 애매한 경우 처리</td><td>local/scratch/ring/edge/shot_grid 예시</td></tr><tr><td><code>fbm_data_flow_guide.md</code></td><td>데이터 경로</td><td>raw, labels, assets, synthetic, model output 경로 연결</td><td>folder tree, manifest JSON</td></tr><tr><td><code>fbm_pattern_asset_pipeline.md</code></td><td>합성 파이프라인</td><td>asset/rule을 학습 sample로 바꾸는 과정 설명</td><td>asset metadata, 합성 명령</td></tr><tr><td><code>validation_protocol.md</code></td><td>검증 기준</td><td>데이터 계약, mask 품질, 모델 correction 검증 정리</td><td>테스트 명령과 통과 기준</td></tr><tr><td><code>semiconductor_ai_review.md</code></td><td>AI 설계 판단</td><td>왜 segmentation/합성/좌표 channel을 쓰는지 설명</td><td>input channel과 target clipping 예시</td></tr><tr><td><code>roadmap.md</code></td><td>단계 계획</td><td>현재/다음 phase와 완료 기준 정리</td><td>phase별 명령과 산출물</td></tr><tr><td><code>data_schema.md</code></td><td>데이터 schema</td><td>배열/manifest/metadata 필드 설명</td><td>좌표 기준과 sample 형식</td></tr><tr><td><code>glossary.md</code></td><td>용어 사전</td><td>변수와 용어 정의 제공</td><td>feature, manifest, family 설명</td></tr><tr><td><code>real_png_operator_runbook.md</code></td><td>실제 PNG 입력</td><td>raw PNG batch를 manifest/report로 만드는 절차</td><td>geometry JSON, 실행 명령</td></tr><tr><td><code>real_unlabeled_workflow.md</code></td><td>라벨 없는 wafer 처리</td><td>triage, asset 후보, prediction correction 연결</td><td>manifest와 feature 추출 예시</td></tr><tr><td><code>real_wafer_review_checklist.md</code></td><td>실제 wafer 리뷰</td><td>리뷰어가 판단할 항목과 결과 형식 정리</td><td>review CSV column</td></tr><tr><td><code>expert_review_protocol.md</code></td><td>전문가 리뷰</td><td>family 정의/asset 품질을 전문가가 검증하는 절차</td><td>review CSV와 집계 명령</td></tr><tr><td><code>modeling_strategy.md</code></td><td>모델 이해 가이드</td><td>U-Net 입력, target, sigmoid, loss, threshold, correction loop 설명</td><td>input/target tensor, BCEWithLogitsLoss, prediction export</td></tr><tr><td><code>experiment_history.md</code></td><td>실험 이력</td><td>왜 현재 방향으로 왔는지 기록</td><td>resize-only, patch proposal, smoke test</td></tr><tr><td><code>enterprise_readiness_assessment.md</code></td><td>운영 준비도</td><td>운영 투입 전 부족한 점 정리</td><td>checklist</td></tr><tr><td><code>legacy_pattern_asset_editor.md</code></td><td>호환성 안내</td><td>과거 command 이름을 왜 유지하는지 설명</td><td>제거 가능 조건</td></tr><tr><td><code>scripts/README.md</code></td><td>명령 지도</td><td>script별 목적과 우선순위 정리</td><td>주력 pipeline command</td></tr></tbody></table></div>
+<h2 id="3-목표-적합성-검증">3. 목표 적합성 검증</h2>
+<p>문서 세트가 현재 목표와 맞는 이유:</p>
+<ul>
+<li>모든 핵심 문서가 <code>pattern asset</code>, <code>synthetic dataset</code>, <code>multi-label segmentation</code>,</li>
+</ul>
+<p><code>prediction correction</code> 흐름을 기준으로 설명합니다.</p>
+<ul>
+<li><code>bbox_xywh</code>를 학습 정답으로 오해하지 않게 <code>mask</code>와 분리했습니다.</li>
+<li><code>shot_grid</code>, <code>ring</code>, <code>edge</code>처럼 손마스킹이 비효율적인 유형은</li>
+</ul>
+<p><code>parametric_mask</code>로 설명했습니다.</p>
+<ul>
+<li>애매한 불량을 억지로 family에 넣지 않고 <code>mixed_unknown</code> 또는 review-only로</li>
+</ul>
+<p>분리하도록 문서화했습니다.</p>
+<ul>
+<li>코드 위치와 command를 각 문서에 넣어 실제 구현과 연결했습니다.</li>
+<li>모델 설명 문서에서 U-Net 구조, input/target tensor, sigmoid multi-label 예측,</li>
+</ul>
+<p>threshold 해석, correction loop까지 작업자 눈높이로 설명했습니다.</p>
+<h2 id="4-문서-유지-규칙">4. 문서 유지 규칙</h2>
+<p>문서를 수정한 뒤에는 아래 순서로 확인합니다.</p>
+<pre><code class="language-powershell">python scripts/build_static_docs.py
+python -m pytest tests/test_documentation_quality.py -q --basetemp .pytest_tmp_docs</code></pre>
+<p>학습 데이터 계약까지 같이 확인하려면:</p>
+<pre><code class="language-powershell">python -m pytest tests/test_pattern_asset_pipeline.py tests/test_segmentation_training.py -q</code></pre>
+<h2 id="5-아직-남겨둘-영어">5. 아직 남겨둘 영어</h2>
+<p>아래는 번역하지 않고 유지합니다.</p>
+<ul>
+<li>script 파일명: <code>train_unet_segmentation.py</code></li>
+<li>schema key: <code>pattern_masks</code>, <code>bbox_xywh</code>, <code>metadata.json</code></li>
+<li>family id: <code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>, <code>random</code></li>
+<li>model 이름: <code>U-Net</code></li>
+<li>manifest/output path</li>
+</ul>
+<p>이 값들은 코드와 데이터 계약의 일부라 한국어로 바꾸면 오히려 혼란이 커집니다.</p>
+    </article>
+  </main>
+</body>
+</html>

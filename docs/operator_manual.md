@@ -1,117 +1,104 @@
-# Operator Manual
+# 작업자 매뉴얼
 
-This is the short runbook for operating WaferMap. For the full command sequence and rationale, start with [End-To-End Workflow](end_to_end_workflow.md).
+이 문서는 실제로 WaferMap 파이프라인을 돌리는 사람이 보는 짧은 실행 안내서입니다.
+자세한 설계 설명보다 “무엇을 실행하고 무엇을 확인해야 하는가”에 집중합니다.
 
-## Goal
+## 1. 목표
 
-Turn real or real-like wafer maps into reusable defect assets, compose those assets into multi-defect synthetic wafers, train a segmentation model, and feed model predictions back into the tool for correction.
+작업자의 목표는 좋은 training sample을 만드는 것입니다.
 
 ```text
-wafer manifest
--> run_segmentation_tool.py
--> data/pattern_assets
--> data/synthetic/asset_composed
--> asset_segmentation_manifest.csv
--> train_unet_segmentation.py
--> export_unet_predictions.py
--> correction loop
+좋은 실제 wafer 예시를 찾는다
+-> 명확한 불량만 mask로 저장한다
+-> 합성 데이터셋을 만든다
+-> readiness report를 본다
+-> U-Net prediction을 다시 수정한다
 ```
 
-## Roles
+## 2. 역할
 
-| Role | Responsibility |
+| 역할 | 하는 일 |
 |---|---|
-| Data operator | Prepare raw wafer input and manifest files. |
-| Annotator | Draw family masks in `run_segmentation_tool.py`. |
-| Dataset owner | Review pattern assets and synthetic dataset readiness. |
-| ML owner | Train U-Net, export prediction masks, and track correction loop quality. |
+| 작업자 | wafer를 열고 불량 mask/asset을 저장 |
+| 리뷰어 | family가 맞는지, mask가 학습에 적합한지 확인 |
+| 개발자 | command, schema, training pipeline 유지 |
 
-## Preconditions
+작업자와 리뷰어가 다르지 않아도 됩니다. 다만 저장할 때와 검수할 때의 관점을
+분리하는 것이 좋습니다.
 
-```powershell
-pip install -e .[dev]
+## 3. 사전 준비
+
+필요한 입력:
+
+- raw wafer PNG 또는 이미 준비된 sample manifest
+- wafer geometry 정보가 있으면 더 좋음
+- 저장할 asset 폴더: `data/pattern_assets`
+- 출력 폴더: `outputs/`
+
+폴더 예시:
+
+```text
+data/raw/product_A/
+  WAFER_0001.png
+  WAFER_0002.png
+
+data/pattern_assets/
+outputs/manifests/
+outputs/reports/
 ```
 
-For real U-Net training:
+## 4. manifest 준비
 
-```powershell
-pip install -e .[dev,train]
-```
-
-Fast environment check:
-
-```powershell
-python -m pytest tests/test_pattern_asset_pipeline.py -q --basetemp .pytest_tmp_operator
-```
-
-## 1. Prepare Manifest
-
-Real PNG batch:
+raw PNG 폴더에서 시작할 때:
 
 ```powershell
 python scripts/analyze_png_raw_folders.py `
-  --raw-root data/raw `
-  --geometry-json data/raw/product_geometry.json `
-  --out-dir outputs/reports/real_png_batch
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json
 ```
 
-Main output:
+실행 후 확인:
 
-```text
-outputs/manifests/real_png_batch_manifest.json
-```
+- manifest 파일이 생성됐는가?
+- sample id가 사람이 구분 가능한가?
+- image shape가 예상과 맞는가?
 
-Quick smoke input:
-
-```text
-configs/eval/real_unlabeled_synthetic_smoke.json
-```
-
-## 2. Open Segmentation Tool
+## 5. segmentation tool 열기
 
 ```powershell
 python scripts/run_segmentation_tool.py `
-  --manifest outputs/manifests/real_png_batch_manifest.json `
-  --sample-id <sample_id> `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
   --assets-root data/pattern_assets
 ```
 
-For model-assisted correction:
+tool에서 할 일:
 
-```powershell
-python scripts/run_segmentation_tool.py `
-  --manifest outputs/manifests/real_png_batch_manifest.json `
-  --sample-id <sample_id> `
-  --prediction-json outputs/predictions/fbm_prediction_masks.json `
-  --assets-root data/pattern_assets
-```
+1. wafer 전체를 먼저 훑습니다.
+2. 확실한 불량만 family를 고릅니다.
+3. `local`처럼 경계가 명확한 것은 mask로 칠합니다.
+4. `ring`, `edge`, `shot_grid`는 가능하면 규칙 기반으로 저장합니다.
+5. 애매한 것은 `mixed_unknown` 또는 review-only로 남깁니다.
 
-## 3. Annotation Rules
+## 6. 라벨링 규칙
 
-| Family | Rule |
+| 상황 | 권장 행동 |
 |---|---|
-| `local` | Compact blob or local cluster only. Do not include broad normal background. |
-| `scratch` | Visible line, arc, or scratch-like defect. Split unrelated blobs into `local`. |
-| `ring` | Annulus, ring, or arc band. Do not fill the whole disk. |
-| `edge` | Abnormal edge band or edge sector, not the normal wafer boundary. |
-| `shot_grid` | Repeated shot-relative signature. Single blobs should usually be `local`. |
-| `random` | Sparse unstructured fail pattern when no stable geometry fits. |
+| 작은 blob이 선명함 | `local`로 mask 저장 |
+| 긴 선형 결함 | `scratch`로 저장하되 polyline + width 고려 |
+| 둥근 band | `ring` parametric label 사용 |
+| wafer edge 근처만 이상함 | `edge` sector rule 사용 |
+| shot마다 같은 상대 위치 문제 | `shot_grid` rule 사용 |
+| family가 애매함 | 학습 target에 넣지 말고 review-only |
 
-Large wafer-wide patterns are still segmentation targets. Use geometry to decide `edge`, `ring`, `shot_grid`, or `random`.
-
-## 4. Save And Review Assets
-
-The tool saves:
+가장 중요한 원칙:
 
 ```text
-data/pattern_assets/<family>/<asset_id>/
-  grade.png
-  mask.png
-  preview.png
-  metadata.json
+bbox는 위치 힌트다.
+U-Net이 배우는 정답은 mask다.
 ```
 
-Review:
+## 7. asset 저장 후 report 확인
 
 ```powershell
 python scripts/build_pattern_asset_report.py `
@@ -119,9 +106,29 @@ python scripts/build_pattern_asset_report.py `
   --out outputs/reports/pattern_asset_library_report.html
 ```
 
-Reject or correct assets with loose masks, wrong family assignment, accidental ring splitting, STBY-only pixels, or broad normal edge labeling.
+report에서 볼 것:
 
-## 5. Build Synthetic Dataset
+- family별 asset 수
+- mask가 비어 있지 않은지
+- 너무 큰 mask가 아닌지
+- 같은 wafer에서 중복 저장된 asset이 많은지
+- preview가 사람이 보기에 납득되는지
+
+## 8. 합성 데이터 만들기
+
+```powershell
+python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20 `
+  --assets-per-wafer 3 `
+  --procedural-families scratch,edge,shot_grid,random
+```
+
+처음에는 `--count 20` 정도로 작게 돌려 preview와 mask가 맞는지 확인합니다.
+
+## 9. readiness 확인
 
 ```powershell
 python scripts/run_pattern_asset_pipeline.py `
@@ -131,30 +138,20 @@ python scripts/run_pattern_asset_pipeline.py `
   --report-out outputs/reports/pattern_asset_project_report.html
 ```
 
-Must inspect:
+생성되는 핵심 파일:
 
 ```text
 outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
-outputs/pattern_asset_pipeline/asset_segmentation_readiness.html
-outputs/pattern_asset_pipeline/asset_segmentation_readiness_metrics.json
 outputs/reports/pattern_asset_project_report.html
 ```
 
-## 6. Train And Export
-
-Train:
+## 10. U-Net 학습과 prediction export
 
 ```powershell
 python scripts/train_unet_segmentation.py `
   --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
-  --out outputs/pattern_asset_pipeline/asset_unet_segmentation.html `
-  --metrics outputs/pattern_asset_pipeline/asset_unet_segmentation_metrics.json `
-  --model-out outputs/models/asset_unet_segmentation.pt `
-  --output-size 96 `
-  --epochs 20
+  --out-model outputs/models/asset_unet_segmentation.pt
 ```
-
-Export predictions:
 
 ```powershell
 python scripts/export_unet_predictions.py `
@@ -165,31 +162,25 @@ python scripts/export_unet_predictions.py `
   --threshold 0.5
 ```
 
-Training blocks when the train split lacks positive examples for a target family unless `--allow-incomplete-target-coverage` is explicitly used for wiring/debug.
+## 11. Troubleshooting
 
-## Troubleshooting
-
-| Symptom | Likely cause | Action |
+| 증상 | 확인할 것 | 조치 |
 |---|---|---|
-| Saved asset count is 0 | No mask pixels were selected | Check active family and output pixel counts. |
-| Synthetic sample has no assets | `data/pattern_assets` is empty or invalid | Run the tool and asset report first. |
-| Edge/ring labels are too broad | Mask rule is too loose | Relabel only the visible abnormal band or arc. |
-| Prediction masks do not load | Schema or sample id mismatch | Check `fbm_prediction_masks/v1` and `sample_id`. |
-| U-Net training refuses to start | Missing positive train samples | Add assets or rebuild the synthetic dataset. |
-| Tests fail after docs edit | Documentation quality test found drift | Check links and current project direction. |
+| manifest가 비어 있음 | 입력 폴더 경로 | `--input-root` 재확인 |
+| tool에서 wafer가 안 보임 | image path | manifest의 path가 실제 존재하는지 확인 |
+| asset report가 비어 있음 | save 여부 | tool에서 asset 저장 버튼/출력 폴더 확인 |
+| readiness에서 target 없음 | `pattern_masks` | 합성 sample의 `arrays.npz` 확인 |
+| U-Net 학습 실패 | manifest column | `asset_segmentation_manifest.csv` schema 확인 |
+| prediction이 엉뚱함 | threshold, family coverage | threshold 조정, asset 추가 수집 |
 
-## Release Checklist
+## 12. Release Checklist
 
-Before committing:
+작업 결과를 공유하기 전 아래를 확인합니다.
 
-```powershell
-python -m compileall scripts src -q
-python -m pytest -q --basetemp .pytest_tmp_release
-git status --short
-```
-
-Also check:
-
-- [End-To-End Workflow](end_to_end_workflow.md) still contains the main command sequence.
-- [scripts command map](../scripts/README.md) lists any new operator-facing command.
-- No generated wafer data, assets, checkpoints, or reports are staged.
+- [ ] `data/pattern_assets`에 family별 asset이 저장됨
+- [ ] pattern asset report가 열림
+- [ ] 합성 sample preview가 이상하지 않음
+- [ ] `asset_segmentation_manifest.csv`가 생성됨
+- [ ] 문서 링크가 깨지지 않음
+- [ ] `python -m pytest tests/test_documentation_quality.py -q` 통과
+- [ ] 관련 pipeline 테스트 통과

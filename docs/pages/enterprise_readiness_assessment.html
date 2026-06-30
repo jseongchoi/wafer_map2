@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>운영 준비도 평가 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>운영 준비도 평가</h1>
+      <p>docs/enterprise_readiness_assessment.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#운영-준비도-평가">운영 준비도 평가</a>
+<a class="toc-level-2" href="#현재-판정">현재 판정</a>
+<a class="toc-level-2" href="#단계별-기준">단계별 기준</a>
+<a class="toc-level-2" href="#현재-강점">현재 강점</a>
+<a class="toc-level-2" href="#아직-중요한-공백">아직 중요한 공백</a>
+<a class="toc-level-2" href="#운영-투입-전-체크리스트">운영 투입 전 체크리스트</a>
+<a class="toc-level-2" href="#결론">결론</a>
+    </aside>
+    <article class="content">
+      <h1 id="운영-준비도-평가">운영 준비도 평가</h1>
+<p>이 문서는 WaferMap 프로젝트가 실제 FBM 업무에 투입되기 위해 무엇이 준비됐고 무엇이 남았는지 정리한다. 현재 목표는 “FBM wafer map에서 불량 패턴을 추출하고, 라벨이 있는 합성 데이터를 만들고, multi-label segmentation 모델로 위치와 패턴을 수치화하는 파이프라인”이다.</p>
+<h2 id="현재-판정">현재 판정</h2>
+<p>현재 평가는 문서, synthetic smoke test, raw PNG batch 준비 상태를 함께 본다. 실제 성능 판정은 real FBM batch와 전문가 리뷰 CSV가 들어온 뒤 가능하다.</p>
+<h2 id="단계별-기준">단계별 기준</h2>
+<div class="table-wrap"><table><thead><tr><th>단계</th><th>현재 의미</th><th>통과 기준</th></tr></thead><tbody><tr><td>0. 문제 정의</td><td>FBM grade, wafer mask, stby, defect family 정의</td><td>문서와 schema가 같은 용어를 사용</td></tr><tr><td>1. 원본 입력</td><td>실제 FBM raw PNG 또는 semantic npz 입력</td><td>Grade 0~7, stby, wafer outside를 안정적으로 분리</td></tr><tr><td>2. 누끼/마스크</td><td>사람이 defect pattern mask를 만들 수 있음</td><td>editor save 결과를 다시 열어 확인 가능</td></tr><tr><td>3. 마스크 라이브러리</td><td>family별 defect mask asset을 축적</td><td><code>data/masks/&amp;lt;family&amp;gt;/</code> 단위로 재사용 가능</td></tr><tr><td>4. 합성 데이터</td><td>실제 wafer 배경에 defect mask를 합성</td><td>image, multi-channel mask, metadata가 함께 생성</td></tr><tr><td>5. 기준 모델</td><td>U-Net 계열 multi-label segmentation baseline</td><td>family별 Dice/IoU, 위치 오차, confidence 산출</td></tr><tr><td>6. 유사맵 검색</td><td>encoder embedding 또는 segmentation feature 검색</td><td>top-k neighbor가 전문가 기준으로 납득 가능</td></tr><tr><td>7. 실제 리뷰</td><td>실제 wafer 5~20장 이상으로 검증</td><td>틀린 family와 위치 오류가 기록됨</td></tr><tr><td>8. 반복 개선</td><td>실패 family 중심으로 generator/model 보정</td><td>같은 오류가 줄어드는지 재평가</td></tr></tbody></table></div>
+<h2 id="현재-강점">현재 강점</h2>
+<ul>
+<li>raw PNG 폴더를 읽어 manifest, feature, sanity report, neighbor 후보를 만들 수 있다.</li>
+<li>editor 기반으로 defect mask asset을 저장하고 확인하는 흐름이 있다.</li>
+<li>synthetic dataset generator, feature retrieval, CPU encoder baseline이 연결되어 있다.</li>
+<li>문서상 입력/출력 위치가 정리되어 작업자가 어디에 파일을 둬야 하는지 알 수 있다.</li>
+</ul>
+<h2 id="아직-중요한-공백">아직 중요한 공백</h2>
+<ul>
+<li>실제 FBM batch 기준으로 defect family 정의가 충분히 축적되지 않았다.</li>
+<li>random처럼 사람이 누끼따기 어려운 family는 코드형 generator 또는 weak-label 전략이 필요하다.</li>
+<li>segmentation 모델 학습/평가 루프는 baseline을 만들고 real review feedback으로 조정해야 한다.</li>
+<li>유사맵 검색은 feature baseline에서 시작하되, 최종적으로 encoder embedding과 segmentation output을 함께 쓰는 방향이 적합하다.</li>
+</ul>
+<h2 id="운영-투입-전-체크리스트">운영 투입 전 체크리스트</h2>
+<div class="table-wrap"><table><thead><tr><th>항목</th><th>기준</th></tr></thead><tbody><tr><td>실제 입력</td><td><code>data/raw/&amp;lt;product&amp;gt;/*.png</code> 또는 사내 경로에 제품별 PNG 배치</td></tr><tr><td>누끼 asset</td><td><code>data/masks/&amp;lt;family&amp;gt;/</code> 아래 family별 PNG/JSON 저장</td></tr><tr><td>합성 산출물</td><td><code>outputs/synthetic_dataset/&amp;lt;run&amp;gt;/</code> 아래 image, mask, metadata 생성</td></tr><tr><td>리포트</td><td><code>outputs/reports/&amp;lt;run&amp;gt;/report.html</code> 생성</td></tr><tr><td>manifest</td><td><code>outputs/manifests/&amp;lt;run&amp;gt;_manifest.json</code> 생성</td></tr><tr><td>리뷰 CSV</td><td>query-neighbor 판단, dominant defect, missed major defect 기록</td></tr><tr><td>모델 산출물</td><td><code>models/&amp;lt;run&amp;gt;/</code> 또는 <code>outputs/models/&amp;lt;run&amp;gt;/</code>에 checkpoint와 metrics 저장</td></tr></tbody></table></div>
+<h2 id="결론">결론</h2>
+<p>프로젝트는 “딥러닝으로 갈 수 있는 구조”를 만들고 있다. 단, 처음부터 모델만 던지는 방식은 라벨 정의와 합성 데이터 품질이 흔들리면 성능을 해석할 수 없다. 그래서 현재의 핵심은 defect mask asset을 잘 만들고, 그 asset으로 라벨이 명확한 synthetic dataset을 만든 뒤, U-Net 계열 모델과 embedding 검색을 붙이는 것이다.</p>
+    </article>
+  </main>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>설계 구조 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>설계 구조</h1>
+      <p>docs/architecture.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#설계-구조">설계 구조</a>
+<a class="toc-level-2" href="#1-제품-경계">1. 제품 경계</a>
+<a class="toc-level-2" href="#2-최상위-폴더">2. 최상위 폴더</a>
+<a class="toc-level-2" href="#3-패키지-경계">3. 패키지 경계</a>
+<a class="toc-level-2" href="#4-기능별-코드-지도">4. 기능별 코드 지도</a>
+<a class="toc-level-3" href="#실제-wafer-입력">실제 wafer 입력</a>
+<a class="toc-level-3" href="#직접-mask-생성">직접 mask 생성</a>
+<a class="toc-level-3" href="#합성-데이터-생성">합성 데이터 생성</a>
+<a class="toc-level-3" href="#학습-준비와-u-net">학습 준비와 U-Net</a>
+<a class="toc-level-2" href="#5-새-코드를-넣는-위치">5. 새 코드를 넣는 위치</a>
+<a class="toc-level-2" href="#6-기술-부채">6. 기술 부채</a>
+<a class="toc-level-2" href="#7-리팩터링-규칙">7. 리팩터링 규칙</a>
+    </aside>
+    <article class="content">
+      <h1 id="설계-구조">설계 구조</h1>
+<p>이 문서는 새 코드를 어디에 넣고, 각 폴더가 무엇을 책임지는지 설명합니다. 목표는 단순합니다. “문서에 적힌 데이터 흐름”과 “실제 코드 위치”가 서로 어긋나지 않게 만드는 것입니다.</p>
+<h2 id="1-제품-경계">1. 제품 경계</h2>
+<p>WaferMap의 중심 기능은 아래 네 가지입니다.</p>
+<ol>
+<li>실제 wafer sample을 읽고 manifest로 정리합니다.</li>
+<li>사람이 segmentation tool에서 대표 불량 mask를 저장합니다.</li>
+<li>pattern asset과 parametric rule을 합성해 학습 sample을 만듭니다.</li>
+<li>small U-Net을 학습하고 prediction을 다시 사람이 고칠 수 있게 내보냅니다.</li>
+</ol>
+<p>이 경계를 벗어난 실험성 retrieval, historical benchmark, report는 보조 기능입니다.</p>
+<h2 id="2-최상위-폴더">2. 최상위 폴더</h2>
+<div class="table-wrap"><table><thead><tr><th>폴더</th><th>역할</th><th>예시</th></tr></thead><tbody><tr><td><code>scripts/</code></td><td>사용자가 직접 실행하는 command</td><td><code>run_segmentation_tool.py</code></td></tr><tr><td><code>src/wafermap/</code></td><td>재사용 가능한 실제 구현</td><td><code>assets/</code>, <code>synth/</code>, <code>training/</code></td></tr><tr><td><code>docs/</code></td><td>작업자/개발자 문서</td><td><code>index.html</code>, <code>label_data_guidelines.md</code></td></tr><tr><td><code>configs/</code></td><td>manifest, geometry, eval 설정</td><td><code>configs/eval/*.json</code></td></tr><tr><td><code>tests/</code></td><td>문서/데이터/학습 계약 검증</td><td><code>tests/test_pattern_asset_pipeline.py</code></td></tr><tr><td><code>data/</code></td><td>로컬 입력과 생성 데이터</td><td>git에 넣지 않는 산출물</td></tr><tr><td><code>outputs/</code></td><td>report, model, prediction output</td><td>git에 넣지 않는 산출물</td></tr></tbody></table></div>
+<h2 id="3-패키지-경계">3. 패키지 경계</h2>
+<div class="table-wrap"><table><thead><tr><th>패키지</th><th>책임</th></tr></thead><tbody><tr><td><code>src/wafermap/assets/</code></td><td>pattern asset 저장, metadata, library report</td></tr><tr><td><code>src/wafermap/synth/</code></td><td>synthetic wafer 생성, procedural pattern</td></tr><tr><td><code>src/wafermap/training/</code></td><td>U-Net dataset, tensor 변환, 학습 loop</td></tr><tr><td><code>src/wafermap/real/</code></td><td>실제 raw PNG ingestion과 manifest 생성</td></tr><tr><td><code>src/wafermap/reporting/</code></td><td>HTML/report 생성</td></tr><tr><td><code>src/wafermap/data/</code></td><td>공통 schema와 family 정의</td></tr></tbody></table></div>
+<h2 id="4-기능별-코드-지도">4. 기능별 코드 지도</h2>
+<h3 id="실제-wafer-입력">실제 wafer 입력</h3>
+<p>사용자가 제품별 raw PNG 폴더를 가지고 있으면 먼저 manifest로 만듭니다.</p>
+<pre><code class="language-powershell">python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json</code></pre>
+<p>관련 코드:</p>
+<ul>
+<li><code>scripts/analyze_png_raw_folders.py</code></li>
+<li><code>src/wafermap/real/</code></li>
+</ul>
+<h3 id="직접-mask-생성">직접 mask 생성</h3>
+<p>작업자가 실제 wafer를 보고 명확한 defect를 mask로 저장합니다.</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p>관련 코드:</p>
+<ul>
+<li><code>scripts/run_segmentation_tool.py</code></li>
+<li><code>scripts/run_pattern_asset_editor.py</code></li>
+<li><code>src/wafermap/assets/</code></li>
+</ul>
+<h3 id="합성-데이터-생성">합성 데이터 생성</h3>
+<p>asset과 procedural pattern을 base wafer 위에 합성합니다.</p>
+<pre><code class="language-powershell">python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20</code></pre>
+<p>관련 코드:</p>
+<ul>
+<li><code>scripts/compose_synthetic_from_assets.py</code></li>
+<li><code>src/wafermap/synth/</code></li>
+</ul>
+<h3 id="학습-준비와-u-net">학습 준비와 U-Net</h3>
+<p>합성 sample을 검사하고 manifest를 만든 뒤 학습합니다.</p>
+<pre><code class="language-powershell">python scripts/build_segmentation_readiness.py `
+  --dataset-dir data/synthetic/asset_composed `
+  --out-manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv
+
+python scripts/train_unet_segmentation.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv</code></pre>
+<p>관련 코드:</p>
+<ul>
+<li><code>scripts/build_segmentation_readiness.py</code></li>
+<li><code>scripts/train_unet_segmentation.py</code></li>
+<li><code>src/wafermap/training/segmentation.py</code></li>
+</ul>
+<h2 id="5-새-코드를-넣는-위치">5. 새 코드를 넣는 위치</h2>
+<div class="table-wrap"><table><thead><tr><th>새 요구사항</th><th>넣을 위치</th><th>이유</th></tr></thead><tbody><tr><td>새 defect family</td><td><code>src/wafermap/data/schema.py</code>와 관련 test</td><td>family 순서가 학습 target에 직접 영향</td></tr><tr><td>새 asset metadata</td><td><code>src/wafermap/assets/</code></td><td>저장/검수/report가 한곳에서 관리됨</td></tr><tr><td>새 procedural defect</td><td><code>src/wafermap/synth/procedural_patterns.py</code></td><td>합성 mask 생성 책임</td></tr><tr><td>새 training channel</td><td><code>src/wafermap/training/segmentation.py</code></td><td>input/target tensor 계약</td></tr><tr><td>새 사용자 command</td><td><code>scripts/</code>와 <code>scripts/README.md</code></td><td>사용자가 직접 실행</td></tr><tr><td>새 운영 문서</td><td><code>docs/operator_manual.md</code> 또는 관련 문서</td><td>작업자가 찾기 쉬움</td></tr></tbody></table></div>
+<h2 id="6-기술-부채">6. 기술 부채</h2>
+<p>현재 일부 파일명에는 과거 호환성을 위한 이름이 남아 있습니다. 예를 들어 <code>run_pattern_asset_editor.py</code>는 기존 사용자를 위해 유지하지만, 실제 방향은 in-repo segmentation tool 중심입니다.</p>
+<p>또한 historical retrieval/benchmark 문서는 남아 있지만 현재 1순위 제품 흐름은 segmentation dataset factory입니다.</p>
+<h2 id="7-리팩터링-규칙">7. 리팩터링 규칙</h2>
+<p>리팩터링은 아래 기준을 만족할 때만 합니다.</p>
+<ul>
+<li>문서에 적힌 command 흐름이 더 단순해진다.</li>
+<li>테스트가 있는 데이터 계약을 더 명확히 만든다.</li>
+<li>pattern asset, synthetic dataset, U-Net training 사이의 중복을 줄인다.</li>
+<li>사용자-facing command 이름이 깨지지 않는다.</li>
+</ul>
+<p>단순히 코드가 보기 싫다는 이유만으로 넓은 리팩터링을 하지 않습니다.</p>
+    </article>
+  </main>
+</body>
+</html>

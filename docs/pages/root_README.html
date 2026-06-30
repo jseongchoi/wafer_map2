@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WaferMap Defect Intelligence - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>WaferMap Defect Intelligence</h1>
+      <p>README.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#wafermap-defect-intelligence">WaferMap Defect Intelligence</a>
+<a class="toc-level-2" href="#현재-방향">현재 방향</a>
+<a class="toc-level-2" href="#주요-명령">주요 명령</a>
+<a class="toc-level-2" href="#세그멘테이션-family">세그멘테이션 Family</a>
+<a class="toc-level-2" href="#문서">문서</a>
+<a class="toc-level-2" href="#검증">검증</a>
+<a class="toc-level-2" href="#저장소-정책">저장소 정책</a>
+    </aside>
+    <article class="content">
+      <h1 id="wafermap-defect-intelligence">WaferMap Defect Intelligence</h1>
+<p>WaferMap은 wafer Fail Bit Map(FBM)에서 defect segmentation model을 만들기 위한 데이터셋 제작 도구입니다. 현재 1순위는 모델 학습 자체가 아니라, 실제 wafer에서 defect mask를 직접 만들고 그 mask를 합성 데이터 생성 파이프라인으로 연결하는 것입니다.</p>
+<h2 id="현재-방향">현재 방향</h2>
+<p>핵심 방향:</p>
+<pre><code class="language-text">FBM maps
+-&gt; defect generation
+-&gt; multi-defect synthetic maps
+-&gt; multi-defect segmentation training and validation
+-&gt; local segmentation tool for real-data pattern asset extraction</code></pre>
+<p>메인 워크플로우는 repo 안의 직접 세그멘테이션 툴을 기준으로 합니다.</p>
+<pre><code class="language-text">real/unlabeled wafer manifest
+-&gt; in-repo segmentation tool
+-&gt; reusable pattern assets
+-&gt; real/base wafer synthetic dataset composition
+-&gt; segmentation readiness and smoke validation</code></pre>
+<p>모델 학습과 평가(<code>train_unet_segmentation.py</code>)는 데이터셋 생성 경로가 안정화된 뒤 붙입니다. 지금은 1) Defect Segmentation Model용 mask asset 제작, 2) 실제 defect pattern을 real/base wafer에 붙여 합성 데이터를 만드는 경로에 집중합니다.</p>
+<h2 id="주요-명령">주요 명령</h2>
+<p>wafer manifest에서 직접 세그멘테이션 툴을 엽니다.</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest configs/eval/real_unlabeled_synthetic_smoke.json `
+  --sample-id real_like_synth_000000 `
+  --assets-root data/pattern_assets</code></pre>
+<p>저장된 pattern asset을 검수합니다.</p>
+<pre><code class="language-powershell">python scripts/build_pattern_asset_report.py `
+  --assets-root data/pattern_assets `
+  --out outputs/reports/pattern_asset_library_report.html</code></pre>
+<p>생성된 pattern asset을 base wafer에 합성합니다.</p>
+<pre><code class="language-powershell">python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20 `
+  --assets-per-wafer 3 `
+  --procedural-families scratch,edge,shot_grid,random</code></pre>
+<p>합성 데이터가 segmentation 학습 입력으로 쓸 수 있는지 점검합니다.</p>
+<pre><code class="language-powershell">python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</code></pre>
+<p>학습된 U-Net 결과를 segmentation tool correction seed로 내보냅니다.</p>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5</code></pre>
+<h2 id="세그멘테이션-family">세그멘테이션 Family</h2>
+<p>현재 핵심 mask family:</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>용도</th></tr></thead><tbody><tr><td><code>local</code></td><td>작은 국소 blob 또는 cluster</td></tr><tr><td><code>scratch</code></td><td>길게 이어지는 선형/곡선형 긁힘</td></tr><tr><td><code>ring</code></td><td>원형 또는 부분 원형 band</td></tr><tr><td><code>edge</code></td><td>wafer edge 근처 band/sector</td></tr><tr><td><code>shot_grid</code></td><td>shot 상대 위치가 반복되는 불량</td></tr><tr><td><code>random</code></td><td>뚜렷한 구조 없는 sparse baseline fail</td></tr></tbody></table></div>
+<p><code>stby_pattern</code>은 valid-test mask를 설명하는 보조 패턴이며, 현재 primary segmentation target에서는 제외합니다.</p>
+<h2 id="문서">문서</h2>
+<ul>
+<li><a href="../index.html">문서 표지판</a></li>
+<li><a href="core_direction.html">핵심 방향</a></li>
+<li><a href="end_to_end_workflow.html">전체 실행 흐름</a></li>
+<li><a href="architecture.html">설계 구조</a></li>
+<li><a href="operator_manual.html">작업자 매뉴얼</a></li>
+<li><a href="segmentation_tool_workflow.html">세그멘테이션 도구 흐름</a></li>
+<li><a href="project_overview.html">프로젝트 개요</a></li>
+<li><a href="fbm_data_flow_guide.html">데이터 흐름 가이드</a></li>
+<li><a href="fbm_pattern_asset_pipeline.html">합성 데이터 파이프라인</a></li>
+<li><a href="semiconductor_ai_review.html">반도체 AI 설계 검토</a></li>
+<li><a href="scripts_README.html">실행 명령 지도</a></li>
+<li><a href="pattern_taxonomy.html">불량 family 정의</a></li>
+<li><a href="label_data_guidelines.html">라벨 데이터 가이드</a></li>
+<li><a href="training_data_contract.html">학습 데이터 규격</a></li>
+<li><a href="modeling_strategy.html">모델 이해 가이드</a></li>
+<li><a href="roadmap.html">로드맵</a></li>
+<li><a href="glossary.html">용어 사전</a></li>
+<li><a href="documentation_quality_audit.html">문서 품질 검증표</a></li>
+</ul>
+<h2 id="검증">검증</h2>
+<p>기본 테스트는 느린 end-to-end 테스트를 건너뜁니다.</p>
+<pre><code class="language-powershell">python -m pytest -q --basetemp .pytest_tmp</code></pre>
+<p>느린 pipeline/training/report 테스트까지 포함할 때:</p>
+<pre><code class="language-powershell">python -m pytest -q --run-slow --basetemp .pytest_tmp_full</code></pre>
+<p>직접 세그멘테이션 툴과 pattern asset pipeline만 빠르게 확인:</p>
+<pre><code class="language-powershell">python -m pytest tests/test_pattern_asset_pipeline.py -q</code></pre>
+<h2 id="저장소-정책">저장소 정책</h2>
+<p>원본 wafer, 생성된 pattern assets, synthetic samples, model checkpoints, reports는 로컬 산출물입니다. Git에는 code, configs, schemas, docs, tests만 넣습니다.</p>
+    </article>
+  </main>
+</body>
+</html>

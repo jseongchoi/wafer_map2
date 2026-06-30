@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>문서 목차 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>문서 목차</h1>
+      <p>docs/README.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#문서-목차">문서 목차</a>
+<a class="toc-level-2" href="#먼저-볼-문서">먼저 볼 문서</a>
+<a class="toc-level-2" href="#핵심-참고-문서">핵심 참고 문서</a>
+<a class="toc-level-2" href="#실제-데이터와-검토">실제 데이터와 검토</a>
+<a class="toc-level-2" href="#보조-이력-문서">보조/이력 문서</a>
+<a class="toc-level-2" href="#문서-관리-규칙">문서 관리 규칙</a>
+    </aside>
+    <article class="content">
+      <h1 id="문서-목차">문서 목차</h1>
+<p>WaferMap 문서는 아래 한 가지 제품 흐름을 기준으로 정리합니다.</p>
+<pre><code class="language-text">FBM wafer map
+-&gt; 대표 불량 패턴 추출
+-&gt; 여러 불량이 섞인 합성맵 생성
+-&gt; multi-label segmentation 학습/검증
+-&gt; 실제 wafer 예측과 수정
+-&gt; 수정 결과를 다시 asset으로 축적</code></pre>
+<h2 id="먼저-볼-문서">먼저 볼 문서</h2>
+<ol>
+<li><a href="../index.html">문서 표지판</a>: 어떤 문서를 먼저 볼지, 현재 구현은 어디까지인지, 다음에 어떤 명령을 실행할지 한 화면에서 봅니다.</li>
+</ol>
+<ol>
+<li><a href="core_direction.html">핵심 방향</a>: 이 프로젝트가 흔들리면 안 되는 범위와 의사결정 기준입니다.</li>
+</ol>
+<ol>
+<li><a href="end_to_end_workflow.html">전체 실행 흐름</a>: wafer 입력부터 asset, 합성맵, U-Net 학습, 예측 export, correction까지의 기준 명령 흐름입니다.</li>
+</ol>
+<ol>
+<li><a href="operator_manual.html">작업자 매뉴얼</a>: 실제로 파이프라인을 돌릴 때 보는 짧은 실행 가이드입니다.</li>
+</ol>
+<ol>
+<li><a href="semiconductor_ai_review.html">반도체 AI 설계 검토</a>: resize, target clipping, 위치 정보를 쓰는 합성, readiness check를 왜 이렇게 하는지 설명합니다.</li>
+</ol>
+<h2 id="핵심-참고-문서">핵심 참고 문서</h2>
+<ul>
+<li><a href="architecture.html">설계 구조</a>: 패키지 경계, command 소유권, 새 코드를 넣을 위치를 정리합니다.</li>
+<li><a href="project_overview.html">프로젝트 개요</a>: 현재 제품 형태, 호환성 파일, 다음 구현 순서를 정리합니다.</li>
+<li><a href="segmentation_tool_workflow.html">세그멘테이션 도구 흐름</a>: tool 조작, mask 편집, asset 저장, prediction prefill 흐름입니다.</li>
+<li><a href="fbm_data_flow_guide.html">FBM 데이터 흐름</a>: 파일 위치, manifest 출력, asset 경로, model artifact 경로입니다.</li>
+<li><a href="fbm_pattern_asset_pipeline.html">합성 데이터 파이프라인</a>: pattern asset 형식, procedural fallback, readiness, training 흐름입니다.</li>
+<li><a href="pattern_taxonomy.html">불량 family 정의</a>: <code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>, <code>random</code>의 의미입니다.</li>
+<li><a href="label_data_guidelines.html">라벨 데이터 가이드</a>: wafer-level tag, rough region, clean mask, reusable pattern asset을 어떻게 저장할지 예시로 설명합니다.</li>
+<li><a href="training_data_contract.html">학습 데이터 규격</a>: U-Net 학습에 필요한 <code>arrays.npz</code>, <code>metadata.json</code>, manifest, input tensor, target tensor 규격입니다.</li>
+<li><a href="modeling_strategy.html">모델 이해 가이드</a>: U-Net이 무엇을 입력받고, 어떤 mask를 예측하고, prediction을 어떻게 해석하는지 설명합니다.</li>
+<li><a href="data_schema.html">데이터 스키마</a>: arrays, masks, metadata, manifest schema입니다.</li>
+<li><a href="roadmap.html">로드맵</a>: 단계별 구현 상태입니다.</li>
+<li><a href="glossary.html">용어 사전</a>: <code>severity</code>, <code>manifest</code>, <code>pattern asset</code>, <code>retrieval_failure_mode</code> 같은 공통 용어입니다.</li>
+<li><a href="scripts_README.html">실행 명령 지도</a>: 안정적으로 쓰는 command-line entrypoint 목록입니다.</li>
+</ul>
+<h2 id="실제-데이터와-검토">실제 데이터와 검토</h2>
+<ul>
+<li><a href="real_png_operator_runbook.html">실제 PNG 실행 가이드</a></li>
+<li><a href="real_unlabeled_workflow.html">실제 unlabeled wafer 흐름</a></li>
+<li><a href="expert_review_protocol.html">전문가 검토 프로토콜</a></li>
+<li><a href="real_wafer_review_checklist.html">실제 wafer 검토 체크리스트</a></li>
+</ul>
+<h2 id="보조-이력-문서">보조/이력 문서</h2>
+<ul>
+<li><a href="experiment_history.html">실험 이력</a></li>
+<li><a href="modeling_strategy.html">모델링 전략</a></li>
+<li><a href="validation_protocol.html">검증 프로토콜</a></li>
+<li><a href="documentation_quality_audit.html">문서 품질 검증표</a></li>
+<li><a href="enterprise_readiness_assessment.html">엔터프라이즈 준비도 평가</a></li>
+<li><a href="legacy_pattern_asset_editor.html">호환성 pattern asset editor</a></li>
+</ul>
+<h2 id="문서-관리-규칙">문서 관리 규칙</h2>
+<ul>
+<li>메인 command 순서는 <a href="end_to_end_workflow.html">전체 실행 흐름</a>을 기준으로 유지합니다.</li>
+<li>tool 조작 상세는 <a href="segmentation_tool_workflow.html">세그멘테이션 도구 흐름</a>에 둡니다.</li>
+<li>artifact와 폴더 규격은 <a href="fbm_data_flow_guide.html">FBM 데이터 흐름</a>에 둡니다.</li>
+<li>합성과 학습 규격은 <a href="fbm_pattern_asset_pipeline.html">합성 데이터 파이프라인</a>과 <a href="training_data_contract.html">학습 데이터 규격</a>에 둡니다.</li>
+<li>새 script를 추가하면 <a href="scripts_README.html">실행 명령 지도</a>에 등록합니다.</li>
+<li>브라우저에서 읽는 예쁜 HTML 문서는 <code>python scripts/build_static_docs.py</code>로 다시 생성합니다.</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pattern Asset과 합성 데이터 파이프라인 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>Pattern Asset과 합성 데이터 파이프라인</h1>
+      <p>docs/fbm_pattern_asset_pipeline.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#pattern-asset과-합성-데이터-파이프라인">Pattern Asset과 합성 데이터 파이프라인</a>
+<a class="toc-level-2" href="#1-핵심-계약">1. 핵심 계약</a>
+<a class="toc-level-2" href="#2-pattern-asset-형식">2. Pattern asset 형식</a>
+<a class="toc-level-2" href="#3-parametric-asset-형식">3. Parametric asset 형식</a>
+<a class="toc-level-2" href="#4-family별-권장-합성-방식">4. Family별 권장 합성 방식</a>
+<a class="toc-level-2" href="#5-합성-명령">5. 합성 명령</a>
+<a class="toc-level-2" href="#6-배치-정책">6. 배치 정책</a>
+<a class="toc-level-2" href="#7-readiness-manifest">7. readiness manifest</a>
+<a class="toc-level-2" href="#8-모델-보조-correction">8. 모델 보조 correction</a>
+<a class="toc-level-2" href="#9-검증-명령">9. 검증 명령</a>
+<a class="toc-level-2" href="#10-실패-예시">10. 실패 예시</a>
+    </aside>
+    <article class="content">
+      <h1 id="pattern-asset과-합성-데이터-파이프라인">Pattern Asset과 합성 데이터 파이프라인</h1>
+<p>이 문서는 실제 wafer에서 뽑은 불량 pattern asset을 어떻게 합성 데이터셋과 U-Net 학습으로 연결하는지 설명합니다.</p>
+<h2 id="1-핵심-계약">1. 핵심 계약</h2>
+<p>파이프라인의 계약은 단순합니다.</p>
+<pre><code class="language-text">pattern asset 또는 parametric rule
+-&gt; base wafer 위에 배치
+-&gt; severity map 업데이트
+-&gt; family별 full-size mask 생성
+-&gt; arrays.npz에 저장</code></pre>
+<p>중요한 점:</p>
+<ul>
+<li>사람이 만든 asset이 우선입니다. 이를 <code>human asset primary</code> 원칙으로 둡니다.</li>
+<li>부족한 family는 <code>procedural fallback</code>으로 보강합니다.</li>
+<li>합성 sample은 반드시 정답 <code>pattern_masks</code>를 가져야 합니다.</li>
+</ul>
+<h2 id="2-pattern-asset-형식">2. Pattern asset 형식</h2>
+<p>asset 하나는 보통 아래 구조를 가집니다.</p>
+<pre><code class="language-text">data/pattern_assets/local/local_000001/
+  image.png
+  mask.png
+  metadata.json</code></pre>
+<p>metadata 예시:</p>
+<pre><code class="language-json">{
+  &quot;asset_id&quot;: &quot;local_000001&quot;,
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;source_sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;label_type&quot;: &quot;manual_mask&quot;,
+  &quot;bbox_xywh&quot;: [120, 720, 80, 70],
+  &quot;quality&quot;: &quot;usable&quot;
+}</code></pre>
+<p><code>mask.png</code>는 asset crop 내부의 binary mask입니다. 합성할 때 이 mask를 base wafer 좌표로 옮겨 <code>pattern_masks</code>에 기록합니다.</p>
+<h2 id="3-parametric-asset-형식">3. Parametric asset 형식</h2>
+<p>손으로 따기 어려운 패턴은 rule로 저장합니다.</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;edge&quot;,
+  &quot;label_type&quot;: &quot;parametric_mask&quot;,
+  &quot;params&quot;: {
+    &quot;theta_range_deg&quot;: [300, 40],
+    &quot;radial_range&quot;: [0.88, 1.0],
+    &quot;intensity&quot;: 0.75
+  }
+}</code></pre>
+<p>이 rule은 합성 시점에 full-size mask로 rasterize됩니다.</p>
+<h2 id="4-family별-권장-합성-방식">4. Family별 권장 합성 방식</h2>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>권장 source</th><th>합성 예시</th></tr></thead><tbody><tr><td><code>local</code></td><td>실제 asset</td><td>random 위치에 blob crop 배치</td></tr><tr><td><code>scratch</code></td><td>실제 asset + procedural line</td><td>polyline을 랜덤 위치/각도로 배치</td></tr><tr><td><code>ring</code></td><td>parametric rule</td><td>radius와 width를 바꿔 ring 생성</td></tr><tr><td><code>edge</code></td><td>parametric rule</td><td>edge sector angle을 바꿔 생성</td></tr><tr><td><code>shot_grid</code></td><td>parametric rule</td><td>shot layout과 affected slot 반복</td></tr><tr><td><code>random</code></td><td>procedural fallback</td><td>sparse fail noise 생성</td></tr></tbody></table></div>
+<h2 id="5-합성-명령">5. 합성 명령</h2>
+<pre><code class="language-powershell">python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20 `
+  --assets-per-wafer 3 `
+  --procedural-families scratch,edge,shot_grid,random</code></pre>
+<p>처음에는 작은 count로 preview를 확인하고, 문제가 없을 때 count를 늘립니다.</p>
+<h2 id="6-배치-정책">6. 배치 정책</h2>
+<p>asset을 배치할 때 확인할 것:</p>
+<ul>
+<li>wafer 밖으로 너무 많이 나가지 않게 합니다.</li>
+<li><code>valid_test_mask</code> 밖에 target을 만들지 않습니다.</li>
+<li>여러 family가 겹칠 수 있지만 metadata에 composition 기록을 남깁니다.</li>
+<li>너무 과도한 defect density를 만들지 않습니다.</li>
+</ul>
+<p>예시:</p>
+<pre><code class="language-text">base wafer는 정상/약한 random fail만 있음
+-&gt; local asset 1개를 왼쪽 아래에 배치
+-&gt; scratch procedural line 1개를 중앙에 생성
+-&gt; edge sector 1개를 오른쪽 edge에 생성</code></pre>
+<p>결과:</p>
+<pre><code class="language-text">pattern_masks[local] = local asset 위치
+pattern_masks[scratch] = line 위치
+pattern_masks[edge] = edge sector 위치</code></pre>
+<h2 id="7-readiness-manifest">7. readiness manifest</h2>
+<p>합성 후 readiness를 돌립니다.</p>
+<pre><code class="language-powershell">python scripts/build_segmentation_readiness.py `
+  --dataset-dir data/synthetic/asset_composed `
+  --out-manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out-report outputs/reports/segmentation_readiness.html</code></pre>
+<p>readiness가 확인하는 것:</p>
+<ul>
+<li><code>arrays.npz</code> 필수 key 존재</li>
+<li>shape 일치</li>
+<li>family별 mask ratio</li>
+<li>train/val split 가능 여부</li>
+<li>target이 전부 0인 sample 과다 여부</li>
+</ul>
+<h2 id="8-모델-보조-correction">8. 모델 보조 correction</h2>
+<p>학습된 U-Net은 바로 최종 판정기가 아닙니다. 실제 목적은 correction 시간을 줄이는 것입니다.</p>
+<pre><code class="language-text">U-Net prediction
+-&gt; segmentation tool에서 prefill
+-&gt; 사람이 틀린 부분 수정
+-&gt; 수정 mask를 새 asset으로 저장
+-&gt; 다음 합성/학습에 반영</code></pre>
+<p>prediction export 예시:</p>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5</code></pre>
+<h2 id="9-검증-명령">9. 검증 명령</h2>
+<p>전체 pipeline smoke:</p>
+<pre><code class="language-powershell">python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</code></pre>
+<p>테스트:</p>
+<pre><code class="language-powershell">python -m pytest tests/test_pattern_asset_pipeline.py -q
+python -m pytest tests/test_segmentation_training.py -q</code></pre>
+<h2 id="10-실패-예시">10. 실패 예시</h2>
+<div class="table-wrap"><table><thead><tr><th>실패</th><th>원인</th><th>해결</th></tr></thead><tbody><tr><td>합성 sample은 있는데 target이 없음</td><td>mask 기록 누락</td><td><code>pattern_masks</code> 확인</td></tr><tr><td>shot_grid가 부자연스러움</td><td>shot layout metadata 부족</td><td>layout/rule 보강</td></tr><tr><td>U-Net loss가 줄지 않음</td><td>family coverage 부족</td><td>asset/rule 수집 확대</td></tr><tr><td>실제 wafer prediction이 약함</td><td>synthetic-real gap</td><td>correction loop 반복</td></tr></tbody></table></div>
+    </article>
+  </main>
+</body>
+</html>

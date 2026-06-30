@@ -1,204 +1,190 @@
-# Validation Protocol
+# 검증 프로토콜
 
-This document defines how to validate the WaferMap pipeline and how to choose between multi-label segmentation, weak/unsupervised methods, and retrieval-style methods.
+이 문서는 WaferMap에서 무엇을 검증해야 하는지 단계별로 정리합니다.
+목표는 “모델 점수 하나”가 아니라 데이터 계약, mask 품질, 합성 품질, correction loop가
+끊기지 않는지 확인하는 것입니다.
 
-Canonical workflow: [End-To-End Workflow](end_to_end_workflow.md).
+## 1. 검증 철학
 
-## Methodology Position
-
-The primary modeling path is multi-label segmentation.
-
-Why:
-
-- The project needs pixel-level labels: where the defect is, not only whether a wafer is abnormal.
-- One wafer can contain multiple defect families, so sigmoid multi-channel output is a better fit than single-class softmax.
-- Synthetic composition already knows the oracle mask for each pasted defect. That label should be used directly.
-- The local segmentation tool creates real-data pattern assets, so human correction naturally improves segmentation masks.
-
-Unsupervised or self-supervised learning is useful, but not sufficient as the main method:
-
-- it can rank unusual wafers for review;
-- it can propose candidate regions for the segmentation tool;
-- it can mine underrepresented real patterns for asset extraction;
-- it can provide embeddings for similarity search;
-- it usually cannot guarantee family-specific, pixel-accurate labels without human correction.
-
-Therefore the recommended stack is:
+현재 프로젝트는 production model 성능을 바로 주장하는 단계가 아닙니다.
+먼저 아래가 안정적이어야 합니다.
 
 ```text
-multi-label segmentation = primary training target
-weak/unsupervised anomaly detection = candidate generation and triage
-self-supervised/embedding retrieval = mining, grouping, and review prioritization
-human correction = source of trusted real-data labels
+실제 wafer를 읽을 수 있다.
+사람이 mask asset을 저장할 수 있다.
+합성 sample이 정답 mask를 가진다.
+manifest가 학습 코드와 맞는다.
+모델 prediction을 다시 사람이 수정할 수 있다.
 ```
 
-## Input Validation
+## 2. 입력 검증
 
-Supported inputs:
+raw PNG ingestion 후 확인합니다.
 
-| Input | Use |
+| 항목 | 확인 방법 |
 |---|---|
-| `png_grayscale_raw` | Real grade 0-7 wafer PNG batch. |
-| `npz_semantic_arrays` | Synthetic or processed arrays containing `severity`, masks, and metadata. |
-| `real_unlabeled_manifest/v1` | Tool input manifest for real or real-like wafers. |
+| 파일 존재 | manifest의 `image_path`가 실제 파일인지 |
+| shape | 모든 sample의 image shape가 예상 범위인지 |
+| geometry | wafer center/radius가 말이 되는지 |
+| intensity | raw gray 값이 뒤집히거나 깨지지 않았는지 |
 
-Checks:
+예시:
 
-- gray values map cleanly to grade 0-7 or known STBY values;
-- wafer shape matches product geometry;
-- `wafer_mask`, `valid_test_mask`, and `stby_mask` are mutually interpretable;
-- sample ids are stable and unique;
-- invalid or missing-test regions are not treated as positive defect targets.
-
-## Pattern Asset Validation
-
-Pattern assets must be family-specific and reusable.
-
-```text
-data/pattern_assets/<family>/<asset_id>/
-  grade.png
-  mask.png
-  preview.png
-  metadata.json
+```powershell
+python scripts/analyze_png_raw_folders.py `
+  --input-root data/raw/product_A `
+  --out-manifest outputs/manifests/product_A_manifest.json
 ```
 
-Checks:
+## 3. Pattern asset 검증
 
-- `mask.png` is tight around the visible defect;
-- family assignment matches `local`, `scratch`, `ring`, `edge`, `shot_grid`, or `random`;
-- one physical ring is not accidentally split into unrelated assets;
-- STBY-only regions are not labeled as physical defects;
-- location summary is present for radial/angular/edge-distance-aware composition.
+asset 하나가 학습에 쓸 만한지 확인합니다.
 
-## Synthetic Dataset Validation
+좋은 asset 조건:
 
-Synthetic samples must include image arrays, target masks, and metadata.
+- family가 명확함
+- mask가 비어 있지 않음
+- mask가 wafer 밖을 많이 포함하지 않음
+- bbox와 mask가 같은 defect를 가리킴
+- source sample metadata가 남아 있음
 
-```text
-data/synthetic/asset_composed/<sample_id>/
-  arrays.npz
-  metadata.json
+report 생성:
+
+```powershell
+python scripts/build_pattern_asset_report.py `
+  --assets-root data/pattern_assets `
+  --out outputs/reports/pattern_asset_library_report.html
 ```
 
-Required arrays:
+## 4. Synthetic dataset 검증
+
+합성 sample은 preview만 보고 끝내면 안 됩니다.
+반드시 `arrays.npz`의 target mask를 확인해야 합니다.
+
+필수 key:
 
 ```text
 severity
 wafer_mask
 valid_test_mask
 stby_mask
+chip_index
 pattern_masks
 pattern_intensity
-chip_index
 ```
 
-Checks:
-
-- `pattern_masks` has one channel per target family;
-- target masks are clipped to `wafer_mask & valid_test_mask`;
-- same-family overlap uses max composition;
-- multi-family overlap is allowed and visible in readiness metrics;
-- gallery samples look physically plausible on the wafer;
-- procedural fallback does not dominate real-data asset families once enough assets exist.
-
-## Segmentation Model Validation
-
-Baseline target: coordinate-aware multi-label U-Net.
-
-Output:
+실패 예:
 
 ```text
-family probability masks:
-local, scratch, ring, edge, shot_grid, random
+preview에는 scratch가 보이는데 pattern_masks[scratch]가 전부 0
 ```
 
-Primary metrics:
+이 경우 모델은 scratch를 배울 수 없습니다.
 
-- per-family Dice/F1;
-- per-family IoU;
-- recall for small local defects;
-- scratch continuity recall;
-- ring/edge continuity and false-positive behavior;
-- missed major defect rate after human review.
+## 5. Readiness 검증
 
-Training gates:
-
-- train split has positive samples for every target family;
-- validation split gaps are reported and not over-interpreted;
-- prediction export uses `fbm_prediction_masks/v1`;
-- exported predictions can be loaded by `run_segmentation_tool.py --prediction-json`.
-
-## Unsupervised And Self-Supervised Validation
-
-Use these methods as assistive models, not as the final label source.
-
-Recommended uses:
-
-| Method family | Use |
-|---|---|
-| Reconstruction/anomaly detection | Find unusual wafers or high-interest regions. |
-| One-class anomaly detection | Flag out-of-distribution wafers when normal examples dominate. |
-| Patch/feature anomaly localization | Propose candidate masks for tool review. |
-| Self-supervised embeddings | Cluster real wafers, find near-duplicates, and mine rare patterns. |
-| Retrieval | Prioritize samples similar to known high-quality assets. |
-
-Validation metrics:
-
-- review hit rate: fraction of proposed wafers/regions accepted by a human;
-- missed major defect rate;
-- false positive review burden;
-- family discovery value: how often proposals create useful new assets;
-- downstream improvement after adding corrected assets to segmentation training.
-
-Failure modes:
-
-- anomaly methods may highlight normal process variation;
-- rare normal layouts can look anomalous;
-- broad wafer-level anomaly scores do not provide family masks;
-- reconstruction models can learn to reconstruct defects if trained on contaminated data;
-- clustering groups similar wafers but does not prove defect family or mask boundaries.
-
-## Human Review Loop
-
-Review fields:
-
-```text
-query_sample_id
-model_family
-reviewer_family
-position_correct
-mask_quality
-missed_major_defect
-false_positive_family
-comment
+```powershell
+python scripts/build_segmentation_readiness.py `
+  --dataset-dir data/synthetic/asset_composed `
+  --out-manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out-report outputs/reports/segmentation_readiness.html
 ```
 
-Decision loop:
+확인 항목:
 
-1. Run model or anomaly proposals.
-2. Load candidates in the segmentation tool.
-3. Correct family and mask boundaries.
-4. Save corrected pattern assets.
-5. Recompose synthetic data.
-6. Retrain or re-evaluate segmentation.
-7. Track whether the correction loop improves downstream segmentation metrics.
+- sample 수
+- train/val split
+- family별 `has_*` 값
+- family별 `*_mask_ratio`
+- target이 비어 있는 sample 비율
 
-## Test Commands
+## 6. Segmentation model 검증
 
-Fast default:
+U-Net 학습 검증은 두 단계로 봅니다.
+
+1. 코드/데이터 계약 검증
+2. prediction이 사람이 수정할 수 있는 수준인지 검증
+
+명령:
+
+```powershell
+python scripts/train_unet_segmentation.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out-model outputs/models/asset_unet_segmentation.pt
+```
+
+확인:
+
+- 학습이 shape 오류 없이 시작되는가?
+- loss가 NaN이 아닌가?
+- validation prediction이 전부 0 또는 전부 1이 아닌가?
+- family별로 최소한의 반응이 있는가?
+
+## 7. Prediction correction 검증
+
+prediction export:
+
+```powershell
+python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json `
+  --split val `
+  --threshold 0.5
+```
+
+검증:
+
+- JSON schema가 `fbm_prediction_masks/v1`인지
+- sample id가 manifest와 맞는지
+- family별 mask가 tool에서 열리는지
+- 사람이 수정 후 asset으로 저장할 수 있는지
+
+## 8. Human review loop
+
+모델 성능은 숫자만 보지 말고 실제 수정 시간을 봐야 합니다.
+
+질문:
+
+- prediction이 완전 blank보다 나은가?
+- 사람이 지워야 할 false positive가 너무 많은가?
+- 놓친 defect가 특정 family에 집중되는가?
+- correction 후 새 asset으로 저장할 만한 예시가 생기는가?
+
+## 9. 테스트 명령
+
+문서와 링크:
+
+```powershell
+python -m pytest tests/test_documentation_quality.py -q --basetemp .pytest_tmp_docs
+```
+
+pattern asset과 학습 데이터 계약:
+
+```powershell
+python -m pytest tests/test_pattern_asset_pipeline.py tests/test_segmentation_training.py -q
+```
+
+전체 빠른 테스트:
 
 ```powershell
 python -m pytest -q --basetemp .pytest_tmp
 ```
 
-Full slow validation:
+느린 테스트 포함:
 
 ```powershell
 python -m pytest -q --run-slow --basetemp .pytest_tmp_full
 ```
 
-Targeted validation:
+## 10. 통과 기준
 
-```powershell
-python -m pytest tests/test_pattern_asset_pipeline.py tests/test_segmentation_training.py tests/test_segmentation_readiness.py -q --basetemp .pytest_tmp_validation
-```
+1차 통과 기준:
+
+- 문서 링크가 깨지지 않음
+- 핵심 문서가 한국어 설명과 예시를 포함함
+- asset report가 생성됨
+- synthetic sample에 `pattern_masks`가 존재함
+- readiness manifest가 생성됨
+- training dataset loader가 sample을 읽음
+- prediction export가 correction tool 입력으로 사용 가능함

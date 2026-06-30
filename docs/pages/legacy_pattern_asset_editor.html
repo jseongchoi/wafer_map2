@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>호환성 Pattern Asset Editor - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>호환성 Pattern Asset Editor</h1>
+      <p>docs/legacy_pattern_asset_editor.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#호환성-pattern-asset-editor">호환성 Pattern Asset Editor</a>
+<a class="toc-level-2" href="#1-현재-방향">1. 현재 방향</a>
+<a class="toc-level-2" href="#2-유지하는-이유">2. 유지하는 이유</a>
+<a class="toc-level-2" href="#3-새-문서에서-쓸-이름">3. 새 문서에서 쓸 이름</a>
+<a class="toc-level-2" href="#4-제거-가능-조건">4. 제거 가능 조건</a>
+    </aside>
+    <article class="content">
+      <h1 id="호환성-pattern-asset-editor">호환성 Pattern Asset Editor</h1>
+<p>이 문서는 <code>run_pattern_asset_editor.py</code> 파일명이 왜 남아 있는지 설명합니다.</p>
+<h2 id="1-현재-방향">1. 현재 방향</h2>
+<p>현재 제품 흐름의 중심 command는 아래입니다.</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p><code>run_pattern_asset_editor.py</code>는 과거 이름을 쓰던 workflow와 문서를 깨지 않기 위해 남겨 둔 호환 entrypoint입니다.</p>
+<h2 id="2-유지하는-이유">2. 유지하는 이유</h2>
+<ul>
+<li>기존 테스트나 사용자가 과거 파일명을 호출할 수 있습니다.</li>
+<li>급하게 삭제하면 문서 링크와 자동화가 깨질 수 있습니다.</li>
+<li>실제 내부 구현을 공유하면 유지 비용이 크지 않습니다.</li>
+</ul>
+<h2 id="3-새-문서에서-쓸-이름">3. 새 문서에서 쓸 이름</h2>
+<p>새 문서와 작업자 안내에서는 <code>run_segmentation_tool.py</code>를 우선 사용합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>상황</th><th>권장 command</th></tr></thead><tbody><tr><td>새 작업자 안내</td><td><code>run_segmentation_tool.py</code></td></tr><tr><td>과거 script 호환</td><td><code>run_pattern_asset_editor.py</code></td></tr><tr><td>문서 예시</td><td><code>run_segmentation_tool.py</code></td></tr></tbody></table></div>
+<h2 id="4-제거-가능-조건">4. 제거 가능 조건</h2>
+<p>나중에 아래 조건이 만족되면 deprecated 처리할 수 있습니다.</p>
+<ul>
+<li>tests에서 과거 command 의존성이 사라짐</li>
+<li>docs에서 과거 이름이 호환 설명 외에는 사라짐</li>
+<li>사용자 자동화에서 더 이상 호출하지 않음</li>
+</ul>
+<p>그 전까지는 wrapper로 유지합니다.</p>
+    </article>
+  </main>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>전문가 리뷰 절차 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>전문가 리뷰 절차</h1>
+      <p>docs/expert_review_protocol.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#전문가-리뷰-절차">전문가 리뷰 절차</a>
+<a class="toc-level-2" href="#1-목적">1. 목적</a>
+<a class="toc-level-2" href="#2-리뷰-단위">2. 리뷰 단위</a>
+<a class="toc-level-2" href="#3-허용-라벨">3. 허용 라벨</a>
+<a class="toc-level-2" href="#4-review-csv-예시">4. Review CSV 예시</a>
+<a class="toc-level-2" href="#5-실행">5. 실행</a>
+<a class="toc-level-2" href="#6-집계-지표">6. 집계 지표</a>
+<a class="toc-level-2" href="#7-파일럿-성공-판정">7. 파일럿 성공 판정</a>
+<a class="toc-level-2" href="#8-다음-의사결정">8. 다음 의사결정</a>
+    </aside>
+    <article class="content">
+      <h1 id="전문가-리뷰-절차">전문가 리뷰 절차</h1>
+<p>이 문서는 공정/품질 전문가가 wafer와 모델 결과를 검토할 때의 기준을 정리합니다. 전문가 리뷰의 목적은 모델 점수 하나를 만드는 것이 아니라, 라벨 정의와 asset 품질을 안정화하는 것입니다.</p>
+<h2 id="1-목적">1. 목적</h2>
+<p>전문가 리뷰로 확인할 것:</p>
+<ul>
+<li>family 정의가 현업 관점에서 맞는가?</li>
+<li><code>ring</code>과 <code>edge</code>처럼 헷갈리는 유형을 어떻게 나눌 것인가?</li>
+<li><code>shot_grid</code>에 필요한 shot layout metadata를 얻을 수 있는가?</li>
+<li>어떤 wafer를 학습 target으로 쓰면 안 되는가?</li>
+<li>모델 prediction이 correction seed로 쓸 만한가?</li>
+</ul>
+<h2 id="2-리뷰-단위">2. 리뷰 단위</h2>
+<p>리뷰 단위는 세 가지입니다.</p>
+<div class="table-wrap"><table><thead><tr><th>단위</th><th>설명</th></tr></thead><tbody><tr><td>wafer-level</td><td>wafer 전체에 어떤 defect family가 보이는지</td></tr><tr><td>region-level</td><td>defect 후보 bbox/sector/polyline이 맞는지</td></tr><tr><td>mask-level</td><td>학습 target으로 쓸 pixel mask가 맞는지</td></tr></tbody></table></div>
+<p>처음부터 모든 wafer를 mask-level로 리뷰하지 않습니다. 먼저 wafer-level, region-level로 후보를 줄이고 clean한 예시만 mask-level로 갑니다.</p>
+<h2 id="3-허용-라벨">3. 허용 라벨</h2>
+<p>추천 라벨:</p>
+<pre><code class="language-text">local
+scratch
+ring
+edge
+shot_grid
+random
+mixed_unknown
+bad_input
+no_defect</code></pre>
+<p><code>mixed_unknown</code>은 실패가 아닙니다. 애매한 것을 억지로 학습 target에 넣지 않기 위한 안전장치입니다.</p>
+<h2 id="4-review-csv-예시">4. Review CSV 예시</h2>
+<pre><code class="language-csv">sample_id,primary_family,secondary_family,review_decision,label_type,notes
+WAFER_0001,local,scratch,usable_asset,manual_mask,&quot;왼쪽 아래 local 명확, 중앙 scratch도 있음&quot;
+WAFER_0002,shot_grid,,needs_parametric_rule,parametric_mask,&quot;shot마다 왼쪽 아래 반복&quot;
+WAFER_0003,mixed_unknown,,review_only,weak_region,&quot;diffuse라 family 확정 어려움&quot;</code></pre>
+<h2 id="5-실행">5. 실행</h2>
+<p>template 생성:</p>
+<pre><code class="language-powershell">python scripts/make_expert_review_template.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --out outputs/reviews/product_A_review_template.csv</code></pre>
+<p>리뷰 집계:</p>
+<pre><code class="language-powershell">python scripts/summarize_expert_review.py `
+  --review-csv outputs/reviews/product_A_review_template.csv `
+  --out outputs/reviews/product_A_review_summary.json</code></pre>
+<h2 id="6-집계-지표">6. 집계 지표</h2>
+<div class="table-wrap"><table><thead><tr><th>지표</th><th>의미</th></tr></thead><tbody><tr><td>family별 sample 수</td><td>어떤 defect가 충분히 모였는지</td></tr><tr><td><code>usable_asset</code> 비율</td><td>학습에 바로 쓸 수 있는 예시 비율</td></tr><tr><td><code>needs_parametric_rule</code> 수</td><td>rule UI/코드가 필요한 유형</td></tr><tr><td><code>mixed_unknown</code> 비율</td><td>taxonomy가 부족하거나 불량 정의가 애매한 정도</td></tr><tr><td><code>bad_input</code> 비율</td><td>입력/geometry 품질 문제</td></tr></tbody></table></div>
+<h2 id="7-파일럿-성공-판정">7. 파일럿 성공 판정</h2>
+<p>성공:</p>
+<ul>
+<li>전문가가 family 정의를 이해하고 일관되게 사용함</li>
+<li>family별 usable asset 후보가 생김</li>
+<li>애매한 유형을 <code>mixed_unknown</code>으로 분리함</li>
+<li><code>shot_grid</code>, <code>edge</code>, <code>ring</code>에 필요한 rule parameter가 정리됨</li>
+</ul>
+<p>실패:</p>
+<ul>
+<li>리뷰어마다 family 해석이 크게 다름</li>
+<li>대부분이 <code>mixed_unknown</code>으로만 쌓임</li>
+<li>mask를 학습 target으로 쓰기 어려움</li>
+<li>shot/grid geometry를 얻을 방법이 없음</li>
+</ul>
+<h2 id="8-다음-의사결정">8. 다음 의사결정</h2>
+<div class="table-wrap"><table><thead><tr><th>리뷰 결과</th><th>다음 행동</th></tr></thead><tbody><tr><td>local/scratch가 많음</td><td>manual mask asset 수집 확대</td></tr><tr><td>ring/edge가 많음</td><td>parametric mask generator 보강</td></tr><tr><td>shot_grid가 많음</td><td>shot layout metadata 확보</td></tr><tr><td>mixed_unknown이 많음</td><td>taxonomy 재정의 또는 별도 family 검토</td></tr><tr><td>bad_input이 많음</td><td>raw ingestion/geometry 보정부터 해결</td></tr></tbody></table></div>
+    </article>
+  </main>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>프로젝트 개요 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>프로젝트 개요</h1>
+      <p>docs/project_overview.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#프로젝트-개요">프로젝트 개요</a>
+<a class="toc-level-2" href="#1-현재-제품-형태">1. 현재 제품 형태</a>
+<a class="toc-level-2" href="#2-주요-구성요소">2. 주요 구성요소</a>
+<a class="toc-level-2" href="#3-defect-family">3. Defect family</a>
+<a class="toc-level-2" href="#4-왜-classification이-아니라-segmentation인가">4. 왜 classification이 아니라 segmentation인가</a>
+<a class="toc-level-2" href="#5-왜-합성맵을-쓰는가">5. 왜 합성맵을 쓰는가</a>
+<a class="toc-level-2" href="#6-현재-검증-상태">6. 현재 검증 상태</a>
+<a class="toc-level-2" href="#7-다음-구현-우선순위">7. 다음 구현 우선순위</a>
+<a class="toc-level-2" href="#8-완료-기준">8. 완료 기준</a>
+    </aside>
+    <article class="content">
+      <h1 id="프로젝트-개요">프로젝트 개요</h1>
+<p>WaferMap은 FBM wafer map에서 불량 segmentation 학습 데이터를 만들기 위한 작업 도구와 파이프라인입니다. 최종 목표는 실제 wafer에서 여러 불량이 섞여 있을 때, 각 pixel이 어떤 family에 속하는지 예측하는 multi-label 모델을 만드는 것입니다.</p>
+<h2 id="1-현재-제품-형태">1. 현재 제품 형태</h2>
+<p>현재 제품은 하나의 큰 흐름으로 보면 됩니다.</p>
+<pre><code class="language-text">실제 wafer 입력
+-&gt; segmentation tool에서 대표 불량 mask 저장
+-&gt; pattern asset library 축적
+-&gt; base wafer 위에 asset/rule 합성
+-&gt; 학습 가능한 arrays.npz + manifest 생성
+-&gt; small U-Net 학습
+-&gt; 실제 wafer prediction export
+-&gt; 사람이 prediction을 수정해 다시 asset으로 저장</code></pre>
+<p>이 흐름에서 중요한 것은 “합성 데이터”가 가짜 장난감 데이터가 아니라는 점입니다. 실제 wafer에서 추출한 대표 패턴을 재사용하고, 위치/강도/겹침을 통제해서 정답 mask를 아는 학습 sample을 만드는 장치입니다.</p>
+<h2 id="2-주요-구성요소">2. 주요 구성요소</h2>
+<div class="table-wrap"><table><thead><tr><th>구성요소</th><th>역할</th><th>대표 파일</th></tr></thead><tbody><tr><td>실제 wafer ingestion</td><td>raw PNG와 metadata를 manifest로 정리</td><td><code>scripts/analyze_png_raw_folders.py</code></td></tr><tr><td>segmentation tool</td><td>사람이 불량 mask를 그리고 asset으로 저장</td><td><code>scripts/run_segmentation_tool.py</code></td></tr><tr><td>pattern asset library</td><td>재사용 가능한 불량 조각 관리</td><td><code>src/wafermap/assets/</code></td></tr><tr><td>synthetic composer</td><td>base wafer에 asset/rule 합성</td><td><code>scripts/compose_synthetic_from_assets.py</code></td></tr><tr><td>readiness builder</td><td>학습 manifest와 coverage 점검</td><td><code>scripts/build_segmentation_readiness.py</code></td></tr><tr><td>U-Net trainer</td><td>multi-label segmentation 학습</td><td><code>scripts/train_unet_segmentation.py</code></td></tr><tr><td>prediction export</td><td>tool에서 다시 고칠 seed 생성</td><td><code>scripts/export_unet_predictions.py</code></td></tr></tbody></table></div>
+<h2 id="3-defect-family">3. Defect family</h2>
+<p>현재 primary target은 여섯 개입니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>뜻</th><th>예시</th></tr></thead><tbody><tr><td><code>local</code></td><td>작은 국소 blob</td><td>특정 die 주변만 밝게 튀는 패턴</td></tr><tr><td><code>scratch</code></td><td>선형/곡선형 긁힘</td><td>wafer 중앙을 가로지르는 긴 선</td></tr><tr><td><code>ring</code></td><td>원형 또는 부분 원형 band</td><td>특정 반지름 근처의 ring</td></tr><tr><td><code>edge</code></td><td>wafer edge 근처 band/sector</td><td>오른쪽 edge만 두꺼운 불량</td></tr><tr><td><code>shot_grid</code></td><td>shot 상대 위치 반복 불량</td><td>shot마다 왼쪽 아래 die가 반복 fail</td></tr><tr><td><code>random</code></td><td>sparse baseline fail</td><td>뚜렷한 구조 없는 산발 fail</td></tr></tbody></table></div>
+<p><code>stby_pattern</code>은 보조 context로 쓰며 현재 primary target에서는 제외합니다.</p>
+<h2 id="4-왜-classification이-아니라-segmentation인가">4. 왜 classification이 아니라 segmentation인가</h2>
+<p>wafer 하나에는 여러 불량이 동시에 있을 수 있습니다.</p>
+<p>예시:</p>
+<pre><code class="language-text">왼쪽 아래: local blob
+중앙: scratch
+edge: 부분 edge band</code></pre>
+<p>이 wafer를 하나의 label로만 분류하면 중요한 정보가 사라집니다. 이 프로젝트가 필요한 정답은 아래처럼 family별 mask입니다.</p>
+<pre><code class="language-text">local_mask[y, x]
+scratch_mask[y, x]
+edge_mask[y, x]</code></pre>
+<h2 id="5-왜-합성맵을-쓰는가">5. 왜 합성맵을 쓰는가</h2>
+<p>실제 wafer만으로 학습하려면 모든 불량을 사람이 mask로 따야 합니다. 하지만 <code>ring</code>, <code>edge</code>, <code>shot_grid</code> 같은 패턴은 사람이 전부 칠하기 어렵고, 어떤 경우는 정의 자체가 애매합니다.</p>
+<p>합성맵을 쓰면 아래 장점이 있습니다.</p>
+<ul>
+<li>어떤 family를 어디에 넣었는지 알기 때문에 정답 mask가 자동으로 생깁니다.</li>
+<li>rare defect를 더 많이 만들 수 있습니다.</li>
+<li><code>local + scratch</code>, <code>ring + edge</code>처럼 조합을 통제할 수 있습니다.</li>
+<li>모델이 처음부터 완벽하지 않아도 실제 wafer correction loop를 시작할 수 있습니다.</li>
+</ul>
+<h2 id="6-현재-검증-상태">6. 현재 검증 상태</h2>
+<p>현재 구현은 아래 흐름을 테스트로 확인합니다.</p>
+<pre><code class="language-text">pattern asset 저장
+-&gt; synthetic composition
+-&gt; segmentation readiness manifest
+-&gt; small U-Net input/target tensor contract</code></pre>
+<p>즉, 아직 “운영급 모델 성능”을 주장하는 단계가 아니라 학습 데이터 공장과 correction loop를 안정화하는 단계입니다.</p>
+<h2 id="7-다음-구현-우선순위">7. 다음 구현 우선순위</h2>
+<ol>
+<li>실제 wafer에서 family별 좋은 예시를 모읍니다.</li>
+<li>애매한 불량은 <code>mixed_unknown</code>으로 따로 보관합니다.</li>
+<li><code>shot_grid</code>, <code>ring</code>, <code>edge</code>는 parametric label UI/저장 구조를 강화합니다.</li>
+<li>readiness report에서 family coverage와 mask ratio를 확인합니다.</li>
+<li>U-Net 예측을 segmentation tool에서 수정하는 loop를 반복합니다.</li>
+</ol>
+<h2 id="8-완료-기준">8. 완료 기준</h2>
+<p>이 프로젝트의 “1차 성공”은 모델 점수 하나가 아닙니다. 아래가 가능해야 합니다.</p>
+<ul>
+<li>작업자가 실제 wafer에서 대표 불량을 5분 안에 asset으로 저장할 수 있음</li>
+<li>합성 데이터셋이 family별 mask를 포함함</li>
+<li>manifest가 학습 코드에서 바로 읽힘</li>
+<li>모델 예측을 다시 tool에서 수정할 수 있음</li>
+<li>수정된 mask가 다음 학습 asset으로 다시 들어감</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>

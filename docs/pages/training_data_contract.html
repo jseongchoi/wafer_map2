@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>학습 데이터 규격 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>학습 데이터 규격</h1>
+      <p>docs/training_data_contract.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#학습-데이터-규격">학습 데이터 규격</a>
+<a class="toc-level-2" href="#1-큰-그림">1. 큰 그림</a>
+<a class="toc-level-2" href="#2-dataset-폴더-구조">2. dataset 폴더 구조</a>
+<a class="toc-level-2" href="#3-arrays-npz-필수-key">3. arrays.npz 필수 key</a>
+<a class="toc-level-2" href="#4-pattern_masks-channel-순서">4. pattern_masks channel 순서</a>
+<a class="toc-level-2" href="#5-u-net-input-tensor">5. U-Net input tensor</a>
+<a class="toc-level-2" href="#6-u-net-target-tensor">6. U-Net target tensor</a>
+<a class="toc-level-2" href="#7-metadata-json-예시">7. metadata.json 예시</a>
+<a class="toc-level-2" href="#8-manifest-csv-규격">8. manifest CSV 규격</a>
+<a class="toc-level-2" href="#9-합성-규칙">9. 합성 규칙</a>
+<a class="toc-level-2" href="#10-parametric-label이-학습-mask가-되는-과정">10. parametric label이 학습 mask가 되는 과정</a>
+<a class="toc-level-2" href="#11-readiness-판단-기준">11. readiness 판단 기준</a>
+<a class="toc-level-2" href="#12-이-규격을-담당하는-코드">12. 이 규격을 담당하는 코드</a>
+    </aside>
+    <article class="content">
+      <h1 id="학습-데이터-규격">학습 데이터 규격</h1>
+<p>이 문서는 현재 multi-label U-Net 학습 코드가 기대하는 데이터 규격을 정의합니다.</p>
+<p>다음 질문에 답하고 싶을 때 이 문서를 보면 됩니다.</p>
+<pre><code class="language-text">train_unet_segmentation.py를 돌리려면 어떤 파일이 필요한가?
+arrays.npz 안에는 어떤 array가 들어가야 하나?
+U-Net input channel은 무엇인가?
+U-Net target channel은 무엇인가?
+manual label, parametric label, synthetic label은 어떻게 학습 데이터가 되는가?</code></pre>
+<h2 id="1-큰-그림">1. 큰 그림</h2>
+<p>학습 데이터는 사람이 작업하는 원천 라벨 폴더가 아닙니다. 학습 데이터는 asset, parametric rule, procedural pattern을 base wafer 위에 합성하고 rasterize한 최종 결과입니다.</p>
+<pre><code class="language-text">manual mask / parametric rule / pattern asset
+-&gt; base wafer 위에 합성
+-&gt; full-size family mask 생성
+-&gt; data/synthetic/&lt;dataset&gt;/&lt;sample_id&gt;/arrays.npz
+-&gt; asset_segmentation_manifest.csv
+-&gt; train_unet_segmentation.py</code></pre>
+<p>U-Net은 <code>bbox_xywh</code>나 parametric rule JSON을 직접 읽지 않습니다. 학습 전에 모든 결함은 <code>pattern_masks</code> 안의 full-size binary mask로 들어가 있어야 합니다.</p>
+<h2 id="2-dataset-폴더-구조">2. dataset 폴더 구조</h2>
+<p>학습 dataset은 여러 sample folder로 구성됩니다.</p>
+<pre><code class="language-text">data/synthetic/&lt;dataset_name&gt;/
+  synth_000001/
+    arrays.npz
+    metadata.json
+    preview.png          # 선택
+  synth_000002/
+    arrays.npz
+    metadata.json
+    preview.png          # 선택</code></pre>
+<p>readiness 단계에서 manifest를 만듭니다.</p>
+<pre><code class="language-text">outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv</code></pre>
+<p>이 manifest가 U-Net 학습의 직접 입력입니다.</p>
+<pre><code class="language-powershell">python scripts/train_unet_segmentation.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv</code></pre>
+<h2 id="3-arrays-npz-필수-key">3. arrays.npz 필수 key</h2>
+<p>각 sample folder의 <code>arrays.npz</code>에는 아래 key가 있어야 합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Key</th><th>dtype</th><th>Shape</th><th>필수</th><th>의미</th></tr></thead><tbody><tr><td><code>severity</code></td><td><code>uint8</code></td><td><code>[H, W]</code></td><td>예</td><td>최종 wafer grade map, 값 0-7</td></tr><tr><td><code>wafer_mask</code></td><td><code>uint8</code> 또는 bool</td><td><code>[H, W]</code></td><td>예</td><td>wafer 내부 pixel</td></tr><tr><td><code>valid_test_mask</code></td><td><code>uint8</code> 또는 bool</td><td><code>[H, W]</code></td><td>예</td><td>실제 측정/관측 가능한 pixel</td></tr><tr><td><code>stby_mask</code></td><td><code>uint8</code> 또는 bool</td><td><code>[H, W]</code></td><td>예</td><td>STBY 또는 missing-test context</td></tr><tr><td><code>chip_index</code></td><td><code>int32</code></td><td><code>[H, W]</code></td><td>예</td><td>die/chip id, 모르면 wafer 밖은 <code>-1</code></td></tr><tr><td><code>pattern_masks</code></td><td><code>uint8</code></td><td><code>[7, H, W]</code></td><td>예</td><td>family별 binary segmentation mask</td></tr><tr><td><code>pattern_intensity</code></td><td><code>float32</code></td><td><code>[7, H, W]</code></td><td>예</td><td>family별 결함 강도, 0-1</td></tr></tbody></table></div>
+<p>모든 2D array는 같은 <code>H, W</code>를 가져야 합니다.</p>
+<h2 id="4-pattern_masks-channel-순서">4. pattern_masks channel 순서</h2>
+<p><code>pattern_masks</code>는 <code>wafermap.data.schema.PATTERN_CLASSES</code> 순서를 따릅니다.</p>
+<pre><code class="language-text">0 scratch
+1 ring
+2 edge
+3 local
+4 random
+5 shot_grid
+6 stby_pattern</code></pre>
+<p>하지만 현재 U-Net target으로 쓰는 순서는 아래 여섯 개입니다.</p>
+<pre><code class="language-text">0 local
+1 scratch
+2 ring
+3 edge
+4 shot_grid
+5 random</code></pre>
+<p><code>stby_pattern</code>은 현재 primary defect target이 아닙니다. STBY는 <code>stby_mask</code>와 <code>valid_test_mask</code>로 context 처리합니다.</p>
+<h2 id="5-u-net-input-tensor">5. U-Net input tensor</h2>
+<p><code>wafermap.training.segmentation.sample_to_input_tensor()</code>는 sample 하나를 아래 tensor로 바꿉니다.</p>
+<pre><code class="language-text">X.shape = [12, output_size, output_size]</code></pre>
+<p>input channel 순서:</p>
+<pre><code class="language-text">0  severity_mean
+1  severity_max
+2  fail_density
+3  wafer_mask
+4  valid_test_mask
+5  stby_mask
+6  x_norm
+7  y_norm
+8  radial_norm
+9  angle_sin
+10 angle_cos
+11 edge_distance_norm</code></pre>
+<p>resize 정책:</p>
+<ul>
+<li><code>severity_mean</code>: normalized severity의 mean pooling</li>
+<li><code>severity_max</code>: normalized severity의 max pooling</li>
+<li><code>fail_density</code>: <code>severity &amp;gt; 0</code>의 mean pooling</li>
+<li><code>wafer_mask</code>, <code>valid_test_mask</code>, <code>stby_mask</code>: max pooling</li>
+<li>좌표 channel: mean pooling</li>
+</ul>
+<p>왜 이렇게 하냐면, 평균만 쓰면 작은 결함이 사라지고 max만 쓰면 한 pixel이 너무 과장될 수 있기 때문입니다.</p>
+<h2 id="6-u-net-target-tensor">6. U-Net target tensor</h2>
+<p><code>wafermap.training.segmentation.sample_to_target_tensor()</code>는 <code>pattern_masks</code>를 아래 tensor로 바꿉니다.</p>
+<pre><code class="language-text">Y.shape = [6, output_size, output_size]</code></pre>
+<p>target channel 순서:</p>
+<pre><code class="language-text">0 local
+1 scratch
+2 ring
+3 edge
+4 shot_grid
+5 random</code></pre>
+<p>resize 전에 모든 target은 아래처럼 잘립니다.</p>
+<pre><code class="language-text">target = pattern_mask &amp; wafer_mask &amp; valid_test_mask</code></pre>
+<p>target mask는 max pooling으로 resize합니다. 그래야 작은 blob이나 얇은 scratch가 낮은 해상도에서 사라지지 않습니다.</p>
+<h2 id="7-metadata-json-예시">7. metadata.json 예시</h2>
+<p><code>metadata.json</code>은 이 sample이 어떻게 만들어졌는지 설명합니다. loader가 반드시 필요로 하는 값은 <code>sample_id</code>이고, 나머지는 review와 debugging을 위한 정보입니다.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;synthetic_wafer_training_sample/v1&quot;,
+  &quot;sample_id&quot;: &quot;synth_000001&quot;,
+  &quot;source&quot;: &quot;hybrid_pattern_asset_composer&quot;,
+  &quot;base_sample_id&quot;: &quot;base_wafer_0003&quot;,
+  &quot;image_shape&quot;: {
+    &quot;height&quot;: 1024,
+    &quot;width&quot;: 1024
+  },
+  &quot;pattern_classes&quot;: [
+    &quot;scratch&quot;,
+    &quot;ring&quot;,
+    &quot;edge&quot;,
+    &quot;local&quot;,
+    &quot;random&quot;,
+    &quot;shot_grid&quot;,
+    &quot;stby_pattern&quot;
+  ],
+  &quot;target_channels&quot;: [
+    &quot;local&quot;,
+    &quot;scratch&quot;,
+    &quot;ring&quot;,
+    &quot;edge&quot;,
+    &quot;shot_grid&quot;,
+    &quot;random&quot;
+  ],
+  &quot;multi_label&quot;: true,
+  &quot;stby_target_excluded&quot;: true,
+  &quot;composition_rule&quot;: &quot;max&quot;,
+  &quot;placed_assets&quot;: [
+    {
+      &quot;family&quot;: &quot;local&quot;,
+      &quot;asset_id&quot;: &quot;WAFER_0001_local_0001&quot;,
+      &quot;source_sample_id&quot;: &quot;WAFER_0001&quot;,
+      &quot;placed_xy&quot;: [140, 720],
+      &quot;bbox_xywh&quot;: [140, 720, 80, 70],
+      &quot;mask_pixel_count&quot;: 530,
+      &quot;label_type&quot;: &quot;manual_mask&quot;
+    }
+  ],
+  &quot;parametric_instances&quot;: [
+    {
+      &quot;family&quot;: &quot;shot_grid&quot;,
+      &quot;instance_id&quot;: &quot;synth_000001_shot_grid_0001&quot;,
+      &quot;label_type&quot;: &quot;parametric_mask&quot;,
+      &quot;parameters&quot;: {
+        &quot;shot_rows&quot;: 3,
+        &quot;shot_cols&quot;: 3,
+        &quot;shot_row_offset&quot;: 0,
+        &quot;shot_col_offset&quot;: 0,
+        &quot;affected_slot&quot;: [2, 0],
+        &quot;anchor_region&quot;: &quot;lower_left&quot;,
+        &quot;intra_die_region&quot;: {
+          &quot;x_min&quot;: 0.0,
+          &quot;x_max&quot;: 0.35,
+          &quot;y_min&quot;: 0.65,
+          &quot;y_max&quot;: 1.0
+        },
+        &quot;severity_threshold&quot;: 1
+      },
+      &quot;rasterized_to_pattern_mask&quot;: true
+    }
+  ]
+}</code></pre>
+<p>중요한 점은 <code>parametric_instances</code> 자체를 학습하지 않는다는 것입니다. 그 규칙으로 생성된 pixel이 <code>pattern_masks</code>에 들어가 있어야 학습됩니다.</p>
+<h2 id="8-manifest-csv-규격">8. manifest CSV 규격</h2>
+<p>readiness script는 sample folder를 보고 manifest를 만듭니다.</p>
+<pre><code class="language-powershell">python scripts/build_segmentation_readiness.py `
+  --data data/synthetic/&lt;dataset_name&gt; `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv</code></pre>
+<p>필수 column:</p>
+<div class="table-wrap"><table><thead><tr><th>Column</th><th>의미</th></tr></thead><tbody><tr><td><code>sample_id</code></td><td><code>metadata.json</code>의 sample id</td></tr><tr><td><code>split</code></td><td><code>train</code> 또는 <code>val</code></td></tr><tr><td><code>arrays_path</code></td><td><code>arrays.npz</code> 경로</td></tr><tr><td><code>metadata_path</code></td><td><code>metadata.json</code> 경로</td></tr><tr><td><code>input_channels</code></td><td>pipe(`</td><td>`)로 연결한 input channel 이름</td></tr><tr><td><code>target_channels</code></td><td>pipe(`</td><td>`)로 연결한 target channel 이름</td></tr><tr><td><code>has_&amp;lt;family&amp;gt;</code></td><td>valid-test target에 해당 family가 있으면 1</td></tr><tr><td><code>&amp;lt;family&amp;gt;_mask_ratio</code></td><td><code>wafer_mask &amp;amp; valid_test_mask</code> 안에서 target pixel 비율</td></tr><tr><td><code>active_target_count</code></td><td>이 sample에 들어있는 positive target family 개수</td></tr></tbody></table></div>
+<p>예시:</p>
+<pre><code class="language-csv">sample_id,split,arrays_path,metadata_path,input_channels,target_channels,has_local,local_mask_ratio,has_scratch,scratch_mask_ratio,has_ring,ring_mask_ratio,has_edge,edge_mask_ratio,has_shot_grid,shot_grid_mask_ratio,has_random,random_mask_ratio,active_target_count
+synth_000001,train,data/synthetic/my_dataset/synth_000001/arrays.npz,data/synthetic/my_dataset/synth_000001/metadata.json,severity_mean|severity_max|fail_density|wafer_mask|valid_test_mask|stby_mask|x_norm|y_norm|radial_norm|angle_sin|angle_cos|edge_distance_norm,local|scratch|ring|edge|shot_grid|random,1,0.0021,1,0.0042,0,0.0,0,0.0,1,0.0065,1,0.0080,4</code></pre>
+<h2 id="9-합성-규칙">9. 합성 규칙</h2>
+<p>asset이나 parametric label을 base wafer에 합성할 때 기본 규칙은 이렇습니다.</p>
+<pre><code class="language-text">severity[pixel] = max(base_severity[pixel], defect_grade[pixel])
+pattern_masks[family_index, pixel] = 1
+pattern_intensity[family_index, pixel] = max(existing_intensity, defect_intensity)</code></pre>
+<p>모든 target mask는 반드시 valid 영역으로 잘라야 합니다.</p>
+<pre><code class="language-text">mask &amp;= wafer_mask &gt; 0
+mask &amp;= valid_test_mask &gt; 0</code></pre>
+<p>severity 조건이 있는 경우:</p>
+<pre><code class="language-text">mask &amp;= severity &gt;= severity_threshold</code></pre>
+<p>multi-family overlap은 허용합니다. 모델은 softmax가 아니라 sigmoid target을 사용합니다.</p>
+<h2 id="10-parametric-label이-학습-mask가-되는-과정">10. parametric label이 학습 mask가 되는 과정</h2>
+<p>parametric label은 mask를 만드는 recipe입니다.</p>
+<pre><code class="language-text">shot_grid rule
+-&gt; full-size binary mask 생성
+-&gt; pattern_masks[shot_grid]에 기록
+-&gt; manifest 생성
+-&gt; U-Net 학습</code></pre>
+<p>예시:</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>사람이 입력하는 값</th><th>최종 rasterized mask</th></tr></thead><tbody><tr><td><code>shot_grid</code></td><td>shot rows/cols, affected slot, intra-die region</td><td>반복 die region pixel</td></tr><tr><td><code>ring</code></td><td>center, radius, width, angle range</td><td>annulus 또는 arc pixel</td></tr><tr><td><code>edge</code></td><td>radial range, angle sector</td><td>edge band/sector pixel</td></tr><tr><td><code>scratch</code></td><td>polyline points, width</td><td>선 주변 tube pixel</td></tr><tr><td><code>local</code></td><td>center/radius, lasso, brush</td><td>blob pixel</td></tr></tbody></table></div>
+<p>사람이 라벨을 어떻게 저장하는지는 <a href="label_data_guidelines.html">라벨 데이터 가이드</a>를 보면 됩니다.</p>
+<h2 id="11-readiness-판단-기준">11. readiness 판단 기준</h2>
+<p>파일이 열리기만 한다고 학습 가능한 dataset은 아닙니다. 아래를 확인해야 합니다.</p>
+<ul>
+<li>모든 target family가 train split에 충분히 있는가?</li>
+<li>validation split에도 해석할 만큼 positive sample이 있는가?</li>
+<li>target pixel이 <code>wafer_mask &amp;amp; valid_test_mask</code> 안에만 있는가?</li>
+<li><code>mixed_unknown</code>이 target에 섞이지 않았는가?</li>
+<li>mask ratio가 너무 넓거나 너무 희박하지 않은가?</li>
+<li>gallery에서 사람이 봐도 family 정의가 맞는가?</li>
+</ul>
+<p><code>train_unet_segmentation.py</code>는 target family가 train split에 없으면 기본적으로 학습을 막습니다. <code>--allow-incomplete-target-coverage</code>는 wiring/debug용으로만 써야 합니다.</p>
+<h2 id="12-이-규격을-담당하는-코드">12. 이 규격을 담당하는 코드</h2>
+<div class="table-wrap"><table><thead><tr><th>계약</th><th>코드</th></tr></thead><tbody><tr><td>array dataclass와 <code>PATTERN_CLASSES</code></td><td><code>src/wafermap/data/schema.py</code></td></tr><tr><td>sample folder 읽기/쓰기</td><td><code>src/wafermap/data/io.py</code></td></tr><tr><td>asset 합성</td><td><code>scripts/compose_synthetic_from_assets.py</code></td></tr><tr><td>procedural pattern rasterization</td><td><code>src/wafermap/synth/procedural_patterns.py</code></td></tr><tr><td>readiness manifest와 metrics</td><td><code>scripts/build_segmentation_readiness.py</code></td></tr><tr><td>U-Net input/target tensor</td><td><code>src/wafermap/training/segmentation.py</code></td></tr><tr><td>train coverage check</td><td><code>scripts/train_unet_segmentation.py</code></td></tr></tbody></table></div>
+    </article>
+  </main>
+</body>
+</html>

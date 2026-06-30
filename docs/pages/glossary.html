@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>용어와 변수 설명 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>용어와 변수 설명</h1>
+      <p>docs/glossary.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#용어와-변수-설명">용어와 변수 설명</a>
+<a class="toc-level-2" href="#1-입력-배열-변수">1. 입력 배열 변수</a>
+<a class="toc-level-2" href="#2-manifest-변수">2. Manifest 변수</a>
+<a class="toc-level-2" href="#3-실제-raw-png-gray-기준">3. 실제 raw PNG gray 기준</a>
+<a class="toc-level-2" href="#4-feature와-검색-용어">4. Feature와 검색 용어</a>
+<a class="toc-level-2" href="#5-검색에서-제외하는-값">5. 검색에서 제외하는 값</a>
+<a class="toc-level-2" href="#6-전문가-리뷰-컬럼">6. 전문가 리뷰 컬럼</a>
+<a class="toc-level-2" href="#7-defect-family">7. Defect Family</a>
+<a class="toc-level-2" href="#8-이-문서를-읽는-방법">8. 이 문서를 읽는 방법</a>
+    </aside>
+    <article class="content">
+      <h1 id="용어와-변수-설명">용어와 변수 설명</h1>
+<p>이 문서는 프로젝트 문서와 HTML에서 반복해서 나오는 변수, 지표, 리뷰 용어를 설명한다.</p>
+<h2 id="1-입력-배열-변수">1. 입력 배열 변수</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>뜻</th><th>왜 필요한가</th><th>예시/주의</th></tr></thead><tbody><tr><td><code>severity</code></td><td>wafer map의 불량 grade 값. 현재 기준은 0~7이다.</td><td>fail 강도와 위치를 feature로 바꾸기 위한 핵심 입력이다.</td><td>wafer 밖 영역과 stby 영역은 0이어야 한다.</td></tr><tr><td><code>wafer_mask</code></td><td>wafer 내부인지 아닌지를 표시하는 mask. wafer 내부는 1, wafer 밖은 0이다.</td><td>wafer 밖 0과 wafer 안의 정상 Grade 0을 구분한다.</td><td>이 값이 없으면 none-wafer와 정상 영역이 섞인다.</td></tr><tr><td><code>valid_test_mask</code></td><td>실제 test가 수행된 pixel인지 표시한다. test된 곳은 1, test되지 않은 곳은 0이다.</td><td>stby나 미측정 영역을 실제 정상 영역과 구분한다.</td><td>stby 영역은 보통 0이다.</td></tr><tr><td><code>stby_mask</code></td><td>stby fail chip 영역을 표시한다. stby 영역은 1이다.</td><td>stby를 Grade 7 같은 불량으로 오해하지 않게 한다.</td><td>stby는 <code>severity=0</code>, <code>valid_test_mask=0</code>, <code>stby_mask=1</code>이어야 한다.</td></tr><tr><td><code>chip_index</code></td><td>die/chip id를 나타내는 배열이다.</td><td>chip 단위 geometry와 shot-relative feature를 안정적으로 계산하는 데 도움된다.</td><td>권장 입력이다. wafer 밖은 -1로 둔다.</td></tr></tbody></table></div>
+<h2 id="2-manifest-변수">2. Manifest 변수</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>뜻</th><th>왜 필요한가</th></tr></thead><tbody><tr><td><code>manifest</code></td><td>여러 wafer sample의 raw PNG 또는 <code>.npz</code> 경로와 metadata를 적은 JSON 파일이다.</td><td>batch 실행, 에디터, feature 추출이 같은 입력 목록을 보게 한다.</td></tr><tr><td><code>sample_id</code></td><td>wafer sample을 가리키는 id다.</td><td>리뷰와 검색 결과에서 wafer를 구분한다. 사람이 읽기 쉬운 이름을 써도 된다.</td></tr><tr><td><code>png_grayscale_raw</code></td><td>실제 8-bit grayscale PNG를 직접 읽는 source type이다.</td><td>gray value를 Grade 0~7과 stby 후보로 변환한다.</td></tr><tr><td><code>png_path</code></td><td>raw PNG 파일 경로다.</td><td>제품별 PNG batch나 manifest에서 입력 파일을 참조한다.</td></tr><tr><td><code>arrays_npz</code></td><td>해당 sample의 <code>.npz</code> 파일 경로다.</td><td><code>severity</code>, <code>wafer_mask</code>, <code>valid_test_mask</code>, <code>stby_mask</code>를 읽는 위치다.</td></tr><tr><td><code>array_keys</code></td><td>원본 <code>.npz</code> 안의 key 이름이 표준 이름과 다를 때 쓰는 mapping이다.</td><td>예를 들어 원본 key가 <code>grade</code>이면 이를 <code>severity</code>로 연결한다.</td></tr><tr><td><code>parser_name</code> / <code>parser_version</code></td><td>실제 FBM을 <code>.npz</code>로 바꾼 parser의 이름과 버전이다.</td><td>추후 parser 변경으로 결과가 달라졌는지 추적한다.</td></tr><tr><td><code>orientation</code></td><td>wafer map 방향 정보다.</td><td>회전/flip이 있으면 clock 위치와 edge 위치 해석이 달라진다.</td></tr><tr><td><code>chip_blocks</code></td><td>한 chip이 array에서 차지하는 block 크기다.</td><td>chip 단위 feature와 geometry 검증에 필요하다.</td></tr><tr><td><code>grid</code></td><td>wafer map의 chip row/column 개수다.</td><td>die layout과 예상 net die 수를 확인한다.</td></tr><tr><td><code>actual_net_die</code></td><td>실제 wafer 안에서 유효한 die 수다.</td><td>generator 또는 parser 결과가 말이 되는지 sanity check에 쓴다.</td></tr><tr><td><code>wafer_mask_strategy</code></td><td>PNG에서 wafer 밖 0과 good 0을 나눌 때 쓰는 mask 추정 방식이다.</td><td>기본값은 <code>centered_ellipse_from_png</code>이다. 제품 layout이 다르면 별도 geometry나 mask가 필요하다.</td></tr></tbody></table></div>
+<h2 id="3-실제-raw-png-gray-기준">3. 실제 raw PNG gray 기준</h2>
+<div class="table-wrap"><table><thead><tr><th>Gray value</th><th>의미</th><th>주의</th></tr></thead><tbody><tr><td><code>0</code></td><td>Grade 0, good</td><td>wafer 밖도 0일 수 있어 mask 추정이 필요하다.</td></tr><tr><td><code>31</code></td><td>Grade 1</td><td></td></tr><tr><td><code>151</code></td><td>Grade 2</td><td></td></tr><tr><td><code>175</code></td><td>Grade 3</td><td></td></tr><tr><td><code>191</code></td><td>Grade 4</td><td></td></tr><tr><td><code>207</code></td><td>Grade 5</td><td></td></tr><tr><td><code>223</code></td><td>Grade 6</td><td></td></tr><tr><td><code>255</code></td><td>Grade 7 또는 stby 후보</td><td>chip 전체가 255일 때만 stby로 분리한다.</td></tr></tbody></table></div>
+<h2 id="4-feature와-검색-용어">4. Feature와 검색 용어</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>뜻</th><th>해석 방법</th></tr></thead><tbody><tr><td><code>feature</code></td><td>wafer map에서 계산한 숫자 표현이다.</td><td>예: fail density, edge density, ring contrast, stby ratio.</td></tr><tr><td><code>compact feature 50개</code></td><td>전체 유사 wafer 검색에 쓰는 핵심 feature 묶음이다.</td><td>실제 wafer에서도 계산 가능한 값만 사용한다.</td></tr><tr><td><code>observable feature</code></td><td>label이나 oracle mask 없이 FBM 자체에서 계산 가능한 feature다.</td><td>실제 inference에 쓸 수 있는 feature라는 뜻이다.</td></tr><tr><td><code>nearest-neighbor</code></td><td>feature가 가장 가까운 wafer를 찾는 검색 방식이다.</td><td>가까울수록 비슷한 wafer 후보로 본다.</td></tr><tr><td><code>top-k</code></td><td>query wafer 하나에 대해 가까운 neighbor k개를 보는 방식이다.</td><td>top-5면 가장 가까운 5개를 본다.</td></tr><tr><td><code>retrieval lift</code></td><td>random 검색보다 nearest-neighbor 검색이 얼마나 나은지 보는 비율이다.</td><td>1보다 크면 random보다 낫다는 뜻이다.</td></tr><tr><td><code>reference features</code></td><td>비교 기준이 되는 기존 feature table이다.</td><td>real wafer query를 synthetic/reference wafer와 비교할 때 쓴다.</td></tr><tr><td><code>feature drift</code></td><td>새 wafer feature 분포가 reference와 얼마나 다른지 보는 값이다.</td><td>성능 점수가 아니라 입력 분포 sanity signal이다.</td></tr><tr><td><code>sanity check</code></td><td>입력 배열과 metadata가 정해진 형식을 지키는지 확인하는 검사다.</td><td>FAIL이면 검색보다 parser/export 문제를 먼저 봐야 한다.</td></tr></tbody></table></div>
+<h2 id="5-검색에서-제외하는-값">5. 검색에서 제외하는 값</h2>
+<p>전체 유사 wafer 검색에서는 아래 값을 쓰지 않는다.</p>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>제외 이유</th></tr></thead><tbody><tr><td><code>label_*</code></td><td>합성 데이터 검증용 label이라 실제 wafer inference에 없다.</td></tr><tr><td><code>*_mask_ratio</code></td><td>합성 oracle mask에서 온 값일 수 있어 실제 feature에 섞으면 안 된다.</td></tr><tr><td><code>pattern_masks</code></td><td>합성 데이터에서만 아는 정답 mask다.</td></tr><tr><td><code>pattern_intensity</code></td><td>합성 데이터에서만 아는 pattern 강도다.</td></tr><tr><td><code>polar_*</code></td><td>전체 유사 검색에 위치 편향을 강하게 줄 수 있다.</td></tr><tr><td><code>stby_polar_*</code></td><td>전체 유사 검색에는 제외하고, 위치가 중요한 검색에서만 조건부로 쓴다.</td></tr></tbody></table></div>
+<h2 id="6-전문가-리뷰-컬럼">6. 전문가 리뷰 컬럼</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>뜻</th><th>채우는 방법</th></tr></thead><tbody><tr><td><code>review_case_id</code></td><td>query-neighbor pair를 구분하는 id다.</td><td>자동 생성된다.</td></tr><tr><td><code>query_sample_id</code></td><td>검색 기준 wafer의 id다.</td><td>자동 생성되거나 manifest에서 온다.</td></tr><tr><td><code>neighbor_sample_id</code></td><td>검색된 neighbor wafer의 id다.</td><td>자동 생성되거나 manifest에서 온다.</td></tr><tr><td><code>rank</code></td><td>neighbor 순위다.</td><td>1이면 가장 가까운 wafer다.</td></tr><tr><td><code>distance</code></td><td>feature 공간에서 query와 neighbor 사이의 거리다.</td><td>낮을수록 feature 기준으로 가깝다.</td></tr><tr><td><code>reviewer_decision</code></td><td>사람이 봤을 때 비슷한지 판단한 값이다.</td><td><code>same_family</code>, <code>partial_match</code>, <code>mismatch</code>, <code>not_sure</code> 중 선택한다.</td></tr><tr><td><code>query_defect_family</code></td><td>query wafer에서 주로 보이는 defect family다.</td><td>예: <code>edge</code>, <code>ring</code>, <code>scratch</code>, <code>local</code>, <code>stby_pattern</code>.</td></tr><tr><td><code>neighbor_defect_family</code></td><td>neighbor wafer에서 주로 보이는 defect family다.</td><td>query와 같은 계열인지 비교한다.</td></tr><tr><td><code>dominant_defect</code></td><td>pair 판단에 가장 큰 영향을 준 defect다.</td><td>여러 defect가 섞였으면 가장 중요한 것을 적는다.</td></tr><tr><td><code>clock_position_match</code></td><td>위치/방향이 비슷한지 보는 값이다.</td><td><code>yes</code>, <code>partial</code>, <code>no</code>, <code>not_applicable</code>.</td></tr><tr><td><code>missed_major_defect</code></td><td>neighbor가 query의 중요한 defect를 놓쳤는지 표시한다.</td><td>놓쳤으면 <code>yes</code>.</td></tr><tr><td><code>retrieval_failure_mode</code></td><td>검색이 틀렸다면 왜 틀렸는지 적는 값이다.</td><td>예: <code>wrong_family</code>, <code>right_family_wrong_location</code>, <code>parser_or_mask_issue</code>.</td></tr><tr><td><code>next_action</code></td><td>다음에 무엇을 보강할지 적는 값이다.</td><td>예: <code>feature_weight_tuning</code>, <code>segmentation_candidate</code>, <code>parser_validation</code>.</td></tr><tr><td><code>review_comment</code></td><td>리뷰어 메모다.</td><td>판단 근거를 자유롭게 적는다.</td></tr></tbody></table></div>
+<h2 id="7-defect-family">7. Defect Family</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>뜻</th></tr></thead><tbody><tr><td><code>edge</code></td><td>wafer edge 근처 fail density가 올라가는 패턴이다.</td></tr><tr><td><code>shot_grid</code></td><td>reticle/shot 위치와 맞물려 반복되는 패턴이다.</td></tr><tr><td><code>stby_pattern</code></td><td>stby fail chip 자체의 missing-test 패턴이다.</td></tr><tr><td><code>stby_hidden_origin</code></td><td>stby가 실제 defect origin을 가리는 경우다.</td></tr><tr><td><code>ring</code></td><td>wafer 중심 기준 ring 또는 partial arc 패턴이다.</td></tr><tr><td><code>scratch</code></td><td>길고 좁은 선형/곡선형 defect다.</td></tr><tr><td><code>local</code></td><td>국소 hotspot 또는 compact blob cluster다.</td></tr><tr><td><code>random</code></td><td>구조가 약한 산발성 fail이다.</td></tr><tr><td><code>mixed</code></td><td>여러 defect family가 동시에 보이는 경우다.</td></tr></tbody></table></div>
+<h2 id="8-이-문서를-읽는-방법">8. 이 문서를 읽는 방법</h2>
+<ol>
+<li>실제 PNG 폴더나 <code>.npz</code>를 준비할 때는 &quot;입력 배열 변수&quot;, &quot;Manifest 변수&quot;, &quot;실제 raw PNG gray 기준&quot;을 본다.</li>
+<li>검색 결과를 볼 때는 &quot;Feature와 검색 용어&quot;를 본다.</li>
+<li>리뷰 양식을 채울 때는 &quot;전문가 리뷰 컬럼&quot;을 본다.</li>
+<li>특정 불량 이름이 헷갈리면 &quot;Defect Family&quot;를 본다.</li>
+</ol>
+    </article>
+  </main>
+</body>
+</html>

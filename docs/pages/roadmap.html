@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로드맵 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>로드맵</h1>
+      <p>docs/roadmap.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#로드맵">로드맵</a>
+<a class="toc-level-2" href="#phase-0-범위-고정">Phase 0. 범위 고정</a>
+<a class="toc-level-2" href="#phase-1-direct-segmentation-tool">Phase 1. Direct Segmentation Tool</a>
+<a class="toc-level-2" href="#phase-2-pattern-asset-library">Phase 2. Pattern Asset Library</a>
+<a class="toc-level-2" href="#phase-3-hybrid-synthetic-data">Phase 3. Hybrid Synthetic Data</a>
+<a class="toc-level-2" href="#phase-4-readiness와-smoke-validation">Phase 4. Readiness와 Smoke Validation</a>
+<a class="toc-level-2" href="#phase-5-small-u-net-training">Phase 5. Small U-Net Training</a>
+<a class="toc-level-2" href="#phase-6-active-learning">Phase 6. Active Learning</a>
+<a class="toc-level-2" href="#phase-7-retrieval과-유사-wafer-검색">Phase 7. Retrieval과 유사 wafer 검색</a>
+<a class="toc-level-2" href="#현재-우선순위">현재 우선순위</a>
+    </aside>
+    <article class="content">
+      <h1 id="로드맵">로드맵</h1>
+<p>이 문서는 WaferMap을 어떤 순서로 구현하고 검증할지 정리합니다. 현재 중심은 “대표 불량 패턴을 모아 합성 segmentation dataset을 만드는 것”입니다.</p>
+<h2 id="phase-0-범위-고정">Phase 0. 범위 고정</h2>
+<p>상태: 완료</p>
+<p>결정:</p>
+<ul>
+<li>wafer classification이 아니라 multi-label segmentation을 목표로 합니다.</li>
+<li>target은 family별 binary mask입니다.</li>
+<li><code>local</code>, <code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>, <code>random</code>을 primary family로 둡니다.</li>
+<li>애매한 불량은 억지로 학습 target에 넣지 않습니다.</li>
+</ul>
+<p>산출물:</p>
+<ul>
+<li><a href="core_direction.html">핵심 방향</a></li>
+<li><a href="pattern_taxonomy.html">불량 Family 정의</a></li>
+</ul>
+<h2 id="phase-1-direct-segmentation-tool">Phase 1. Direct Segmentation Tool</h2>
+<p>상태: 현재</p>
+<p>목표:</p>
+<ul>
+<li>실제 wafer를 열고 사람이 mask를 만들 수 있어야 합니다.</li>
+<li>prediction JSON을 prefill로 불러와 수정할 수 있어야 합니다.</li>
+<li>수정된 mask를 pattern asset으로 저장할 수 있어야 합니다.</li>
+</ul>
+<p>예시 명령:</p>
+<pre><code class="language-powershell">python scripts/run_segmentation_tool.py `
+  --manifest outputs/manifests/product_A_manifest.json `
+  --sample-id WAFER_0001 `
+  --assets-root data/pattern_assets</code></pre>
+<p>완료 기준:</p>
+<ul>
+<li><code>local</code> blob을 수동 mask로 저장 가능</li>
+<li><code>scratch</code>, <code>ring</code>, <code>edge</code>, <code>shot_grid</code>는 parametric workflow 방향이 문서화됨</li>
+<li>asset report에서 저장 결과 확인 가능</li>
+</ul>
+<h2 id="phase-2-pattern-asset-library">Phase 2. Pattern Asset Library</h2>
+<p>상태: 현재</p>
+<p>목표:</p>
+<ul>
+<li>family별 좋은 대표 예시를 모읍니다.</li>
+<li>asset마다 source wafer, family, label_type, bbox, quality가 남아야 합니다.</li>
+</ul>
+<p>처음 목표량:</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>1차 목표</th></tr></thead><tbody><tr><td><code>local</code></td><td>50개 이상</td></tr><tr><td><code>scratch</code></td><td>30개 이상</td></tr><tr><td><code>ring</code></td><td>20개 이상 또는 rule 중심</td></tr><tr><td><code>edge</code></td><td>20개 이상 또는 rule 중심</td></tr><tr><td><code>shot_grid</code></td><td>10개 이상 또는 rule 중심</td></tr><tr><td><code>random</code></td><td>baseline sample 충분히</td></tr></tbody></table></div>
+<h2 id="phase-3-hybrid-synthetic-data">Phase 3. Hybrid Synthetic Data</h2>
+<p>상태: 현재</p>
+<p>목표:</p>
+<ul>
+<li>실제 asset과 procedural fallback을 섞어 합성 sample을 만듭니다.</li>
+<li>각 sample은 <code>arrays.npz</code>와 <code>metadata.json</code>을 가져야 합니다.</li>
+<li><code>pattern_masks</code>가 family별 target을 포함해야 합니다.</li>
+</ul>
+<p>예시 명령:</p>
+<pre><code class="language-powershell">python scripts/compose_synthetic_from_assets.py `
+  --base-sample-dir data/synthetic/fbm_grouping_scale_pilot/synth_000000 `
+  --assets-root data/pattern_assets `
+  --out-dir data/synthetic/asset_composed `
+  --count 20</code></pre>
+<h2 id="phase-4-readiness와-smoke-validation">Phase 4. Readiness와 Smoke Validation</h2>
+<p>상태: 현재</p>
+<p>목표:</p>
+<ul>
+<li>synthetic dataset이 U-Net 학습에 들어갈 수 있는지 검사합니다.</li>
+<li>family coverage, mask ratio, split을 확인합니다.</li>
+</ul>
+<p>예시 명령:</p>
+<pre><code class="language-powershell">python scripts/run_pattern_asset_pipeline.py `
+  --assets-root data/pattern_assets `
+  --composed-dir data/synthetic/asset_composed `
+  --work-dir outputs/pattern_asset_pipeline `
+  --report-out outputs/reports/pattern_asset_project_report.html</code></pre>
+<p>완료 기준:</p>
+<ul>
+<li><code>asset_segmentation_manifest.csv</code> 생성</li>
+<li>report 생성</li>
+<li>pipeline test 통과</li>
+</ul>
+<h2 id="phase-5-small-u-net-training">Phase 5. Small U-Net Training</h2>
+<p>상태: 다음</p>
+<p>목표:</p>
+<ul>
+<li>coordinate-aware small U-Net을 학습합니다.</li>
+<li>모델 prediction을 correction tool seed로 export합니다.</li>
+</ul>
+<p>예시 명령:</p>
+<pre><code class="language-powershell">python scripts/train_unet_segmentation.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --out-model outputs/models/asset_unet_segmentation.pt</code></pre>
+<pre><code class="language-powershell">python scripts/export_unet_predictions.py `
+  --manifest outputs/pattern_asset_pipeline/asset_segmentation_manifest.csv `
+  --model outputs/models/asset_unet_segmentation.pt `
+  --out outputs/predictions/fbm_prediction_masks.json</code></pre>
+<p>성공 기준:</p>
+<ul>
+<li>모델이 shape 오류 없이 학습됨</li>
+<li>prediction이 전부 blank가 아님</li>
+<li>segmentation tool에서 prediction을 수정 가능</li>
+</ul>
+<h2 id="phase-6-active-learning">Phase 6. Active Learning</h2>
+<p>상태: 다음</p>
+<p>목표:</p>
+<pre><code class="language-text">모델 예측
+-&gt; 사람이 수정
+-&gt; 수정 mask를 새 asset으로 저장
+-&gt; 합성 데이터 업데이트
+-&gt; 재학습</code></pre>
+<p>이 단계부터 실제 wafer와 synthetic wafer 사이의 차이를 줄입니다.</p>
+<h2 id="phase-7-retrieval과-유사-wafer-검색">Phase 7. Retrieval과 유사 wafer 검색</h2>
+<p>상태: 보조</p>
+<p>retrieval/embedding 계열 실험은 남겨두지만 현재 주력 workflow는 아닙니다. 나중에 아래 용도로 사용할 수 있습니다.</p>
+<ul>
+<li>비슷한 wafer 찾기</li>
+<li>리뷰 우선순위 정하기</li>
+<li>새 defect 후보 추천</li>
+</ul>
+<h2 id="현재-우선순위">현재 우선순위</h2>
+<ol>
+<li>실제 wafer에서 명확한 family별 예시를 모읍니다.</li>
+<li><code>shot_grid</code>, <code>ring</code>, <code>edge</code> parametric label을 더 실용적으로 만듭니다.</li>
+<li>합성 sample의 <code>pattern_masks</code>를 계속 검증합니다.</li>
+<li>U-Net prediction correction loop를 실제 wafer에서 반복합니다.</li>
+</ol>
+    </article>
+  </main>
+</body>
+</html>
