@@ -31,7 +31,7 @@ The local browser app is not a separate annotation product. It is the operator s
 
 - external annotation suites;
 - generic image labeling workflows that do not preserve wafer-specific masks and metadata;
-- enterprise governance features;
+- non-segmentation platform features;
 - standalone retrieval experiments unless they directly improve segmentation data quality.
 
 ## Decision Rule
