@@ -154,7 +154,7 @@ Resize policy:
 - support masks: max-pool;
 - coordinate channels: mean-pool.
 
-This is why “input mean only” is too weak, and “input max only” can exaggerate one high-grade die. The model gets both mean context and max/high-grade presence, plus fail density.
+This is why "input mean only" is too weak, and "input max only" can exaggerate one high-grade die. The model gets both mean context and max/high-grade presence, plus fail density.
 
 ## 8. Export Predictions For Correction
 

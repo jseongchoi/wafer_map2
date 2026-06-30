@@ -12,6 +12,12 @@ FBM maps
 
 ## Current Technical Decisions
 
+### Methodology Choice
+
+Multi-label segmentation is the primary method for this project because the target is a pixel-level family mask. Unsupervised and self-supervised methods should be used as assistive methods for candidate mining, anomaly triage, proposal generation, and embedding retrieval.
+
+Do not replace the segmentation target with wafer-level anomaly scores. An anomaly score can say "review this wafer", but it does not reliably answer "which pixels are local, scratch, ring, edge, shot_grid, or random".
+
 ### Observed Targets Only
 
 Primary segmentation targets must be limited to observed testable pixels:
