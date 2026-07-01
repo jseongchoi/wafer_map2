@@ -110,6 +110,8 @@ python scripts/export_unet_predictions.py `
 - [라벨 데이터 가이드](docs/label_data_guidelines.md)
 - [학습 데이터 규격](docs/training_data_contract.md)
 - [모델 이해 가이드](docs/modeling_strategy.md)
+- [유사맵 검색 가이드](docs/similar_map_retrieval_guide.md)
+- [불량 심각도 수치화 가이드](docs/defect_severity_scoring_guide.md)
 - [로드맵](docs/roadmap.md)
 - [용어 사전](docs/glossary.md)
 - [문서 품질 검증표](docs/documentation_quality_audit.md)

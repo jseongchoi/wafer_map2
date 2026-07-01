@@ -34,6 +34,64 @@ edge 전체가 나빠짐
 긴 선 형태
 ```
 
+### local 안의 subtype은 처음에는 metadata로 둡니다
+
+`local` blob 안에서도 세부 유형은 나뉠 수 있습니다. 예를 들면 아래와 같습니다.
+
+| Subtype 후보 | 설명 | 처음 처리 |
+|---|---|---|
+| `tiny_isolated_blob` | 작은 점 하나 | `family=local`, metadata only |
+| `small_isolated_blob` | 작은 blob 하나 | `family=local`, metadata only |
+| `cluster_blob` | 여러 blob이 가까이 모임 | `family=local`, metadata only |
+| `large_blob` | 큰 덩어리 | `family=local`, metadata only |
+| `diffuse_blob` | 경계가 흐림 | `mixed_unknown` 또는 `local` low confidence |
+| `comet_blob` | blob에 꼬리처럼 늘어짐 | `local` 또는 `scratch` review |
+| `edge_near_blob` | edge 가까운 blob | `family=local`, 위치 metadata 기록 |
+
+처음부터 이 subtype들을 target channel로 쪼개지 않습니다.
+
+```text
+초기 target:
+local
+
+metadata:
+subtype = cluster_blob
+subtype_status = metadata_only
+```
+
+이유는 subtype 기준이 초기에 흔들리기 쉽고, 샘플 수가 부족하면 모델이
+subtype을 배우는 것이 아니라 라벨러의 흔들림을 배울 수 있기 때문입니다.
+
+subtype은 아래 조건이 충분할 때만 별도 subfamily 또는 target channel로 승격합니다.
+
+```text
+공정/품질 관점에서 의미가 다르다
+리뷰어가 일관되게 구분할 수 있다
+샘플 수가 충분하다
+mask 생성 방식이나 후처리가 다르다
+모델 성능을 따로 봐야 할 필요가 있다
+```
+
+승격 전:
+
+```json
+{
+  "family": "local",
+  "subtype": "cluster_blob",
+  "subtype_status": "metadata_only"
+}
+```
+
+승격 후:
+
+```json
+{
+  "family": "local_cluster",
+  "parent_family": "local",
+  "subtype_status": "target_channel"
+}
+```
+
 ## 3. scratch
 
 `scratch`는 선처럼 이어지는 불량입니다. 직선일 수도 있고 곡선일 수도 있습니다.

@@ -25,6 +25,7 @@
 <a class="toc-level-2" href="#phase-4-readiness와-smoke-validation">Phase 4. Readiness와 Smoke Validation</a>
 <a class="toc-level-2" href="#phase-5-small-u-net-training">Phase 5. Small U-Net Training</a>
 <a class="toc-level-2" href="#phase-6-active-learning">Phase 6. Active Learning</a>
+<a class="toc-level-2" href="#phase-6-5-family별-지속-학습-루프">Phase 6.5. Family별 지속 학습 루프</a>
 <a class="toc-level-2" href="#phase-7-retrieval과-유사-wafer-검색">Phase 7. Retrieval과 유사 wafer 검색</a>
 <a class="toc-level-2" href="#현재-우선순위">현재 우선순위</a>
     </aside>
@@ -136,6 +137,19 @@
 -&gt; 합성 데이터 업데이트
 -&gt; 재학습</code></pre>
 <p>이 단계부터 실제 wafer와 synthetic wafer 사이의 차이를 줄입니다.</p>
+<h2 id="phase-6-5-family별-지속-학습-루프">Phase 6.5. Family별 지속 학습 루프</h2>
+<p>상태: 다음</p>
+<p>새로운 불량 family가 나오면 모델부터 바꾸지 않습니다. 먼저 family별 readiness를 채웁니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Family</th><th>정의</th><th>라벨 workflow</th><th>asset</th><th>합성</th><th>학습 target</th><th>prediction review</th></tr></thead><tbody><tr><td><code>local</code></td><td>완료</td><td><code>threshold_assisted_brush</code></td><td>수집 중</td><td>가능</td><td>enabled</td><td>진행 예정</td></tr><tr><td><code>scratch</code></td><td>초안</td><td>polyline + width</td><td>부족</td><td>가능</td><td>enabled</td><td>진행 예정</td></tr><tr><td><code>edge</code></td><td>초안</td><td>angle/radial rule</td><td>부족</td><td>가능</td><td>enabled</td><td>진행 예정</td></tr><tr><td><code>ring</code></td><td>초안</td><td>center/radius/width</td><td>부족</td><td>가능</td><td>enabled</td><td>진행 예정</td></tr><tr><td><code>shot_grid</code></td><td>초안</td><td>shot layout + affected slot</td><td>부족</td><td>부분</td><td>enabled 후보</td><td>미시작</td></tr><tr><td>신규 family</td><td>후보</td><td>미정</td><td>없음</td><td>없음</td><td>disabled</td><td>미시작</td></tr></tbody></table></div>
+<p>신규 family는 아래 checklist를 통과하기 전까지 target channel에 바로 넣지 않습니다.</p>
+<pre><code class="language-text">definition_ready
+label_workflow_ready
+mask_generation_ready
+asset_count_ready
+synthetic_ready
+training_coverage_ready
+prediction_review_ready</code></pre>
+<p>이 표를 계속 갱신하면 “지금 어떤 불량을 먼저 개선해야 하는가”가 분명해집니다.</p>
 <h2 id="phase-7-retrieval과-유사-wafer-검색">Phase 7. Retrieval과 유사 wafer 검색</h2>
 <p>상태: 보조</p>
 <p>retrieval/embedding 계열 실험은 남겨두지만 현재 주력 workflow는 아닙니다. 나중에 아래 용도로 사용할 수 있습니다.</p>

@@ -34,6 +34,8 @@ FBM wafer map
 - [라벨 데이터 가이드](label_data_guidelines.md): wafer-level tag, rough region, clean mask, reusable pattern asset을 어떻게 저장할지 예시로 설명합니다.
 - [학습 데이터 규격](training_data_contract.md): U-Net 학습에 필요한 `arrays.npz`, `metadata.json`, manifest, input tensor, target tensor 규격입니다.
 - [모델 이해 가이드](modeling_strategy.md): U-Net이 무엇을 입력받고, 어떤 mask를 예측하고, prediction을 어떻게 해석하는지 설명합니다.
+- [유사맵 검색 가이드](similar_map_retrieval_guide.md): feature, mask, subtype, embedding을 이용해 비슷한 wafer를 찾는 절차입니다.
+- [불량 심각도 수치화 가이드](defect_severity_scoring_guide.md): mask feature에서 severity component와 최종 score를 계산하는 방법입니다.
 - [데이터 스키마](data_schema.md): arrays, masks, metadata, manifest schema입니다.
 - [로드맵](roadmap.md): 단계별 구현 상태입니다.
 - [용어 사전](glossary.md): `severity`, `manifest`, `pattern asset`, `retrieval_failure_mode` 같은 공통 용어입니다.

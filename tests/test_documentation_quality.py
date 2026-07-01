@@ -25,6 +25,8 @@ USER_FACING_DOCS = [
     DOCS / "project_overview.md",
     DOCS / "label_data_guidelines.md",
     DOCS / "training_data_contract.md",
+    DOCS / "similar_map_retrieval_guide.md",
+    DOCS / "defect_severity_scoring_guide.md",
     DOCS / "documentation_quality_audit.md",
     DOCS / "experiment_history.md",
     DOCS / "roadmap.md",
@@ -44,6 +46,8 @@ GENERATED_HTML_DOCS = [
     DOCS / "pages" / "label_data_guidelines.html",
     DOCS / "pages" / "training_data_contract.html",
     DOCS / "pages" / "modeling_strategy.html",
+    DOCS / "pages" / "similar_map_retrieval_guide.html",
+    DOCS / "pages" / "defect_severity_scoring_guide.html",
     DOCS / "pages" / "end_to_end_workflow.html",
     DOCS / "pages" / "operator_manual.html",
     DOCS / "pages" / "pattern_taxonomy.html",
@@ -141,6 +145,8 @@ def test_core_documentation_is_korean_and_example_driven() -> None:
         DOCS / "fbm_pattern_asset_pipeline.md",
         DOCS / "validation_protocol.md",
         DOCS / "modeling_strategy.md",
+        DOCS / "similar_map_retrieval_guide.md",
+        DOCS / "defect_severity_scoring_guide.md",
         DOCS / "documentation_quality_audit.md",
     ]
 
@@ -173,6 +179,9 @@ def test_documentation_guides_current_project_direction() -> None:
     label_guidelines = (DOCS / "label_data_guidelines.md").read_text(encoding="utf-8")
     training_contract = (DOCS / "training_data_contract.md").read_text(encoding="utf-8")
     modeling_strategy = (DOCS / "modeling_strategy.md").read_text(encoding="utf-8")
+    retrieval_guide = (DOCS / "similar_map_retrieval_guide.md").read_text(encoding="utf-8")
+    severity_guide = (DOCS / "defect_severity_scoring_guide.md").read_text(encoding="utf-8")
+    taxonomy = (DOCS / "pattern_taxonomy.md").read_text(encoding="utf-8")
     audit = (DOCS / "documentation_quality_audit.md").read_text(encoding="utf-8")
 
     assert "core_direction.md" in docs_index
@@ -182,6 +191,10 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "multi-defect synthetic maps" in core_direction
     assert "multi-defect segmentation training and validation" in core_direction
     assert "real-data pattern asset extraction" in core_direction
+    assert "불량 하나씩 vertical slice로 닫습니다" in core_direction
+    assert "신규 defect 발견" in core_direction
+    assert "family = 모델 target" in core_direction
+    assert "subtype = 초기에는 분석/리뷰 metadata" in core_direction
     assert "전체 실행 흐름" in workflow
     assert "run_segmentation_tool.py" in workflow
     assert "compose_synthetic_from_assets.py" in workflow
@@ -195,6 +208,8 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "semiconductor_ai_review.md" in docs_index
     assert "label_data_guidelines.md" in docs_index
     assert "training_data_contract.md" in docs_index
+    assert "similar_map_retrieval_guide.md" in docs_index
+    assert "defect_severity_scoring_guide.md" in docs_index
     assert "fbm_data_flow_guide.md" in docs_index
     assert "project_overview.md" in docs_index
     assert "roadmap.md" in docs_index
@@ -222,6 +237,8 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "Direct Segmentation Tool" in roadmap
     assert "Small U-Net Training" in roadmap
     assert "Active Learning" in roadmap
+    assert "Family별 지속 학습 루프" in roadmap
+    assert "definition_ready" in roadmap
     assert "human asset primary" in pipeline
     assert "procedural fallback" in pipeline
     assert "export_unet_predictions.py" in pipeline
@@ -248,13 +265,31 @@ def test_documentation_guides_current_project_direction() -> None:
     assert "label_data_guidelines.md" in roadmap_html
     assert "training_data_contract.md" in roadmap_html
     assert "modeling_strategy.html" in roadmap_html
+    assert "similar_map_retrieval_guide.html" in roadmap_html
+    assert "defect_severity_scoring_guide.html" in roadmap_html
     assert "pages/glossary.html" in roadmap_html
     assert "documentation_quality_audit.html" in roadmap_html
     assert "`severity`" in glossary
     assert "`retrieval_failure_mode`" in glossary
     assert "bbox_xywh = 어디를 볼지 알려주는 사각형 힌트" in label_guidelines
     assert "mask.png  = U-Net이 실제로 학습하는 정답" in label_guidelines
+    assert "local blob mask는 이렇게 만듭니다" in label_guidelines
+    assert "threshold_assisted_brush" in label_guidelines
+    assert "subtype_status" in label_guidelines
+    assert "full_mask[y:y+h, x:x+w]" in label_guidelines
     assert "parametric_mask" in label_guidelines
+    assert "local 안의 subtype은 처음에는 metadata로 둡니다" in taxonomy
+    assert "metadata_only" in taxonomy
+    assert "target_channel" in taxonomy
+    assert "초기: 해석 가능한 feature 기반 nearest-neighbor" in retrieval_guide
+    assert "2차 재정렬" in retrieval_guide
+    assert "subtype은 target channel로 승격하기 전에도 검색 metadata" in retrieval_guide
+    assert "encoder embedding" in retrieval_guide
+    assert "confidence와 severity는 다릅니다" in severity_guide
+    assert "defect_severity/v1" in severity_guide
+    assert "final_severity_score" in severity_guide
+    assert "severity_bucket" in severity_guide
+    assert "rule-based score" in severity_guide
     assert "arrays.npz" in training_contract
     assert "pattern_masks" in training_contract
     assert "severity_mean" in training_contract

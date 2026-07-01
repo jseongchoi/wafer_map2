@@ -20,6 +20,7 @@
       <a class="toc-level-1" href="#불량-family-정의">불량 Family 정의</a>
 <a class="toc-level-2" href="#1-현재-모델-family">1. 현재 모델 family</a>
 <a class="toc-level-2" href="#2-local">2. local</a>
+<a class="toc-level-3" href="#local-안의-subtype은-처음에는-metadata로-둡니다">local 안의 subtype은 처음에는 metadata로 둡니다</a>
 <a class="toc-level-2" href="#3-scratch">3. scratch</a>
 <a class="toc-level-2" href="#4-ring">4. ring</a>
 <a class="toc-level-2" href="#5-edge">5. edge</a>
@@ -43,6 +44,35 @@
 <pre><code class="language-text">wafer 절반이 흐리게 나빠짐
 edge 전체가 나빠짐
 긴 선 형태</code></pre>
+<h3 id="local-안의-subtype은-처음에는-metadata로-둡니다">local 안의 subtype은 처음에는 metadata로 둡니다</h3>
+<p><code>local</code> blob 안에서도 세부 유형은 나뉠 수 있습니다. 예를 들면 아래와 같습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Subtype 후보</th><th>설명</th><th>처음 처리</th></tr></thead><tbody><tr><td><code>tiny_isolated_blob</code></td><td>작은 점 하나</td><td><code>family=local</code>, metadata only</td></tr><tr><td><code>small_isolated_blob</code></td><td>작은 blob 하나</td><td><code>family=local</code>, metadata only</td></tr><tr><td><code>cluster_blob</code></td><td>여러 blob이 가까이 모임</td><td><code>family=local</code>, metadata only</td></tr><tr><td><code>large_blob</code></td><td>큰 덩어리</td><td><code>family=local</code>, metadata only</td></tr><tr><td><code>diffuse_blob</code></td><td>경계가 흐림</td><td><code>mixed_unknown</code> 또는 <code>local</code> low confidence</td></tr><tr><td><code>comet_blob</code></td><td>blob에 꼬리처럼 늘어짐</td><td><code>local</code> 또는 <code>scratch</code> review</td></tr><tr><td><code>edge_near_blob</code></td><td>edge 가까운 blob</td><td><code>family=local</code>, 위치 metadata 기록</td></tr></tbody></table></div>
+<p>처음부터 이 subtype들을 target channel로 쪼개지 않습니다.</p>
+<pre><code class="language-text">초기 target:
+local
+
+metadata:
+subtype = cluster_blob
+subtype_status = metadata_only</code></pre>
+<p>이유는 subtype 기준이 초기에 흔들리기 쉽고, 샘플 수가 부족하면 모델이 subtype을 배우는 것이 아니라 라벨러의 흔들림을 배울 수 있기 때문입니다.</p>
+<p>subtype은 아래 조건이 충분할 때만 별도 subfamily 또는 target channel로 승격합니다.</p>
+<pre><code class="language-text">공정/품질 관점에서 의미가 다르다
+리뷰어가 일관되게 구분할 수 있다
+샘플 수가 충분하다
+mask 생성 방식이나 후처리가 다르다
+모델 성능을 따로 봐야 할 필요가 있다</code></pre>
+<p>승격 전:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;subtype&quot;: &quot;cluster_blob&quot;,
+  &quot;subtype_status&quot;: &quot;metadata_only&quot;
+}</code></pre>
+<p>승격 후:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;local_cluster&quot;,
+  &quot;parent_family&quot;: &quot;local&quot;,
+  &quot;subtype_status&quot;: &quot;target_channel&quot;
+}</code></pre>
 <h2 id="3-scratch">3. scratch</h2>
 <p><code>scratch</code>는 선처럼 이어지는 불량입니다. 직선일 수도 있고 곡선일 수도 있습니다.</p>
 <p>좋은 예:</p>

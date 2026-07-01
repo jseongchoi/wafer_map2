@@ -105,7 +105,65 @@ target[ring, y, x] = 1 또는 0
 
 위 질문에 “아니오”가 많으면 지금 할 일이 아닐 가능성이 큽니다.
 
-## 7. 예시: 좋은 방향과 나쁜 방향
+## 7. 불량 하나씩 vertical slice로 닫습니다
+
+불량 family가 10개 있다고 해서 10개를 한 번에 정의하고 한 번에 학습하지
+않습니다. 이 프로젝트는 family 하나를 끝까지 닫는 방식으로 진행합니다.
+
+```text
+blob/local 하나를 끝까지 닫는다
+-> 라벨 방식, mask 생성, asset 저장, 합성, 학습, 예측 수정까지 검증한다
+-> 다음 family로 넘어간다
+-> 신규 불량도 같은 루프에 태운다
+```
+
+family 하나가 “닫혔다”고 보려면 아래를 통과해야 합니다.
+
+| 단계 | 확인할 것 | local blob 예시 |
+|---|---|---|
+| 정의 | 이 family를 어떤 기준으로 볼지 | 작고 국소적인 blob/cluster |
+| 라벨 방식 | manual, assisted, parametric 중 무엇인지 | `threshold_assisted_brush` |
+| mask 생성 | full-size binary mask가 생기는지 | `masks/local.png` |
+| asset 승격 | 좋은 예시만 library로 저장되는지 | `data/pattern_assets/local/...` |
+| 합성 | base wafer 위에 붙이고 정답 mask가 유지되는지 | local crop paste |
+| 학습 | U-Net target channel에 들어가는지 | `target[local]` |
+| 예측 수정 | 실제 wafer prediction을 사람이 고칠 수 있는지 | tool에서 local mask 수정 |
+| 재축적 | 수정 결과가 다음 asset이 되는지 | corrected local asset 저장 |
+
+이 구조를 만들면 신규 불량이 나와도 절차가 같습니다.
+
+```text
+신규 defect 발견
+-> taxonomy 후보 등록
+-> label_type 결정
+-> mask generator 또는 annotation workflow 추가
+-> 최소 asset 수집
+-> synthetic composer 반영
+-> readiness coverage 확인
+-> target channel 추가 여부 결정
+-> 학습과 correction loop 반복
+```
+
+중요한 통일점은 하나입니다.
+
+```text
+불량마다 mask를 만드는 방법은 달라도
+최종 산출물은 항상 full-size family mask여야 한다.
+```
+
+또 하나의 규칙은 family와 subtype을 분리하는 것입니다.
+
+```text
+family = 모델 target
+subtype = 초기에는 분석/리뷰 metadata
+```
+
+예를 들어 blob 안에 `tiny_isolated_blob`, `cluster_blob`, `large_blob` 같은
+세부 유형이 있어도 처음부터 target channel을 쪼개지 않습니다. 먼저
+`family=local`로 학습 loop를 닫고, subtype은 metadata로 쌓습니다. 충분히 반복되고
+리뷰어가 안정적으로 구분할 수 있을 때만 subfamily 승격을 검토합니다.
+
+## 8. 예시: 좋은 방향과 나쁜 방향
 
 좋은 방향:
 

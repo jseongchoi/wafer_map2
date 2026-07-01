@@ -171,7 +171,156 @@ local, scratch, ring, edge, shot_grid, random
 | edge sector | edge 근처 crop | 비정상 edge band/sector만 1 |
 | shot repeat | 반복 패턴이 있는 영역 crop | 반복 die 위치만 1 |
 
-## 5. label_type을 꼭 나눕니다
+## 5. local blob mask는 이렇게 만듭니다
+
+작은 blob 불량은 보통 `local` family로 저장합니다. 이 유형은 처음부터 완전
+자동으로 맡기기보다, 코드가 후보 mask를 만들고 사람이 마지막에 고치는 방식이
+가장 현실적입니다.
+
+```text
+wafer image
+-> blob 주변 bbox 선택
+-> crop 안에서 자동 후보 mask 생성
+-> 사람이 brush/eraser로 수정
+-> 원본 wafer 크기의 full-size mask로 저장
+-> 좋은 예시만 pattern asset으로 승격
+```
+
+### 5.1 bbox로 작업 영역을 자릅니다
+
+원본 wafer가 `1024 x 1024`이고 왼쪽 아래에 blob이 있다고 가정합니다.
+
+```json
+{
+  "family": "local",
+  "bbox_xywh": [120, 720, 80, 70]
+}
+```
+
+이 bbox는 학습 정답이 아닙니다. 작업자가 보기 편하게 blob 주변만 crop하는
+힌트입니다.
+
+```text
+crop = wafer[y:y+h, x:x+w]
+crop = wafer[720:790, 120:200]
+```
+
+### 5.2 crop 안에서 blob 후보를 자동으로 잡습니다
+
+밝은 blob이면 주변 background보다 밝은 pixel을 후보로 잡습니다.
+
+```python
+crop = wafer[y:y+h, x:x+w]
+threshold = crop.mean() + 2.0 * crop.std()
+candidate = crop > threshold
+```
+
+어두운 blob이면 방향을 반대로 둡니다.
+
+```python
+threshold = crop.mean() - 2.0 * crop.std()
+candidate = crop < threshold
+```
+
+실제 구현에서는 아래 후처리를 같이 씁니다.
+
+```text
+작은 점 제거
+-> 구멍 메우기
+-> morphology close/open
+-> connected component 중 가장 그럴듯한 blob 선택
+```
+
+이 자동 후보는 정답이 아니라 초안입니다. wafer마다 밝기, noise, 주변 pattern이
+다르기 때문에 사람이 preview를 보고 고쳐야 합니다.
+
+### 5.3 사람이 마지막 mask를 고칩니다
+
+작업자는 자동 후보를 보고 아래를 수정합니다.
+
+| 상황 | 수정 |
+|---|---|
+| blob 일부가 빠짐 | brush로 추가 |
+| 정상 background가 들어감 | eraser로 제거 |
+| 작은 noise 점이 같이 잡힘 | 작은 component 삭제 |
+| blob 안쪽 구멍이 생김 | fill holes |
+
+최종 crop mask는 blob pixel만 1이어야 합니다.
+
+```text
+crop_mask[pixel] = 1   # local blob
+crop_mask[pixel] = 0   # background
+```
+
+### 5.4 full-size mask로 되돌립니다
+
+U-Net이 학습하는 mask는 crop 크기가 아니라 원본 wafer와 같은 크기입니다.
+
+```python
+full_mask = np.zeros_like(wafer, dtype=np.uint8)
+full_mask[y:y+h, x:x+w] = crop_mask.astype(np.uint8) * 255
+```
+
+저장 예시:
+
+```text
+data/labels/WAFER_0001/masks/local.png
+```
+
+`local.png`는 원본 wafer와 같은 `1024 x 1024` 크기입니다.
+
+```text
+0 또는 검정      = local blob 아님
+255 또는 흰색    = local blob pixel
+```
+
+### 5.5 metadata는 이렇게 남깁니다
+
+```json
+{
+  "instance_id": "WAFER_0001_local_0001",
+  "family": "local",
+  "label_type": "manual_mask",
+  "subtype": "small_isolated_blob",
+  "subtype_status": "metadata_only",
+  "mask_creation_method": "threshold_assisted_brush",
+  "bbox_xywh": [120, 720, 80, 70],
+  "mask_path": "masks/local.png",
+  "label_confidence": "high",
+  "mask_quality": "clean",
+  "is_training_eligible": true,
+  "notes": "왼쪽 아래의 명확한 local blob. 자동 후보를 brush/eraser로 수정함."
+}
+```
+
+`label_type`은 `manual_mask`로 둡니다. 최종 책임은 사람이 확인한 mask에 있기
+때문입니다. 자동 threshold를 썼다는 사실은 `mask_creation_method`에 남깁니다.
+`subtype`은 처음에는 모델 target이 아니라 분석용 metadata입니다. subtype이
+충분히 반복되고 리뷰어가 안정적으로 구분할 수 있을 때만 별도 target 승격을
+검토합니다.
+
+### 5.6 pattern asset으로 승격할지 판단합니다
+
+승격해도 되는 blob:
+
+```text
+family가 local로 명확하다.
+mask가 blob만 포함한다.
+background가 과하게 들어가지 않았다.
+source wafer와 bbox가 기록되어 있다.
+합성 wafer에 다시 붙여도 자연스럽다.
+```
+
+승격하지 말아야 하는 blob:
+
+```text
+경계가 흐려서 diffuse defect에 가깝다.
+scratch나 edge와 붙어 있어 local만 분리하기 어렵다.
+threshold가 noise를 blob처럼 잡았다.
+정상 background가 mask 대부분을 차지한다.
+```
+
+## 6. label_type을 꼭 나눕니다
 
 모든 라벨이 사람이 직접 칠한 mask일 필요는 없습니다.
 
@@ -211,7 +360,7 @@ local, scratch, ring, edge, shot_grid, random
 그 die 내부의 lower-left 영역을 mask로 만든다
 ```
 
-## 6. parametric_mask 예시
+## 7. parametric_mask 예시
 
 | Family | 사람이 지정하는 값 | 코드가 만드는 mask |
 |---|---|---|
@@ -263,7 +412,7 @@ mask &= valid_test_mask
 mask &= severity >= severity_threshold
 ```
 
-## 7. 좋은 예시만 pattern asset으로 승격합니다
+## 8. 좋은 예시만 pattern asset으로 승격합니다
 
 full-wafer label package는 라벨 관리용입니다. 학습과 합성에 재사용할
 좋은 조각만 pattern asset으로 저장합니다.
@@ -310,7 +459,7 @@ data/pattern_assets/scratch/WAFER_0001_scratch_0001/
 명확하고 재사용 가능함 -> pattern asset
 ```
 
-## 8. 처음 모을 목표량
+## 9. 처음 모을 목표량
 
 처음부터 많이 모으는 것보다, 흔들리지 않는 예시를 먼저 모으는 게
 좋습니다.
@@ -336,7 +485,7 @@ data/pattern_assets/scratch/WAFER_0001_scratch_0001/
 7. U-Net 예측을 실제 wafer에서 고쳐 다시 asset으로 저장
 ```
 
-## 9. 최소 metadata 필드
+## 10. 최소 metadata 필드
 
 각 instance에는 최소한 아래 필드를 남깁니다.
 
@@ -362,11 +511,10 @@ data/pattern_assets/scratch/WAFER_0001_scratch_0001/
 - `source_manifest`
 - `location_summary`
 
-## 10. 판단 규칙
+## 11. 판단 규칙
 
 - 모양이 명확하면 공정 원인 추정보다 geometry 기준으로 라벨링합니다.
 - family가 애매하면 `mixed_unknown`으로 보관하고 학습에서 제외합니다.
 - normal background가 많이 들어간 mask는 training eligible이 아닙니다.
 - wafer-wide pattern도 의미 있는 band, arc, 반복 위치만 mask로 잡습니다.
 - 한 pixel이 여러 family에 해당하면 multi-label을 허용합니다.
-

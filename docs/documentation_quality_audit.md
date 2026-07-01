@@ -38,9 +38,11 @@ docs/index.html
 | `end_to_end_workflow.md` | 전체 실행 순서 | raw wafer부터 prediction correction까지 연결 | 단계별 PowerShell command |
 | `operator_manual.md` | 작업자 실행 안내 | 실제 작업 순서와 troubleshooting 정리 | manifest, tool, readiness, U-Net 명령 |
 | `segmentation_tool_workflow.md` | 도구 조작 기준 | bbox/mask 차이와 prediction prefill 설명 | shot_grid/ring/scratch parametric JSON |
-| `label_data_guidelines.md` | 라벨 저장 방식 | wafer 1장 기준 labels/masks 구조 설명 | `labels.json`, `manual_mask`, `parametric_mask` |
+| `label_data_guidelines.md` | 라벨 저장 방식 | wafer 1장 기준 labels/masks 구조 설명 | `labels.json`, local blob mask 생성 절차, `manual_mask`, `parametric_mask` |
 | `training_data_contract.md` | 학습 데이터 규격 | `arrays.npz`, manifest, input/target channel 정의 | sample folder, metadata, CSV 예시 |
 | `pattern_taxonomy.md` | defect family 정의 | family별 판단 기준과 애매한 경우 처리 | local/scratch/ring/edge/shot_grid 예시 |
+| `similar_map_retrieval_guide.md` | 유사맵 검색 | feature 기반 검색, mask rerank, subtype metadata, embedding 확장 순서 정리 | local/blob 검색 feature, review column |
+| `defect_severity_scoring_guide.md` | 불량 심각도 수치화 | mask feature에서 component score와 final severity score를 계산하는 절차 정리 | local/blob MVP schema, family별 weight |
 | `fbm_data_flow_guide.md` | 데이터 경로 | raw, labels, assets, synthetic, model output 경로 연결 | folder tree, manifest JSON |
 | `fbm_pattern_asset_pipeline.md` | 합성 파이프라인 | asset/rule을 학습 sample로 바꾸는 과정 설명 | asset metadata, 합성 명령 |
 | `validation_protocol.md` | 검증 기준 | 데이터 계약, mask 품질, 모델 correction 검증 정리 | 테스트 명령과 통과 기준 |
@@ -72,6 +74,14 @@ docs/index.html
 - 코드 위치와 command를 각 문서에 넣어 실제 구현과 연결했습니다.
 - 모델 설명 문서에서 U-Net 구조, input/target tensor, sigmoid multi-label 예측,
   threshold 해석, correction loop까지 작업자 눈높이로 설명했습니다.
+- 신규 불량이 나올 때 family 하나씩 vertical slice로 닫고, family별 readiness를
+  채우는 지속 학습 루프를 핵심 방향과 로드맵에 명시했습니다.
+- blob 안의 세부 유형처럼 subtype이 생기는 경우, 처음에는 target channel로
+  쪼개지 않고 metadata로 관리한 뒤 충분한 근거가 있을 때 승격하도록 정의했습니다.
+- 유사맵 검색은 segmentation과 분리된 보조 축으로 두고, feature 기반 검색에서
+  시작해 mask feature rerank와 encoder embedding으로 확장하는 절차를 추가했습니다.
+- 불량 심각도는 confidence와 분리하고, raw feature와 component score를 함께 저장하는
+  rule-based scoring 방법으로 시작하도록 정리했습니다.
 
 ## 4. 문서 유지 규칙
 

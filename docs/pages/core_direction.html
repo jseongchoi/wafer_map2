@@ -24,7 +24,8 @@
 <a class="toc-level-2" href="#4-범위-밖">4. 범위 밖</a>
 <a class="toc-level-2" href="#5-라벨링-판단-규칙">5. 라벨링 판단 규칙</a>
 <a class="toc-level-2" href="#6-의사결정-규칙">6. 의사결정 규칙</a>
-<a class="toc-level-2" href="#7-예시-좋은-방향과-나쁜-방향">7. 예시: 좋은 방향과 나쁜 방향</a>
+<a class="toc-level-2" href="#7-불량-하나씩-vertical-slice로-닫습니다">7. 불량 하나씩 vertical slice로 닫습니다</a>
+<a class="toc-level-2" href="#8-예시-좋은-방향과-나쁜-방향">8. 예시: 좋은 방향과 나쁜 방향</a>
     </aside>
     <article class="content">
       <h1 id="핵심-방향">핵심 방향</h1>
@@ -87,7 +88,32 @@ target[ring, y, x] = 1 또는 0</code></pre>
 <li>이 변경이 실제 wafer 예측을 사람이 고쳐 다시 asset으로 축적하는 loop를 돕는가?</li>
 </ol>
 <p>위 질문에 “아니오”가 많으면 지금 할 일이 아닐 가능성이 큽니다.</p>
-<h2 id="7-예시-좋은-방향과-나쁜-방향">7. 예시: 좋은 방향과 나쁜 방향</h2>
+<h2 id="7-불량-하나씩-vertical-slice로-닫습니다">7. 불량 하나씩 vertical slice로 닫습니다</h2>
+<p>불량 family가 10개 있다고 해서 10개를 한 번에 정의하고 한 번에 학습하지 않습니다. 이 프로젝트는 family 하나를 끝까지 닫는 방식으로 진행합니다.</p>
+<pre><code class="language-text">blob/local 하나를 끝까지 닫는다
+-&gt; 라벨 방식, mask 생성, asset 저장, 합성, 학습, 예측 수정까지 검증한다
+-&gt; 다음 family로 넘어간다
+-&gt; 신규 불량도 같은 루프에 태운다</code></pre>
+<p>family 하나가 “닫혔다”고 보려면 아래를 통과해야 합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>단계</th><th>확인할 것</th><th>local blob 예시</th></tr></thead><tbody><tr><td>정의</td><td>이 family를 어떤 기준으로 볼지</td><td>작고 국소적인 blob/cluster</td></tr><tr><td>라벨 방식</td><td>manual, assisted, parametric 중 무엇인지</td><td><code>threshold_assisted_brush</code></td></tr><tr><td>mask 생성</td><td>full-size binary mask가 생기는지</td><td><code>masks/local.png</code></td></tr><tr><td>asset 승격</td><td>좋은 예시만 library로 저장되는지</td><td><code>data/pattern_assets/local/...</code></td></tr><tr><td>합성</td><td>base wafer 위에 붙이고 정답 mask가 유지되는지</td><td>local crop paste</td></tr><tr><td>학습</td><td>U-Net target channel에 들어가는지</td><td><code>target[local]</code></td></tr><tr><td>예측 수정</td><td>실제 wafer prediction을 사람이 고칠 수 있는지</td><td>tool에서 local mask 수정</td></tr><tr><td>재축적</td><td>수정 결과가 다음 asset이 되는지</td><td>corrected local asset 저장</td></tr></tbody></table></div>
+<p>이 구조를 만들면 신규 불량이 나와도 절차가 같습니다.</p>
+<pre><code class="language-text">신규 defect 발견
+-&gt; taxonomy 후보 등록
+-&gt; label_type 결정
+-&gt; mask generator 또는 annotation workflow 추가
+-&gt; 최소 asset 수집
+-&gt; synthetic composer 반영
+-&gt; readiness coverage 확인
+-&gt; target channel 추가 여부 결정
+-&gt; 학습과 correction loop 반복</code></pre>
+<p>중요한 통일점은 하나입니다.</p>
+<pre><code class="language-text">불량마다 mask를 만드는 방법은 달라도
+최종 산출물은 항상 full-size family mask여야 한다.</code></pre>
+<p>또 하나의 규칙은 family와 subtype을 분리하는 것입니다.</p>
+<pre><code class="language-text">family = 모델 target
+subtype = 초기에는 분석/리뷰 metadata</code></pre>
+<p>예를 들어 blob 안에 <code>tiny_isolated_blob</code>, <code>cluster_blob</code>, <code>large_blob</code> 같은 세부 유형이 있어도 처음부터 target channel을 쪼개지 않습니다. 먼저 <code>family=local</code>로 학습 loop를 닫고, subtype은 metadata로 쌓습니다. 충분히 반복되고 리뷰어가 안정적으로 구분할 수 있을 때만 subfamily 승격을 검토합니다.</p>
+<h2 id="8-예시-좋은-방향과-나쁜-방향">8. 예시: 좋은 방향과 나쁜 방향</h2>
 <p>좋은 방향:</p>
 <pre><code class="language-text">실제 wafer에서 명확한 scratch 30개를 저장한다.
 각 scratch의 mask와 metadata를 정리한다.

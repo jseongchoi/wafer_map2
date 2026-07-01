@@ -285,6 +285,8 @@ pattern_intensity    [7, H, W]</pre>
         <a class="card" href="pages/label_data_guidelines.html"><strong>라벨 데이터 가이드</strong><span>wafer 1장 기준으로 labels.json, masks 폴더, bbox와 mask 차이, parametric label 예시를 설명합니다.</span></a>
         <a class="card" href="pages/training_data_contract.html"><strong>학습 데이터 규격</strong><span>U-Net이 읽는 `arrays.npz`, `metadata.json`, manifest CSV, input/target channel 규격입니다.</span></a>
         <a class="card" href="pages/modeling_strategy.html"><strong>모델 이해 가이드</strong><span>U-Net이 무엇을 입력받고, 어떤 mask를 예측하고, prediction을 어떻게 해석하는지 설명합니다.</span></a>
+        <a class="card" href="pages/similar_map_retrieval_guide.html"><strong>유사맵 검색 가이드</strong><span>feature, mask, subtype, embedding으로 비슷한 wafer를 찾는 절차입니다.</span></a>
+        <a class="card" href="pages/defect_severity_scoring_guide.html"><strong>불량 심각도 수치화</strong><span>mask feature에서 area, intensity, location, spread score를 계산하는 방법입니다.</span></a>
         <a class="card" href="pages/end_to_end_workflow.html"><strong>전체 실행 흐름</strong><span>raw wafer부터 asset, synthetic dataset, U-Net, prediction correction까지의 command 흐름입니다.</span></a>
         <a class="card" href="pages/operator_manual.html"><strong>작업자 매뉴얼</strong><span>실제로 명령을 실행할 때 보는 짧은 runbook입니다.</span></a>
         <a class="card" href="pages/pattern_taxonomy.html"><strong>불량 family 정의</strong><span>local, scratch, ring, edge, shot_grid, random을 어떤 기준으로 나누는지 정리합니다.</span></a>
@@ -304,6 +306,8 @@ pattern_intensity    [7, H, W]</pre>
         <tr><td>readiness와 manifest</td><td><code>scripts/build_segmentation_readiness.py</code></td><td><a href="pages/training_data_contract.html">학습 데이터 규격</a></td><td>구현됨</td></tr>
         <tr><td>U-Net 학습</td><td><code>scripts/train_unet_segmentation.py</code>, <code>src/wafermap/training/segmentation.py</code></td><td><a href="pages/training_data_contract.html">학습 데이터 규격</a></td><td>구현됨, PyTorch 환경 필요</td></tr>
         <tr><td>예측 mask 재수정 loop</td><td><code>scripts/export_unet_predictions.py</code>, <code>run_segmentation_tool.py --prediction-json</code></td><td><a href="pages/end_to_end_workflow.html">전체 실행 흐름</a></td><td>경로 구현됨, 실제 correction cycle 필요</td></tr>
+        <tr><td>유사 wafer 검색</td><td><code>scripts/extract_real_unlabeled_features.py</code>, <code>scripts/evaluate_defect_feature_retrieval.py</code></td><td><a href="pages/similar_map_retrieval_guide.html">유사맵 검색 가이드</a></td><td>feature baseline 구현됨, mask/embedding hybrid는 확장 단계</td></tr>
+        <tr><td>불량 심각도 수치화</td><td>후처리/리포트 확장 대상</td><td><a href="pages/defect_severity_scoring_guide.html">불량 심각도 수치화</a></td><td>방법론 문서화됨, 구현은 다음 단계</td></tr>
       </table>
     </section>
 

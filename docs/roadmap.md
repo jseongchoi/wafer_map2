@@ -155,6 +155,36 @@ python scripts/export_unet_predictions.py `
 
 이 단계부터 실제 wafer와 synthetic wafer 사이의 차이를 줄입니다.
 
+## Phase 6.5. Family별 지속 학습 루프
+
+상태: 다음
+
+새로운 불량 family가 나오면 모델부터 바꾸지 않습니다. 먼저 family별 readiness를
+채웁니다.
+
+| Family | 정의 | 라벨 workflow | asset | 합성 | 학습 target | prediction review |
+|---|---|---|---|---|---|---|
+| `local` | 완료 | `threshold_assisted_brush` | 수집 중 | 가능 | enabled | 진행 예정 |
+| `scratch` | 초안 | polyline + width | 부족 | 가능 | enabled | 진행 예정 |
+| `edge` | 초안 | angle/radial rule | 부족 | 가능 | enabled | 진행 예정 |
+| `ring` | 초안 | center/radius/width | 부족 | 가능 | enabled | 진행 예정 |
+| `shot_grid` | 초안 | shot layout + affected slot | 부족 | 부분 | enabled 후보 | 미시작 |
+| 신규 family | 후보 | 미정 | 없음 | 없음 | disabled | 미시작 |
+
+신규 family는 아래 checklist를 통과하기 전까지 target channel에 바로 넣지 않습니다.
+
+```text
+definition_ready
+label_workflow_ready
+mask_generation_ready
+asset_count_ready
+synthetic_ready
+training_coverage_ready
+prediction_review_ready
+```
+
+이 표를 계속 갱신하면 “지금 어떤 불량을 먼저 개선해야 하는가”가 분명해집니다.
+
 ## Phase 7. Retrieval과 유사 wafer 검색
 
 상태: 보조

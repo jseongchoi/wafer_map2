@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>불량 심각도 수치화 가이드 - WaferMap 문서</title>
+  <link rel="stylesheet" href="doc_site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <a class="home-link" href="../index.html">WaferMap 문서 표지판</a>
+      <h1>불량 심각도 수치화 가이드</h1>
+      <p>docs/defect_severity_scoring_guide.md</p>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="toc">
+      <strong>목차</strong>
+      <a class="toc-level-1" href="#불량-심각도-수치화-가이드">불량 심각도 수치화 가이드</a>
+<a class="toc-level-2" href="#1-confidence와-severity는-다릅니다">1. confidence와 severity는 다릅니다</a>
+<a class="toc-level-2" href="#2-공통-severity-component">2. 공통 severity component</a>
+<a class="toc-level-2" href="#3-raw-feature와-score를-모두-저장합니다">3. raw feature와 score를 모두 저장합니다</a>
+<a class="toc-level-2" href="#4-family별-심각도-기준">4. family별 심각도 기준</a>
+<a class="toc-level-3" href="#local-blob">local/blob</a>
+<a class="toc-level-3" href="#scratch">scratch</a>
+<a class="toc-level-3" href="#ring">ring</a>
+<a class="toc-level-3" href="#edge">edge</a>
+<a class="toc-level-3" href="#shot_grid">shot_grid</a>
+<a class="toc-level-2" href="#5-final-severity-score-계산">5. final severity score 계산</a>
+<a class="toc-level-2" href="#6-severity-bucket">6. severity bucket</a>
+<a class="toc-level-2" href="#7-local-blob-mvp-schema">7. local/blob MVP schema</a>
+<a class="toc-level-2" href="#8-파이프라인-위치">8. 파이프라인 위치</a>
+<a class="toc-level-2" href="#9-유사맵-검색과의-연결">9. 유사맵 검색과의 연결</a>
+<a class="toc-level-2" href="#10-판단-규칙">10. 판단 규칙</a>
+    </aside>
+    <article class="content">
+      <h1 id="불량-심각도-수치화-가이드">불량 심각도 수치화 가이드</h1>
+<p>이 문서는 defect mask가 생긴 뒤 “이 불량이 얼마나 심각한가”를 어떻게 수치화할지 설명합니다. 목표는 단순히 불량 유무를 표시하는 것이 아니라, 리뷰 우선순위와 유사맵 검색, 모델 correction loop에 쓸 수 있는 해석 가능한 severity score를 만드는 것입니다.</p>
+<p>핵심 원칙:</p>
+<pre><code class="language-text">mask가 먼저다
+-&gt; mask feature를 뽑는다
+-&gt; component score를 계산한다
+-&gt; family별 weight로 final severity score를 만든다
+-&gt; 원본 feature와 score를 모두 저장한다</code></pre>
+<p>처음부터 ML로 severity를 예측하지 않습니다. 먼저 사람이 이해할 수 있는 rule-based score로 시작하고, 나중에 yield impact나 전문가 severity label이 쌓이면 supervised severity model을 검토합니다.</p>
+<h2 id="1-confidence와-severity는-다릅니다">1. confidence와 severity는 다릅니다</h2>
+<p>가장 먼저 이 둘을 분리해야 합니다.</p>
+<div class="table-wrap"><table><thead><tr><th>값</th><th>의미</th><th>예시</th></tr></thead><tbody><tr><td><code>confidence_score</code></td><td>이 mask/label/model prediction을 얼마나 믿는가</td><td>manual clean mask는 높음</td></tr><tr><td><code>severity_score</code></td><td>이 defect가 공정/수율 관점에서 얼마나 심각한가</td><td>큰 scratch는 높음</td></tr></tbody></table></div>
+<p>예시:</p>
+<pre><code class="language-text">confidence high, severity low:
+  아주 선명하지만 작은 local blob
+
+confidence low, severity high:
+  모델은 애매해하지만 실제로는 큰 diffuse defect 가능성</code></pre>
+<p>둘을 섞으면 안 됩니다. confidence는 score의 보조 component로 쓸 수 있지만, defect 자체의 심각도와 동일한 값이 아닙니다.</p>
+<h2 id="2-공통-severity-component">2. 공통 severity component</h2>
+<p>대부분의 family에 공통으로 쓸 수 있는 component는 아래입니다.</p>
+<div class="table-wrap"><table><thead><tr><th>Component</th><th>의미</th><th>예시</th></tr></thead><tbody><tr><td><code>area_score</code></td><td>defect mask 면적이 얼마나 큰가</td><td>blob area, ring coverage</td></tr><tr><td><code>intensity_score</code></td><td>mask 내부 fail grade가 얼마나 강한가</td><td>평균/최대 grade</td></tr><tr><td><code>location_score</code></td><td>중요한 위치에 있는가</td><td>center, edge, shot critical region</td></tr><tr><td><code>spread_score</code></td><td>얼마나 퍼져 있는가</td><td>component 수, bbox 크기</td></tr><tr><td><code>repeat_score</code></td><td>반복 구조가 있는가</td><td>shot마다 반복</td></tr><tr><td><code>confidence_score</code></td><td>라벨/모델 신뢰도</td><td>manual high, prediction low</td></tr><tr><td><code>rarity_score</code></td><td>reference 대비 드문 패턴인가</td><td>rare subtype</td></tr><tr><td><code>trend_score</code></td><td>최근 batch에서 증가 중인가</td><td>lot별 증가</td></tr></tbody></table></div>
+<p>초기 MVP는 아래 다섯 개면 충분합니다.</p>
+<pre><code class="language-text">area_score
+intensity_score
+location_score
+spread_score
+confidence_score</code></pre>
+<h2 id="3-raw-feature와-score를-모두-저장합니다">3. raw feature와 score를 모두 저장합니다</h2>
+<p>score만 저장하면 나중에 왜 심각한지 알 수 없습니다.</p>
+<p>나쁜 예:</p>
+<pre><code class="language-json">{
+  &quot;final_severity_score&quot;: 0.82
+}</code></pre>
+<p>좋은 예:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;area_px&quot;: 820,
+  &quot;valid_area_px&quot;: 780000,
+  &quot;component_count&quot;: 4,
+  &quot;mean_grade&quot;: 5.8,
+  &quot;max_grade&quot;: 7,
+  &quot;radial_norm&quot;: 0.72,
+  &quot;edge_distance_norm&quot;: 0.28,
+  &quot;area_score&quot;: 0.36,
+  &quot;intensity_score&quot;: 0.83,
+  &quot;spread_score&quot;: 0.44,
+  &quot;location_score&quot;: 0.30,
+  &quot;confidence_score&quot;: 0.91,
+  &quot;final_severity_score&quot;: 0.52
+}</code></pre>
+<p>원본 feature를 같이 저장하면 나중에 weight를 바꿔도 다시 계산할 수 있습니다.</p>
+<h2 id="4-family별-심각도-기준">4. family별 심각도 기준</h2>
+<p>같은 면적이라도 family마다 심각도 의미가 다릅니다.</p>
+<h3 id="local-blob">local/blob</h3>
+<p>blob은 크기, 진하기, 개수, 위치가 중요합니다.</p>
+<pre><code class="language-text">area_score        = blob 면적 / valid wafer area
+intensity_score   = blob 내부 평균/최대 grade
+spread_score      = component_count 또는 bbox size
+location_score    = critical zone 여부</code></pre>
+<p>예시:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;subtype&quot;: &quot;cluster_blob&quot;,
+  &quot;area_px&quot;: 820,
+  &quot;component_count&quot;: 4,
+  &quot;mean_grade&quot;: 5.8,
+  &quot;radial_norm&quot;: 0.72,
+  &quot;area_score&quot;: 0.36,
+  &quot;intensity_score&quot;: 0.83,
+  &quot;spread_score&quot;: 0.44,
+  &quot;location_score&quot;: 0.30,
+  &quot;final_severity_score&quot;: 0.52
+}</code></pre>
+<h3 id="scratch">scratch</h3>
+<p>scratch는 면적보다 길이, 폭, 방향, die를 가로지르는 정도가 중요할 수 있습니다.</p>
+<pre><code class="language-text">length_score
+width_score
+cross_die_score
+intensity_score
+location_score</code></pre>
+<p>짧은 scratch 1개보다 wafer를 길게 가로지르는 scratch가 더 심각할 가능성이 큽니다.</p>
+<h3 id="ring">ring</h3>
+<p>ring은 coverage와 radius가 중요합니다.</p>
+<pre><code class="language-text">radius_score
+coverage_score
+width_score
+intensity_score
+center_offset_score</code></pre>
+<p>예시:</p>
+<pre><code class="language-text">partial ring 20도 &lt; ring 280도
+얇은 ring &lt; 넓고 진한 ring</code></pre>
+<h3 id="edge">edge</h3>
+<p>edge는 edge coverage와 안쪽 침투 정도가 중요합니다.</p>
+<pre><code class="language-text">edge_coverage_score
+radial_depth_score
+sector_width_score
+intensity_score</code></pre>
+<h3 id="shot_grid">shot_grid</h3>
+<p>shot_grid는 반복성이 핵심입니다.</p>
+<pre><code class="language-text">repeat_score
+affected_shot_ratio
+slot_consistency_score
+intensity_score
+location_score</code></pre>
+<p>한두 pixel보다 “shot마다 같은 위치에서 반복적으로 발생”하는 것이 더 강한 공정 신호입니다.</p>
+<h2 id="5-final-severity-score-계산">5. final severity score 계산</h2>
+<p>처음에는 family별 weighted sum으로 시작합니다.</p>
+<pre><code class="language-text">final_severity =
+  0.30 * area_score +
+  0.30 * intensity_score +
+  0.20 * location_score +
+  0.10 * spread_score +
+  0.10 * confidence_score</code></pre>
+<p>family별 weight는 다르게 둡니다.</p>
+<p>local 예시:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;severity_weights&quot;: {
+    &quot;area_score&quot;: 0.30,
+    &quot;intensity_score&quot;: 0.35,
+    &quot;location_score&quot;: 0.15,
+    &quot;spread_score&quot;: 0.10,
+    &quot;confidence_score&quot;: 0.10
+  }
+}</code></pre>
+<p>shot_grid 예시:</p>
+<pre><code class="language-json">{
+  &quot;family&quot;: &quot;shot_grid&quot;,
+  &quot;severity_weights&quot;: {
+    &quot;repeat_score&quot;: 0.40,
+    &quot;affected_shot_ratio&quot;: 0.25,
+    &quot;intensity_score&quot;: 0.20,
+    &quot;location_score&quot;: 0.10,
+    &quot;confidence_score&quot;: 0.05
+  }
+}</code></pre>
+<h2 id="6-severity-bucket">6. severity bucket</h2>
+<p>운영에서는 score 하나보다 bucket이 더 읽기 쉽습니다.</p>
+<pre><code class="language-text">0.0 &lt;= score &lt; 0.3  -&gt; low
+0.3 &lt;= score &lt; 0.7  -&gt; medium
+0.7 &lt;= score &lt;= 1.0 -&gt; high</code></pre>
+<p>저장 예시:</p>
+<pre><code class="language-json">{
+  &quot;final_severity_score&quot;: 0.52,
+  &quot;severity_bucket&quot;: &quot;medium&quot;
+}</code></pre>
+<h2 id="7-local-blob-mvp-schema">7. local/blob MVP schema</h2>
+<p>blob부터 시작한다면 아래 정도면 충분합니다.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;defect_severity/v1&quot;,
+  &quot;sample_id&quot;: &quot;WAFER_0001&quot;,
+  &quot;instance_id&quot;: &quot;WAFER_0001_local_0001&quot;,
+  &quot;family&quot;: &quot;local&quot;,
+  &quot;subtype&quot;: &quot;small_isolated_blob&quot;,
+  &quot;source&quot;: &quot;manual_mask&quot;,
+  &quot;raw_features&quot;: {
+    &quot;area_px&quot;: 820,
+    &quot;valid_area_px&quot;: 780000,
+    &quot;component_count&quot;: 1,
+    &quot;bbox_xywh&quot;: [120, 720, 80, 70],
+    &quot;mean_grade&quot;: 5.8,
+    &quot;max_grade&quot;: 7,
+    &quot;radial_norm&quot;: 0.72,
+    &quot;edge_distance_norm&quot;: 0.28
+  },
+  &quot;component_scores&quot;: {
+    &quot;area_score&quot;: 0.36,
+    &quot;intensity_score&quot;: 0.83,
+    &quot;location_score&quot;: 0.30,
+    &quot;spread_score&quot;: 0.18,
+    &quot;confidence_score&quot;: 0.95
+  },
+  &quot;final_severity_score&quot;: 0.50,
+  &quot;severity_bucket&quot;: &quot;medium&quot;
+}</code></pre>
+<h2 id="8-파이프라인-위치">8. 파이프라인 위치</h2>
+<p>severity scoring은 segmentation 후처리 단계에 붙입니다.</p>
+<pre><code class="language-text">mask 생성
+-&gt; mask feature 추출
+-&gt; severity component 계산
+-&gt; final severity score 계산
+-&gt; review/report 표시
+-&gt; 유사맵 검색 feature로 사용</code></pre>
+<p>입력:</p>
+<pre><code class="language-text">pattern_masks
+severity map
+wafer_mask
+valid_test_mask
+geometry / coordinate channels
+label confidence 또는 model probability</code></pre>
+<p>출력:</p>
+<pre><code class="language-text">defect_severity/v1 JSON
+report table
+유사맵 검색용 feature
+review 우선순위</code></pre>
+<h2 id="9-유사맵-검색과의-연결">9. 유사맵 검색과의 연결</h2>
+<p>severity score는 유사맵 검색에서 filter나 rerank feature로 쓸 수 있습니다.</p>
+<p>예시:</p>
+<pre><code class="language-text">query = high severity local cluster blob
+candidate 검색:
+  family = local
+  subtype = cluster_blob
+  severity_bucket = high 또는 medium/high
+  blob area와 위치가 비슷함</code></pre>
+<p>단, severity만으로 유사도를 판단하지 않습니다.</p>
+<pre><code class="language-text">비슷한 severity라도 위치와 shape가 다르면 다른 defect일 수 있다.
+비슷한 shape라도 severity bucket이 다르면 리뷰 우선순위가 다를 수 있다.</code></pre>
+<h2 id="10-판단-규칙">10. 판단 규칙</h2>
+<ul>
+<li>severity scoring은 segmentation mask 이후에 계산합니다.</li>
+<li>final score만 저장하지 말고 raw feature와 component score를 같이 저장합니다.</li>
+<li>family별 weight를 다르게 둡니다.</li>
+<li>confidence와 severity를 분리합니다.</li>
+<li>초기에는 rule-based score로 시작합니다.</li>
+<li>전문가 severity label이나 yield impact가 쌓이면 supervised severity model로 확장합니다.</li>
+</ul>
+    </article>
+  </main>
+</body>
+</html>
